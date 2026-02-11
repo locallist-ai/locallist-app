@@ -10,6 +10,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PaywallModal } from '../../components/PaywallModal';
+import { SignupPromptModal } from '../../components/SignupPromptModal';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../lib/auth';
 import { colors, spacing, fonts } from '../../lib/theme';
@@ -72,6 +73,7 @@ export default function PlanDetailScreen() {
   const router = useRouter();
   const { isAuthenticated, isPro } = useAuth();
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
   const { data, isLoading } = useApi<PlanDetail>(`/plans/${id}`);
 
   if (isLoading) {
@@ -141,22 +143,86 @@ export default function PlanDetailScreen() {
       </LinearGradient>
 
       {/* ═══ FOLLOW MODE CTA ══════════════════ */}
-      <View style={styles.ctaSection}>
-        <TouchableOpacity activeOpacity={0.9} onPress={handleFollowMode}>
+      {isPro ? (
+        <View style={styles.ctaSection}>
+          <TouchableOpacity activeOpacity={0.9} onPress={handleFollowMode}>
+            <LinearGradient
+              colors={[colors.electricBlue, '#2563eb']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.followBtn}
+            >
+              <Text style={styles.followBtnText}>Follow This Plan</Text>
+              <Text style={styles.followBtnIcon}>{'\u2192'}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          <Text style={styles.followHint}>
+            Step-by-step navigation with directions to each spot
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.followUpsell}>
           <LinearGradient
-            colors={[colors.electricBlue, '#2563eb']}
+            colors={[colors.deepOcean, '#1e3a5f']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.followBtn}
+            style={styles.followUpsellCard}
           >
-            <Text style={styles.followBtnText}>Follow This Plan</Text>
-            <Text style={styles.followBtnIcon}>{'\u2192'}</Text>
+            <View style={styles.followUpsellCorner} />
+            <View style={styles.followUpsellBadge}>
+              <Text style={styles.followUpsellBadgeText}>PRO FEATURE</Text>
+            </View>
+            <Text style={styles.followUpsellTitle}>Follow Mode</Text>
+            <Text style={styles.followUpsellDesc}>
+              Navigate this plan stop-by-stop with real-time guidance. See where you are, what{'\u2019'}s next, and get directions — hands-free.
+            </Text>
+
+            {/* Mini preview showing first 3 stops */}
+            <View style={styles.followPreviewList}>
+              {data.days?.[0]?.stops.slice(0, 3).map((stop, i) => (
+                <View key={stop.id} style={styles.followPreviewItem}>
+                  <View style={[styles.followPreviewDot, i === 0 && styles.followPreviewDotActive]} />
+                  <View style={styles.followPreviewInfo}>
+                    <Text style={[styles.followPreviewName, i === 0 && styles.followPreviewNameActive]}>
+                      {stop.place.name}
+                    </Text>
+                    <Text style={styles.followPreviewMeta}>
+                      {stop.suggestedArrival ?? stop.timeBlock} {'\u00B7'} {stop.place.category}
+                    </Text>
+                  </View>
+                  {i === 0 && (
+                    <View style={styles.followPreviewNowBadge}>
+                      <Text style={styles.followPreviewNowText}>START</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+              {(data.days?.[0]?.stops.length ?? 0) > 3 && (
+                <Text style={styles.followPreviewMore}>
+                  +{(data.days?.[0]?.stops.length ?? 3) - 3} more stops...
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.followUpsellFeatures}>
+              <Text style={styles.followUpsellFeature}>{'\u2713'} Turn-by-turn navigation</Text>
+              <Text style={styles.followUpsellFeature}>{'\u2713'} Real-time progress tracking</Text>
+              <Text style={styles.followUpsellFeature}>{'\u2713'} Skip, pause, resume anytime</Text>
+            </View>
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => isAuthenticated ? setShowPaywall(true) : setShowSignup(true)}
+            >
+              <View style={styles.followUpsellBtn}>
+                <Text style={styles.followUpsellBtnText}>
+                  {isAuthenticated ? 'Unlock Follow Mode' : 'Sign Up to Unlock'}
+                </Text>
+              </View>
+            </TouchableOpacity>
           </LinearGradient>
-        </TouchableOpacity>
-        <Text style={styles.followHint}>
-          Step-by-step navigation with directions to each spot
-        </Text>
-      </View>
+        </View>
+      )}
 
       {/* ═══ DAY-BY-DAY ═══════════════════════ */}
       {data.days?.map((day) => (
@@ -245,6 +311,14 @@ export default function PlanDetailScreen() {
           setShowPaywall(false);
         }}
         trigger="follow_mode"
+      />
+      <SignupPromptModal
+        visible={showSignup}
+        onClose={() => setShowSignup(false)}
+        onSignUp={() => {
+          setShowSignup(false);
+          router.push('/(auth)/login');
+        }}
       />
     </ScrollView>
   );
@@ -519,5 +593,139 @@ const styles = StyleSheet.create({
     color: colors.textMain,
     fontStyle: 'italic',
     lineHeight: 20,
+  },
+
+  // ── Follow Mode Upsell ────────────────
+  followUpsell: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: 24,
+    paddingBottom: 8,
+  },
+  followUpsellCard: {
+    borderRadius: 20,
+    padding: 24,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  followUpsellCorner: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 80,
+    height: 80,
+    borderBottomLeftRadius: 80,
+    backgroundColor: colors.sunsetOrange + '18',
+  },
+  followUpsellBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.sunsetOrange,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 14,
+  },
+  followUpsellBadgeText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 10,
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
+  },
+  followUpsellTitle: {
+    fontFamily: fonts.headingBold,
+    fontSize: 26,
+    color: '#FFFFFF',
+    lineHeight: 32,
+    marginBottom: 10,
+  },
+  followUpsellDesc: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    lineHeight: 21,
+    marginBottom: 18,
+  },
+  followPreviewList: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  followPreviewItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  followPreviewDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginRight: 12,
+  },
+  followPreviewDotActive: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.sunsetOrange,
+  },
+  followPreviewInfo: {
+    flex: 1,
+  },
+  followPreviewName: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: 1,
+  },
+  followPreviewNameActive: {
+    fontFamily: fonts.bodySemiBold,
+    color: '#FFFFFF',
+  },
+  followPreviewMeta: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.35)',
+  },
+  followPreviewNowBadge: {
+    backgroundColor: colors.sunsetOrange + '30',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  followPreviewNowText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 9,
+    color: colors.sunsetOrange,
+    letterSpacing: 1,
+  },
+  followPreviewMore: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center',
+    paddingTop: 6,
+  },
+  followUpsellFeatures: {
+    marginBottom: 18,
+    gap: 6,
+  },
+  followUpsellFeature: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.65)',
+    lineHeight: 20,
+  },
+  followUpsellBtn: {
+    backgroundColor: colors.sunsetOrange,
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderRadius: 12,
+  },
+  followUpsellBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 16,
+    color: '#FFFFFF',
   },
 });
