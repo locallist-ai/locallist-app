@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApi } from '../../hooks/useApi';
+import { useAuth } from '../../lib/auth';
 import { colors, spacing, fonts } from '../../lib/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -37,6 +38,7 @@ const CATEGORIES = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { isPro } = useAuth();
   const { data, isLoading } = useApi<{ plans: Plan[] }>('/plans?showcase=true', {
     auth: false,
   });
@@ -257,6 +259,59 @@ export default function HomeScreen() {
           </ScrollView>
         )}
       </Animated.View>
+
+      {/* ═══ PRO FEATURES TEASER ════════════════════ */}
+      {!isPro && (
+        <View style={styles.proTeaser}>
+          <LinearGradient
+            colors={[colors.deepOcean, '#1e3a5f']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.proTeaserCard}
+          >
+            <View style={styles.proTeaserCorner} />
+            <Text style={styles.proTeaserLabel}>LOCALLIST PRO</Text>
+            <Text style={styles.proTeaserTitle}>Get the full{'\n'}experience</Text>
+            <View style={styles.proTeaserFeatures}>
+              <View style={styles.proFeatureRow}>
+                <View style={styles.proFeatureIcon}>
+                  <Text style={styles.proFeatureEmoji}>{'\u{1F4CD}'}</Text>
+                </View>
+                <View style={styles.proFeatureText}>
+                  <Text style={styles.proFeatureName}>Follow Mode</Text>
+                  <Text style={styles.proFeatureDesc}>Navigate plans stop-by-stop with real-time guidance</Text>
+                </View>
+              </View>
+              <View style={styles.proFeatureRow}>
+                <View style={styles.proFeatureIcon}>
+                  <Text style={styles.proFeatureEmoji}>{'\u26A1'}</Text>
+                </View>
+                <View style={styles.proFeatureText}>
+                  <Text style={styles.proFeatureName}>50 Plans / Day</Text>
+                  <Text style={styles.proFeatureDesc}>Unlimited exploration with the AI plan builder</Text>
+                </View>
+              </View>
+              <View style={styles.proFeatureRow}>
+                <View style={styles.proFeatureIcon}>
+                  <Text style={styles.proFeatureEmoji}>{'\u{1F30E}'}</Text>
+                </View>
+                <View style={styles.proFeatureText}>
+                  <Text style={styles.proFeatureName}>Full Catalog</Text>
+                  <Text style={styles.proFeatureDesc}>Access every curated place in our database</Text>
+                </View>
+              </View>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => router.push('/(tabs)/account')}
+            >
+              <View style={styles.proTeaserBtn}>
+                <Text style={styles.proTeaserBtnText}>Learn More</Text>
+              </View>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      )}
 
       {/* ═══ EDITORIAL FOOTER ═══════════════════════ */}
       <Animated.View style={[styles.footer, anim(4)]}>
@@ -592,6 +647,87 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
     lineHeight: 20,
+  },
+
+  /* ── PRO TEASER ──────────────────────────────────── */
+  proTeaser: {
+    paddingHorizontal: spacing.lg,
+    marginTop: 36,
+  },
+  proTeaserCard: {
+    borderRadius: 20,
+    padding: 24,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  proTeaserCorner: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 80,
+    height: 80,
+    borderBottomLeftRadius: 80,
+    backgroundColor: colors.sunsetOrange + '18',
+  },
+  proTeaserLabel: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 10,
+    color: colors.sunsetOrange,
+    letterSpacing: 2,
+    marginBottom: 10,
+  },
+  proTeaserTitle: {
+    fontFamily: fonts.headingBold,
+    fontSize: 28,
+    color: '#FFFFFF',
+    lineHeight: 34,
+    marginBottom: 22,
+  },
+  proTeaserFeatures: {
+    gap: 16,
+    marginBottom: 22,
+  },
+  proFeatureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  proFeatureIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proFeatureEmoji: {
+    fontSize: 18,
+  },
+  proFeatureText: {
+    flex: 1,
+  },
+  proFeatureName: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  proFeatureDesc: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.55)',
+    lineHeight: 19,
+  },
+  proTeaserBtn: {
+    backgroundColor: colors.sunsetOrange,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  proTeaserBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 16,
+    color: '#FFFFFF',
   },
 
   /* ── SKELETON ──────────────────────────────────── */

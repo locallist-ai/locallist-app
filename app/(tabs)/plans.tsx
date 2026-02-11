@@ -5,9 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
+import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { PlanCard } from '../../components/PlanCard';
 import { useApi } from '../../hooks/useApi';
+import { useAuth } from '../../lib/auth';
 import { colors, spacing, fonts } from '../../lib/theme';
 
 interface Plan {
@@ -21,6 +25,8 @@ interface Plan {
 }
 
 export default function PlansScreen() {
+  const router = useRouter();
+  const { isPro, isAuthenticated } = useAuth();
   const { data, isLoading } = useApi<{ plans: Plan[] }>('/plans');
 
   const plans = data?.plans ?? [];
@@ -63,6 +69,42 @@ export default function PlansScreen() {
               isShowcase={plan.isShowcase}
             />
           ))}
+        </View>
+      )}
+
+      {/* ── Upgrade Nudge (non-Pro) ──────── */}
+      {!isPro && (
+        <View style={styles.nudgeBanner}>
+          <LinearGradient
+            colors={[colors.deepOcean, '#1e3a5f']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.nudgeCard}
+          >
+            <View style={styles.nudgeContent}>
+              <Text style={styles.nudgeIcon}>{'\u{1F512}'}</Text>
+              <View style={styles.nudgeText}>
+                <Text style={styles.nudgeTitle}>
+                  {isAuthenticated ? 'Upgrade to Pro' : 'Sign up for free'}
+                </Text>
+                <Text style={styles.nudgeDesc}>
+                  {isAuthenticated
+                    ? 'Follow Mode, 50 plans/day, full catalog access'
+                    : 'Save plans, build more, unlock premium features'}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => isAuthenticated ? router.push('/(tabs)/account') : router.push('/(auth)/login')}
+            >
+              <View style={styles.nudgeBtn}>
+                <Text style={styles.nudgeBtnText}>
+                  {isAuthenticated ? 'Go Pro' : 'Sign Up'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </LinearGradient>
         </View>
       )}
 
@@ -149,6 +191,51 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     overflow: 'hidden',
+  },
+
+  // ── Upgrade Nudge ─────────────────────
+  nudgeBanner: {
+    paddingHorizontal: spacing.lg,
+    marginTop: 24,
+  },
+  nudgeCard: {
+    borderRadius: 16,
+    padding: 18,
+  },
+  nudgeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 14,
+  },
+  nudgeIcon: {
+    fontSize: 28,
+  },
+  nudgeText: {
+    flex: 1,
+  },
+  nudgeTitle: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 3,
+  },
+  nudgeDesc: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 19,
+  },
+  nudgeBtn: {
+    backgroundColor: colors.sunsetOrange,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  nudgeBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: '#FFFFFF',
   },
 
   // ── Empty State ────────────────────────
