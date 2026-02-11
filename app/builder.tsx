@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button } from '../components/ui/Button';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -20,26 +21,28 @@ import { PaywallModal } from '../components/PaywallModal';
 
 // ─── Constants ────────────────────────────────────────────
 
-type WizardStep = 'group' | 'vibes' | 'duration' | 'details' | 'generating' | 'result';
+const USE_MOCK = __DEV__;
+
+type BuilderPhase = 'form' | 'generating' | 'result';
 
 const GROUP_OPTIONS = [
-  { id: 'solo', label: 'Solo' },
-  { id: 'couple', label: 'Couple' },
-  { id: 'friends', label: 'Friends' },
-  { id: 'family-kids', label: 'Family w/ Kids' },
-  { id: 'family', label: 'Family' },
-  { id: 'group', label: 'Group' },
+  { id: 'solo', label: 'Solo', icon: '\u{1F9D1}' },
+  { id: 'couple', label: 'Couple', icon: '\u{1F491}' },
+  { id: 'friends', label: 'Friends', icon: '\u{1F91D}' },
+  { id: 'family-kids', label: 'Family w/ Kids', icon: '\u{1F476}' },
+  { id: 'family', label: 'Family', icon: '\u{1F46A}' },
+  { id: 'group', label: 'Group', icon: '\u{1F465}' },
 ] as const;
 
 const VIBE_OPTIONS = [
-  { id: 'romantic', label: 'Romantic' },
-  { id: 'adventurous', label: 'Adventurous' },
-  { id: 'relaxed', label: 'Relaxed' },
-  { id: 'foodie', label: 'Foodie' },
-  { id: 'cultural', label: 'Cultural' },
-  { id: 'party', label: 'Party' },
-  { id: 'wellness', label: 'Wellness' },
-  { id: 'outdoor', label: 'Outdoor' },
+  { id: 'romantic', label: 'Romantic', icon: '\u{1F339}' },
+  { id: 'adventurous', label: 'Adventurous', icon: '\u{1F9D7}' },
+  { id: 'relaxed', label: 'Relaxed', icon: '\u{1F334}' },
+  { id: 'foodie', label: 'Foodie', icon: '\u{1F37D}' },
+  { id: 'cultural', label: 'Cultural', icon: '\u{1F3A8}' },
+  { id: 'party', label: 'Party', icon: '\u{1F389}' },
+  { id: 'wellness', label: 'Wellness', icon: '\u{1F9D8}' },
+  { id: 'outdoor', label: 'Outdoor', icon: '\u{1F3D5}' },
 ] as const;
 
 const DURATION_OPTIONS = [
@@ -82,14 +85,114 @@ interface PlanResult {
   usage: { tier: string; remaining: number | null; limit: number | null };
 }
 
+const MOCK_RESULT: PlanResult = {
+  plan: {
+    id: 'mock-plan-001',
+    name: 'Miami Highlights',
+    city: 'Miami',
+    description: 'A curated day hitting the best spots in Miami — from coffee to cocktails.',
+    durationDays: 1,
+    isEphemeral: true,
+  },
+  stops: [
+    {
+      dayNumber: 1,
+      orderIndex: 0,
+      timeBlock: 'morning',
+      suggestedArrival: '9:00 AM',
+      suggestedDurationMin: 45,
+      travelFromPrevious: null,
+      place: {
+        id: 'mock-1',
+        name: 'Café La Trova',
+        category: 'coffee',
+        neighborhood: 'Little Havana',
+        whyThisPlace: 'Old-school Cuban coffee with live bolero music — the real Little Havana experience.',
+        priceRange: '$$',
+        photos: null,
+      },
+    },
+    {
+      dayNumber: 1,
+      orderIndex: 1,
+      timeBlock: 'morning',
+      suggestedArrival: '10:30 AM',
+      suggestedDurationMin: 90,
+      travelFromPrevious: { distance_km: 3.2, duration_min: 8, mode: 'drive' },
+      place: {
+        id: 'mock-2',
+        name: 'Pérez Art Museum Miami',
+        category: 'culture',
+        neighborhood: 'Downtown',
+        whyThisPlace: 'World-class contemporary art with stunning Biscayne Bay views from the terrace.',
+        priceRange: '$$',
+        photos: null,
+      },
+    },
+    {
+      dayNumber: 1,
+      orderIndex: 2,
+      timeBlock: 'afternoon',
+      suggestedArrival: '1:00 PM',
+      suggestedDurationMin: 60,
+      travelFromPrevious: { distance_km: 5.1, duration_min: 12, mode: 'drive' },
+      place: {
+        id: 'mock-3',
+        name: 'Mandolin Aegean Bistro',
+        category: 'food',
+        neighborhood: 'Design District',
+        whyThisPlace: 'Mediterranean lunch in a gorgeous courtyard garden — a local favorite that never disappoints.',
+        priceRange: '$$$',
+        photos: null,
+      },
+    },
+    {
+      dayNumber: 1,
+      orderIndex: 3,
+      timeBlock: 'afternoon',
+      suggestedArrival: '3:00 PM',
+      suggestedDurationMin: 120,
+      travelFromPrevious: { distance_km: 1.8, duration_min: 5, mode: 'walk' },
+      place: {
+        id: 'mock-4',
+        name: 'Design District',
+        category: 'culture',
+        neighborhood: 'Design District',
+        whyThisPlace: 'Open-air luxury shopping and street art — the best people-watching in Miami.',
+        priceRange: 'Free',
+        photos: null,
+      },
+    },
+    {
+      dayNumber: 1,
+      orderIndex: 4,
+      timeBlock: 'evening',
+      suggestedArrival: '7:00 PM',
+      suggestedDurationMin: 90,
+      travelFromPrevious: { distance_km: 8.5, duration_min: 18, mode: 'drive' },
+      place: {
+        id: 'mock-5',
+        name: 'Juvia',
+        category: 'food',
+        neighborhood: 'South Beach',
+        whyThisPlace: 'Rooftop dining with panoramic views — French-Japanese-Peruvian fusion that actually works.',
+        priceRange: '$$$$',
+        photos: null,
+      },
+    },
+  ],
+  message: 'Here\'s your curated Miami plan!',
+  usage: { tier: 'anonymous', remaining: 2, limit: 3 },
+};
+
 // ─── Component ────────────────────────────────────────────
 
 export default function BuilderScreen() {
   const router = useRouter();
-  const { isAuthenticated, userTier } = useAuth();
+  const { isAuthenticated } = useAuth();
 
-  // Wizard state
-  const [step, setStep] = useState<WizardStep>('group');
+  // Form state
+  const [phase, setPhase] = useState<BuilderPhase>('form');
   const [groupType, setGroupType] = useState<string>('couple');
   const [vibes, setVibes] = useState<string[]>([]);
   const [days, setDays] = useState<number>(1);
@@ -121,8 +224,23 @@ export default function BuilderScreen() {
   };
 
   const handleGenerate = async () => {
-    setStep('generating');
+    setPhase('generating');
     setError(null);
+
+    // Mock mode — simulate API delay and return fake data
+    if (USE_MOCK) {
+      await new Promise((r) => setTimeout(r, 1500));
+      setResult({
+        ...MOCK_RESULT,
+        plan: {
+          ...MOCK_RESULT.plan,
+          durationDays: days,
+          name: `Miami ${days === 1 ? 'Day Trip' : `${days}-Day`} ${vibes[0] ? vibes[0].charAt(0).toUpperCase() + vibes[0].slice(1) + ' ' : ''}Plan`,
+        },
+      });
+      setPhase('result');
+      return;
+    }
 
     const message = buildMessage();
 
@@ -140,8 +258,7 @@ export default function BuilderScreen() {
     });
 
     if (status === 429) {
-      // Rate limited — use upgradeHint from API to pick the right modal
-      setStep('details');
+      setPhase('form');
       const hint = errorBody?.upgradeHint;
       if (hint === 'signup') {
         setShowSignupModal(true);
@@ -157,15 +274,15 @@ export default function BuilderScreen() {
 
     if (data) {
       setResult(data);
-      setStep('result');
+      setPhase('result');
     } else {
       setError(apiError ?? 'Failed to generate plan');
-      setStep('details');
+      setPhase('form');
     }
   };
 
   const handleReset = () => {
-    setStep('group');
+    setPhase('form');
     setGroupType('couple');
     setVibes([]);
     setDays(1);
@@ -174,156 +291,9 @@ export default function BuilderScreen() {
     setError(null);
   };
 
-  // ─── Step: Group ──────────────────────────────────────────
+  // ─── Phase: Generating ──────────────────────────────────────
 
-  if (step === 'group') {
-    return (
-      <View style={styles.container}>
-        <View style={styles.stepContainer}>
-          <Text style={styles.stepIndicator}>Step 1 of 4</Text>
-          <Text style={styles.stepTitle}>Who's going?</Text>
-          <Text style={styles.stepSubtitle}>Select the group type for your trip</Text>
-          <View style={styles.chipGrid}>
-            {GROUP_OPTIONS.map((g) => (
-              <TouchableOpacity
-                key={g.id}
-                style={[styles.chip, groupType === g.id && styles.chipSelected]}
-                onPress={() => setGroupType(g.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.chipText, groupType === g.id && styles.chipTextSelected]}>
-                  {g.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-        <View style={styles.navBar}>
-          <View />
-          <Button title="Next" onPress={() => setStep('vibes')} variant="primary" />
-        </View>
-      </View>
-    );
-  }
-
-  // ─── Step: Vibes ──────────────────────────────────────────
-
-  if (step === 'vibes') {
-    return (
-      <View style={styles.container}>
-        <View style={styles.stepContainer}>
-          <Text style={styles.stepIndicator}>Step 2 of 4</Text>
-          <Text style={styles.stepTitle}>What's the vibe?</Text>
-          <Text style={styles.stepSubtitle}>Pick up to 5 vibes for your trip</Text>
-          <View style={styles.chipGrid}>
-            {VIBE_OPTIONS.map((v) => (
-              <TouchableOpacity
-                key={v.id}
-                style={[styles.chip, vibes.includes(v.id) && styles.chipSelected]}
-                onPress={() => toggleVibe(v.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.chipText, vibes.includes(v.id) && styles.chipTextSelected]}>
-                  {v.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-        <View style={styles.navBar}>
-          <Button title="Back" onPress={() => setStep('group')} variant="ghost" />
-          <Button title="Next" onPress={() => setStep('duration')} variant="primary" />
-        </View>
-      </View>
-    );
-  }
-
-  // ─── Step: Duration ───────────────────────────────────────
-
-  if (step === 'duration') {
-    return (
-      <View style={styles.container}>
-        <View style={styles.stepContainer}>
-          <Text style={styles.stepIndicator}>Step 3 of 4</Text>
-          <Text style={styles.stepTitle}>How long?</Text>
-          <Text style={styles.stepSubtitle}>Choose the duration of your trip</Text>
-          <View style={styles.chipGrid}>
-            {DURATION_OPTIONS.map((d) => (
-              <TouchableOpacity
-                key={d.id}
-                style={[styles.chip, days === d.id && styles.chipSelected]}
-                onPress={() => setDays(d.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.chipText, days === d.id && styles.chipTextSelected]}>
-                  {d.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-        <View style={styles.navBar}>
-          <Button title="Back" onPress={() => setStep('vibes')} variant="ghost" />
-          <Button title="Next" onPress={() => setStep('details')} variant="primary" />
-        </View>
-      </View>
-    );
-  }
-
-  // ─── Step: Details + Generate ─────────────────────────────
-
-  if (step === 'details') {
-    return (
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={100}
-      >
-        <View style={styles.stepContainer}>
-          <Text style={styles.stepIndicator}>Step 4 of 4</Text>
-          <Text style={styles.stepTitle}>Anything specific?</Text>
-          <Text style={styles.stepSubtitle}>
-            Optional — add details like "rooftop bars only" or "kid-friendly restaurants"
-          </Text>
-          <TextInput
-            style={styles.detailsInput}
-            value={details}
-            onChangeText={setDetails}
-            placeholder="e.g. rooftop bars, oceanfront dining..."
-            placeholderTextColor={colors.textSecondary}
-            multiline
-            maxLength={500}
-          />
-          {error && <Text style={styles.errorText}>{error}</Text>}
-        </View>
-        <View style={styles.navBar}>
-          <Button title="Back" onPress={() => setStep('duration')} variant="ghost" />
-          <Button title="Generate Plan" onPress={handleGenerate} variant="primary" />
-        </View>
-
-        <SignupPromptModal
-          visible={showSignupModal}
-          onClose={() => setShowSignupModal(false)}
-          onSignUp={() => {
-            setShowSignupModal(false);
-            router.push('/(auth)/login');
-          }}
-        />
-        <PaywallModal
-          visible={showPaywallModal}
-          onClose={() => setShowPaywallModal(false)}
-          onUpgrade={() => {
-            setShowPaywallModal(false);
-            // RevenueCat paywall handled by native IAP
-          }}
-        />
-      </KeyboardAvoidingView>
-    );
-  }
-
-  // ─── Step: Generating ─────────────────────────────────────
-
-  if (step === 'generating') {
+  if (phase === 'generating') {
     return (
       <View style={[styles.container, styles.centerContent]}>
         <ActivityIndicator size="large" color={colors.electricBlue} />
@@ -335,9 +305,9 @@ export default function BuilderScreen() {
     );
   }
 
-  // ─── Step: Result ─────────────────────────────────────────
+  // ─── Phase: Result ──────────────────────────────────────────
 
-  if (step === 'result' && result) {
+  if (phase === 'result' && result) {
     const { plan, stops, usage } = result;
     const isEphemeral = (plan as any).isEphemeral === true;
     const groupedByDay: Record<number, PlanStop[]> = {};
@@ -351,7 +321,6 @@ export default function BuilderScreen() {
 
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.resultContent}>
-        {/* Plan header */}
         <View style={styles.resultHeader}>
           <Text style={styles.resultTitle}>{plan.name}</Text>
           <Text style={styles.resultMeta}>
@@ -364,7 +333,6 @@ export default function BuilderScreen() {
           )}
         </View>
 
-        {/* Day-by-day stops */}
         {dayNumbers.map((dayNum) => (
           <View key={dayNum} style={styles.daySection}>
             <Text style={styles.dayTitle}>Day {dayNum}</Text>
@@ -399,7 +367,6 @@ export default function BuilderScreen() {
           </View>
         ))}
 
-        {/* CTAs */}
         <View style={styles.resultActions}>
           {isEphemeral && !isAuthenticated && (
             <Button
@@ -431,8 +398,141 @@ export default function BuilderScreen() {
     );
   }
 
-  // Fallback
-  return null;
+  // ─── Phase: Form (single page) ─────────────────────────────
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={styles.formScroll}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Header */}
+        <View style={styles.formHeader}>
+          <Text style={styles.formTitle}>Plan Your Trip</Text>
+          <Text style={styles.formSubtitle}>
+            Pick your preferences and we'll craft the perfect itinerary.
+          </Text>
+        </View>
+
+        {/* ── Group Type ──────────────────────── */}
+        <View style={styles.fieldSection}>
+          <Text style={styles.fieldLabel}>WHO'S GOING?</Text>
+          <View style={styles.chipGrid}>
+            {GROUP_OPTIONS.map((g) => (
+              <TouchableOpacity
+                key={g.id}
+                style={[styles.chip, groupType === g.id && styles.chipSelected]}
+                onPress={() => setGroupType(g.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.chipIcon}>{g.icon}</Text>
+                <Text style={[styles.chipText, groupType === g.id && styles.chipTextSelected]}>
+                  {g.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* ── Vibes ───────────────────────────── */}
+        <View style={styles.fieldSection}>
+          <View style={styles.fieldLabelRow}>
+            <Text style={styles.fieldLabel}>WHAT'S THE VIBE?</Text>
+            <Text style={styles.fieldHint}>{vibes.length}/5</Text>
+          </View>
+          <View style={styles.chipGrid}>
+            {VIBE_OPTIONS.map((v) => (
+              <TouchableOpacity
+                key={v.id}
+                style={[styles.chip, vibes.includes(v.id) && styles.chipSelected]}
+                onPress={() => toggleVibe(v.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.chipIcon}>{v.icon}</Text>
+                <Text style={[styles.chipText, vibes.includes(v.id) && styles.chipTextSelected]}>
+                  {v.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* ── Duration ────────────────────────── */}
+        <View style={styles.fieldSection}>
+          <Text style={styles.fieldLabel}>HOW LONG?</Text>
+          <View style={styles.durationRow}>
+            {DURATION_OPTIONS.map((d) => (
+              <TouchableOpacity
+                key={d.id}
+                style={[styles.durationChip, days === d.id && styles.durationChipSelected]}
+                onPress={() => setDays(d.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.durationText, days === d.id && styles.durationTextSelected]}>
+                  {d.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* ── Details (optional) ──────────────── */}
+        <View style={styles.fieldSection}>
+          <Text style={styles.fieldLabel}>ANYTHING SPECIFIC?</Text>
+          <TextInput
+            style={styles.detailsInput}
+            value={details}
+            onChangeText={setDetails}
+            placeholder="Optional — rooftop bars, oceanfront dining, kid-friendly..."
+            placeholderTextColor={colors.textSecondary}
+            multiline
+            maxLength={500}
+          />
+        </View>
+
+        {error && (
+          <Text style={styles.errorText}>{error}</Text>
+        )}
+
+        {/* ── Generate Button ─────────────────── */}
+        <TouchableOpacity activeOpacity={0.9} onPress={handleGenerate}>
+          <LinearGradient
+            colors={[colors.electricBlue, '#2563eb']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.generateBtn}
+          >
+            <Text style={styles.generateBtnText}>Generate My Plan</Text>
+            <Text style={styles.generateBtnIcon}>{'\u2192'}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <Text style={styles.generateDisclaimer}>
+          Powered by AI. One call, zero fluff.
+        </Text>
+      </ScrollView>
+
+      <SignupPromptModal
+        visible={showSignupModal}
+        onClose={() => setShowSignupModal(false)}
+        onSignUp={() => {
+          setShowSignupModal(false);
+          router.push('/(auth)/login');
+        }}
+      />
+      <PaywallModal
+        visible={showPaywallModal}
+        onClose={() => setShowPaywallModal(false)}
+        onUpgrade={() => {
+          setShowPaywallModal(false);
+        }}
+      />
+    </KeyboardAvoidingView>
+  );
 }
 
 // ─── Styles ─────────────────────────────────────────────────
@@ -448,81 +548,168 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.md,
   },
-  stepContainer: {
-    flex: 1,
+
+  // ── Form ─────────────────────────────────
+  formScroll: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xxl,
+    paddingTop: 64,
+    paddingBottom: 40,
   },
-  stepIndicator: {
-    ...typography.caption,
-    color: colors.electricBlue,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+  formHeader: {
+    marginBottom: 28,
   },
-  stepTitle: {
-    ...typography.h1,
-    marginBottom: spacing.xs,
+  formTitle: {
+    fontFamily: fonts.headingBold,
+    fontSize: 32,
+    color: colors.deepOcean,
+    lineHeight: 38,
+    marginBottom: 8,
   },
-  stepSubtitle: {
-    ...typography.body,
+  formSubtitle: {
+    fontFamily: fonts.body,
+    fontSize: 15,
     color: colors.textSecondary,
-    marginBottom: spacing.lg,
+    lineHeight: 22,
   },
+
+  // ── Field Sections ───────────────────────
+  fieldSection: {
+    marginBottom: 28,
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  fieldLabel: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.sunsetOrange,
+    letterSpacing: 2,
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.sunsetOrange + '28',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  fieldHint: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+
+  // ── Chips (group + vibes) ────────────────
   chipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: 8,
   },
   chip: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: borderRadius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
     backgroundColor: colors.bgCard,
     borderWidth: 1.5,
     borderColor: colors.borderColor,
+    gap: 6,
   },
   chipSelected: {
-    backgroundColor: colors.electricBlue,
-    borderColor: colors.electricBlue,
+    backgroundColor: colors.deepOcean,
+    borderColor: colors.deepOcean,
+  },
+  chipIcon: {
+    fontSize: 16,
   },
   chipText: {
-    ...typography.body,
-    fontWeight: '500',
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    color: colors.textMain,
   },
   chipTextSelected: {
     color: '#FFFFFF',
   },
-  navBar: {
+
+  // ── Duration ─────────────────────────────
+  durationRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderColor,
-    backgroundColor: colors.bgCard,
+    gap: 8,
   },
+  durationChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1.5,
+    borderColor: colors.borderColor,
+  },
+  durationChipSelected: {
+    backgroundColor: colors.deepOcean,
+    borderColor: colors.deepOcean,
+  },
+  durationText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.textMain,
+  },
+  durationTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  // ── Details Input ────────────────────────
   detailsInput: {
     backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.md,
+    borderRadius: 12,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: 16,
+    paddingVertical: 14,
+    fontFamily: fonts.body,
+    fontSize: 15,
     color: colors.textMain,
-    minHeight: 100,
+    minHeight: 72,
     textAlignVertical: 'top',
     borderWidth: 1,
     borderColor: colors.borderColor,
   },
   errorText: {
-    ...typography.bodySmall,
+    fontFamily: fonts.body,
+    fontSize: 14,
     color: colors.error,
-    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
 
-  // Generating
+  // ── Generate Button ──────────────────────
+  generateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 14,
+    gap: 8,
+  },
+  generateBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 17,
+    color: '#FFFFFF',
+  },
+  generateBtnIcon: {
+    fontSize: 18,
+    color: '#FFFFFF',
+  },
+  generateDisclaimer: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+
+  // ── Generating ───────────────────────────
   generatingTitle: {
     ...typography.h2,
     textAlign: 'center',
@@ -533,7 +720,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Result
+  // ── Result ───────────────────────────────
   resultContent: {
     paddingBottom: spacing.xxl,
   },
