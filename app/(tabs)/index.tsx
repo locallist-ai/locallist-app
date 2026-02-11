@@ -165,16 +165,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {!isLoading && (!data?.plans || data.plans.length === 0) && (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>{'\u{1F334}'}</Text>
-            <Text style={styles.emptyTitle}>Plans are being curated</Text>
-            <Text style={styles.emptyText}>
-              Our team is handpicking the best spots in Miami. Check back soon!
-            </Text>
-          </View>
-        )}
-
         {data?.plans?.map((plan) => (
           <TouchableOpacity
             key={plan.id}
@@ -354,12 +344,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: colors.deepOcean,
     marginBottom: 4,
+    textAlign: 'center',
   },
   sectionSubtitle: {
     fontFamily: fonts.body,
     fontSize: 14,
     color: colors.textSecondary,
     marginBottom: 20,
+    textAlign: 'center',
   },
 
   // ─── Categories ───────────────────────────
@@ -479,30 +471,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#e5e5e5',
     width: '80%',
-  },
-
-  // ─── Empty State ──────────────────────────
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontFamily: fonts.headingSemiBold,
-    fontSize: 20,
-    color: colors.deepOcean,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
   },
 
   // ─── Quality Promise ──────────────────────
