@@ -13,7 +13,6 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApi } from '../../hooks/useApi';
 import { colors, spacing, fonts } from '../../lib/theme';
-import { useAuth } from '../../lib/auth';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -28,55 +27,64 @@ interface Plan {
 }
 
 const CATEGORIES = [
-  { label: 'Food', icon: '\u{1F37D}', color: '#ef4444' },
-  { label: 'Nightlife', icon: '\u{1F378}', color: '#8b5cf6' },
-  { label: 'Outdoors', icon: '\u{1F3D6}', color: '#10b981' },
-  { label: 'Coffee', icon: '\u2615', color: '#f59e0b' },
-  { label: 'Culture', icon: '\u{1F3A8}', color: '#3b82f6' },
-  { label: 'Wellness', icon: '\u{1F9D8}', color: '#ec4899' },
+  { label: 'Food', icon: '\u{1F37D}', accent: '#ef4444' },
+  { label: 'Nightlife', icon: '\u{1F378}', accent: '#8b5cf6' },
+  { label: 'Outdoors', icon: '\u{1F3D6}', accent: '#10b981' },
+  { label: 'Coffee', icon: '\u2615', accent: '#f59e0b' },
+  { label: 'Culture', icon: '\u{1F3A8}', accent: '#3b82f6' },
+  { label: 'Wellness', icon: '\u{1F9D8}', accent: '#ec4899' },
 ];
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { isPro } = useAuth();
   const { data, isLoading } = useApi<{ plans: Plan[] }>('/plans?showcase=true', {
     auth: false,
   });
 
-  // Staggered animations
-  const fadeAnims = useRef([
-    new Animated.Value(0),
-    new Animated.Value(0),
-    new Animated.Value(0),
-    new Animated.Value(0),
-  ]).current;
+  // 5-part staggered entrance
+  const anims = useRef(
+    Array.from({ length: 5 }, () => ({
+      opacity: new Animated.Value(0),
+      translateY: new Animated.Value(28),
+    })),
+  ).current;
 
-  const slideAnims = useRef([
-    new Animated.Value(30),
-    new Animated.Value(30),
-    new Animated.Value(30),
-    new Animated.Value(30),
-  ]).current;
+  // Subtle scale for the CTA card
+  const ctaScale = useRef(new Animated.Value(0.96)).current;
 
   useEffect(() => {
-    const animations = fadeAnims.map((anim, i) =>
+    const entrance = anims.map((a, i) =>
       Animated.parallel([
-        Animated.timing(anim, {
+        Animated.timing(a.opacity, {
           toValue: 1,
-          duration: 600,
-          delay: i * 150,
+          duration: 520,
+          delay: i * 110,
           useNativeDriver: true,
         }),
-        Animated.timing(slideAnims[i], {
+        Animated.timing(a.translateY, {
           toValue: 0,
-          duration: 600,
-          delay: i * 150,
+          duration: 520,
+          delay: i * 110,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
-    Animated.stagger(100, animations).start();
+    Animated.stagger(60, [
+      ...entrance,
+      Animated.spring(ctaScale, {
+        toValue: 1,
+        delay: 180,
+        friction: 6,
+        tension: 80,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
+
+  const anim = (i: number) => ({
+    opacity: anims[i].opacity,
+    transform: [{ translateY: anims[i].translateY }],
+  });
 
   return (
     <ScrollView
@@ -84,450 +92,565 @@ export default function HomeScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* ─── Hero ─────────────────────────────────── */}
-      <View style={styles.hero}>
-        {/* Decorative gradient orbs (like landing) */}
-        <View style={styles.orbContainer}>
-          <View style={[styles.orb, styles.orb1]} />
-          <View style={[styles.orb, styles.orb2]} />
-        </View>
-
-        <Animated.View style={{ opacity: fadeAnims[0], transform: [{ translateY: slideAnims[0] }] }}>
+      {/* ═══ EDITORIAL HEADER ═══════════════════════ */}
+      <Animated.View style={[styles.header, anim(0)]}>
+        <View style={styles.headerRow}>
           <Image
             source={require('../../assets/images/icon.png')}
-            style={styles.heroIcon}
+            style={styles.logo}
             resizeMode="contain"
           />
-        </Animated.View>
+          <View style={styles.headerDot} />
+          <Text style={styles.headerLabel}>MIAMI</Text>
+        </View>
+        <Text style={styles.heroTitle}>LocalList</Text>
+        <View style={styles.taglineRow}>
+          <View style={styles.taglineRule} />
+          <Text style={styles.tagline}>Only The Best. Nothing Else.</Text>
+          <View style={styles.taglineRule} />
+        </View>
+      </Animated.View>
 
-        <Animated.View style={{ opacity: fadeAnims[1], transform: [{ translateY: slideAnims[1] }] }}>
-          <Text style={styles.heroTitle}>
-            <Text style={styles.heroTitleSerif}>Stop researching.{'\n'}</Text>
-            <Text style={styles.heroTitleAccent}>Start traveling.</Text>
-          </Text>
-        </Animated.View>
-
-        <Animated.View style={{ opacity: fadeAnims[2], transform: [{ translateY: slideAnims[2] }] }}>
-          <Text style={styles.heroSubtitle}>
-            No endless options. No tourist traps.{'\n'}Just a plan built to be followed.
-          </Text>
-        </Animated.View>
-
-        <Animated.View style={{ opacity: fadeAnims[3], transform: [{ translateY: slideAnims[3] }] }}>
-          <TouchableOpacity
-            style={styles.heroCta}
-            activeOpacity={0.85}
-            onPress={() => router.push('/builder')}
+      {/* ═══ BUILDER CTA ════════════════════════════ */}
+      <Animated.View
+        style={[
+          styles.ctaOuter,
+          anim(1),
+          { transform: [{ translateY: anims[1].translateY }, { scale: ctaScale }] },
+        ]}
+      >
+        <TouchableOpacity
+          activeOpacity={0.92}
+          onPress={() => router.push('/builder')}
+        >
+          <LinearGradient
+            colors={[colors.deepOcean, '#1a2744']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.ctaCard}
           >
-            <Text style={styles.heroCtaText}>Build Your Plan</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
+            <View style={styles.ctaTop}>
+              <View style={styles.ctaBadge}>
+                <Text style={styles.ctaBadgeText}>AI-POWERED</Text>
+              </View>
+            </View>
+            <Text style={styles.ctaTitle}>Build Your Plan</Text>
+            <Text style={styles.ctaSub}>
+              Tell us what you love — we craft the perfect itinerary in seconds.
+            </Text>
+            <View style={styles.ctaButton}>
+              <Text style={styles.ctaButtonText}>Get Started</Text>
+              <Text style={styles.ctaArrow}>{'\u2192'}</Text>
+            </View>
+            {/* Decorative corner accent */}
+            <View style={styles.ctaCornerAccent} />
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
 
-      {/* ─── Categories ───────────────────────────── */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Explore by Category</Text>
-        <View style={styles.categories}>
+      {/* ═══ CATEGORIES ═════════════════════════════ */}
+      <Animated.View style={[styles.section, anim(2)]}>
+        <Text style={styles.sectionLabel}>EXPLORE</Text>
+        <Text style={styles.sectionHeading}>What draws you in?</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.catScroll}
+        >
           {CATEGORIES.map((cat) => (
             <TouchableOpacity
               key={cat.label}
-              style={styles.categoryCard}
+              style={styles.catPill}
               activeOpacity={0.8}
               onPress={() =>
                 router.push(`/(tabs)/plans?category=${cat.label.toLowerCase()}`)
               }
             >
-              <View style={[styles.categoryIconBg, { backgroundColor: cat.color + '15' }]}>
-                <Text style={styles.categoryIcon}>{cat.icon}</Text>
-              </View>
-              <Text style={styles.categoryLabel}>{cat.label}</Text>
+              <View style={[styles.catAccentBar, { backgroundColor: cat.accent }]} />
+              <Text style={styles.catEmoji}>{cat.icon}</Text>
+              <Text style={styles.catName}>{cat.label}</Text>
             </TouchableOpacity>
           ))}
-        </View>
-      </View>
+        </ScrollView>
+      </Animated.View>
 
-      {/* ─── Featured Plans ───────────────────────── */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Featured Plans</Text>
-        <Text style={styles.sectionSubtitle}>
-          Curated by locals. Ready to follow.
-        </Text>
+      {/* ═══ FEATURED PLANS ═════════════════════════ */}
+      <Animated.View style={[styles.section, anim(3)]}>
+        <View style={styles.featuredHeader}>
+          <View>
+            <Text style={styles.sectionLabel}>CURATED FOR YOU</Text>
+            <Text style={styles.sectionHeading}>Featured Plans</Text>
+          </View>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push('/(tabs)/plans')}
+            style={styles.seeAllPill}
+          >
+            <Text style={styles.seeAllText}>See all</Text>
+          </TouchableOpacity>
+        </View>
 
         {isLoading && (
-          <View style={styles.loadingContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.planScroll}
+          >
             {[1, 2].map((i) => (
-              <View key={i} style={styles.skeletonCard}>
-                <View style={styles.skeletonImage} />
-                <View style={styles.skeletonText} />
-                <View style={[styles.skeletonText, { width: '60%' }]} />
+              <View key={i} style={styles.planCard}>
+                <View style={styles.skeleton} />
               </View>
             ))}
-          </View>
+          </ScrollView>
         )}
 
-        {data?.plans?.map((plan) => (
-          <TouchableOpacity
-            key={plan.id}
-            style={styles.planCard}
-            activeOpacity={0.9}
-            onPress={() => router.push(`/plan/${plan.id}`)}
+        {!isLoading && data?.plans && data.plans.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.planScroll}
+            snapToInterval={SCREEN_WIDTH * 0.78 + 14}
+            decelerationRate="fast"
           >
-            {plan.imageUrl ? (
-              <Image source={{ uri: plan.imageUrl }} style={styles.planImage} />
-            ) : (
-              <LinearGradient
-                colors={['#1e3a4f', '#4eb4e6']}
-                style={styles.planImage}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+            {data.plans.map((plan) => (
+              <TouchableOpacity
+                key={plan.id}
+                style={styles.planCard}
+                activeOpacity={0.92}
+                onPress={() => router.push(`/plan/${plan.id}`)}
               >
-                <Text style={styles.planImagePlaceholder}>{'\u{1F5FA}'}</Text>
-              </LinearGradient>
-            )}
-            <View style={styles.planInfo}>
-              <View style={styles.planBadges}>
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {plan.durationDays} {plan.durationDays === 1 ? 'day' : 'days'}
-                  </Text>
-                </View>
-                {plan.isShowcase && (
-                  <View style={[styles.badge, styles.badgeFeatured]}>
-                    <Text style={[styles.badgeText, styles.badgeFeaturedText]}>
-                      {'\u2B50'} Featured
-                    </Text>
-                  </View>
+                {/* Top accent line */}
+                <View style={styles.planAccentTop} />
+                {plan.imageUrl ? (
+                  <Image source={{ uri: plan.imageUrl }} style={styles.planImage} />
+                ) : (
+                  <LinearGradient
+                    colors={['#0f172a', '#1e3a5f', '#3b82f6']}
+                    style={styles.planImage}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  />
                 )}
-              </View>
-              <Text style={styles.planName}>{plan.name}</Text>
-              {plan.description && (
-                <Text style={styles.planDescription} numberOfLines={2}>
-                  {plan.description}
-                </Text>
-              )}
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
+                <LinearGradient
+                  colors={['transparent', 'rgba(0,0,0,0.8)']}
+                  style={styles.planOverlay}
+                >
+                  <View style={styles.planBadges}>
+                    <View style={styles.daysBadge}>
+                      <Text style={styles.daysText}>
+                        {plan.durationDays}d
+                      </Text>
+                    </View>
+                    <View style={styles.curatedBadge}>
+                      <Text style={styles.curatedText}>Curated</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.planName}>{plan.name}</Text>
+                  {plan.description && (
+                    <Text style={styles.planDesc} numberOfLines={2}>
+                      {plan.description}
+                    </Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+      </Animated.View>
 
-      {/* ─── Quality Promise ──────────────────────── */}
-      <View style={styles.qualitySection}>
-        <View style={styles.qualityCard}>
-          <Text style={styles.qualityBadge}>Only The Best</Text>
-          <Text style={styles.qualityTitle}>Nothing Else.</Text>
-          <Text style={styles.qualityText}>
-            Every place passes a multi-factor quality analysis.
-            If it's not genuinely great, it doesn't make the cut.
-          </Text>
-          <View style={styles.qualityStats}>
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>Top 5%</Text>
-              <Text style={styles.statLabel}>Acceptance Rate</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>0 Ads</Text>
-              <Text style={styles.statLabel}>100% Unbiased</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>Local</Text>
-              <Text style={styles.statLabel}>Verified Places</Text>
-            </View>
+      {/* ═══ EDITORIAL FOOTER ═══════════════════════ */}
+      <Animated.View style={[styles.footer, anim(4)]}>
+        <View style={styles.footerRule} />
+        <Text style={styles.footerText}>
+          Every place passes a multi-factor quality analysis.{'\n'}
+          If it{'\u2019'}s not genuinely great, it doesn{'\u2019'}t make the cut.
+        </Text>
+        <View style={styles.footerStats}>
+          <View style={styles.footerStat}>
+            <Text style={styles.statNum}>Top 5%</Text>
+            <Text style={styles.statDesc}>Acceptance</Text>
+          </View>
+          <View style={styles.footerStatDivider} />
+          <View style={styles.footerStat}>
+            <Text style={styles.statNum}>0 Ads</Text>
+            <Text style={styles.statDesc}>Unbiased</Text>
+          </View>
+          <View style={styles.footerStatDivider} />
+          <View style={styles.footerStat}>
+            <Text style={styles.statNum}>Local</Text>
+            <Text style={styles.statDesc}>Verified</Text>
           </View>
         </View>
-      </View>
+      </Animated.View>
 
-      <View style={{ height: spacing.xxl }} />
+      <View style={{ height: 32 }} />
     </ScrollView>
   );
 }
 
+/* ═══════════════════════════════════════════════════
+   STYLES — Editorial Travel Journal aesthetic
+   ═══════════════════════════════════════════════════ */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bgMain,
   },
   content: {
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
 
-  // ─── Hero ─────────────────────────────────
-  hero: {
+  /* ── HEADER ────────────────────────────────────── */
+  header: {
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
-    paddingBottom: 48,
+    paddingTop: 64,
+    paddingBottom: 6,
     alignItems: 'center',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  logo: {
+    width: 28,
+    height: 34,
+  },
+  headerDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.sunsetOrange,
+    marginHorizontal: 10,
+  },
+  headerLabel: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.textSecondary,
+    letterSpacing: 3,
+  },
+  heroTitle: {
+    fontFamily: fonts.headingBold,
+    fontSize: 42,
+    color: colors.deepOcean,
+    letterSpacing: -0.5,
+    lineHeight: 48,
+  },
+  taglineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  taglineRule: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.deepOcean + '18',
+  },
+  tagline: {
+    fontFamily: fonts.heading,
+    fontSize: 13,
+    color: colors.textSecondary,
+    letterSpacing: 1.2,
+    marginHorizontal: 14,
+    textTransform: 'uppercase',
+  },
+
+  /* ── CTA CARD ──────────────────────────────────── */
+  ctaOuter: {
+    paddingHorizontal: spacing.lg,
+    marginTop: 22,
+  },
+  ctaCard: {
+    borderRadius: 20,
+    padding: 24,
     position: 'relative',
     overflow: 'hidden',
   },
-  orbContainer: {
+  ctaTop: {
+    flexDirection: 'row',
+    marginBottom: 14,
+  },
+  ctaBadge: {
+    backgroundColor: colors.sunsetOrange,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  ctaBadgeText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 10,
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
+  },
+  ctaTitle: {
+    fontFamily: fonts.headingBold,
+    fontSize: 28,
+    color: '#FFFFFF',
+    lineHeight: 34,
+    marginBottom: 8,
+  },
+  ctaSub: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: '#94a3b8',
+    lineHeight: 21,
+    marginBottom: 20,
+  },
+  ctaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.electricBlue,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  ctaButtonText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: '#FFFFFF',
+    marginRight: 8,
+  },
+  ctaArrow: {
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  ctaCornerAccent: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 80,
+    height: 80,
+    borderBottomLeftRadius: 80,
+    backgroundColor: colors.sunsetOrange + '12',
+  },
+
+  /* ── SECTIONS ──────────────────────────────────── */
+  section: {
+    marginTop: 36,
+  },
+  sectionLabel: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 11,
+    color: colors.sunsetOrange,
+    letterSpacing: 2.5,
+    paddingHorizontal: spacing.lg,
+    marginBottom: 4,
+  },
+  sectionHeading: {
+    fontFamily: fonts.headingBold,
+    fontSize: 24,
+    color: colors.deepOcean,
+    paddingHorizontal: spacing.lg,
+    marginBottom: 18,
+  },
+  seeAllPill: {
+    borderWidth: 1,
+    borderColor: colors.electricBlue + '40',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  seeAllText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.electricBlue,
+  },
+
+  /* ── CATEGORIES ────────────────────────────────── */
+  catScroll: {
+    paddingHorizontal: spacing.lg,
+    gap: 10,
+  },
+  catPill: {
+    backgroundColor: colors.bgCard,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    minWidth: 80,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  catAccentBar: {
+    position: 'absolute',
+    top: 0,
+    left: 16,
+    right: 16,
+    height: 3,
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
+  },
+  catEmoji: {
+    fontSize: 26,
+    marginBottom: 6,
+  },
+  catName: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: colors.textMain,
+    letterSpacing: 0.3,
+  },
+
+  /* ── FEATURED PLANS ────────────────────────────── */
+  featuredHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: spacing.lg,
+    marginBottom: 18,
+  },
+  planScroll: {
+    paddingHorizontal: spacing.lg,
+    gap: 14,
+  },
+  planCard: {
+    width: SCREEN_WIDTH * 0.78,
+    height: 260,
+    borderRadius: 22,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 8,
+    position: 'relative',
+  },
+  planAccentTop: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
+    height: 3,
+    backgroundColor: colors.sunsetOrange,
+    zIndex: 10,
   },
-  orb: {
-    position: 'absolute',
-    borderRadius: 999,
+  planImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
-  orb1: {
-    width: 300,
-    height: 300,
-    top: -80,
-    left: -60,
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+  planOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    padding: 22,
   },
-  orb2: {
-    width: 250,
-    height: 250,
-    top: 40,
-    right: -80,
-    backgroundColor: 'rgba(249, 115, 22, 0.06)',
+  planBadges: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
   },
-  heroIcon: {
-    width: 72,
-    height: 90,
-    marginBottom: 24,
+  daysBadge: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
-  heroTitle: {
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  heroTitleSerif: {
-    fontFamily: fonts.headingBold,
-    fontSize: 32,
-    color: colors.deepOcean,
-    lineHeight: 40,
-  },
-  heroTitleAccent: {
-    fontFamily: fonts.headingBold,
-    fontSize: 32,
-    color: colors.electricBlue,
-    lineHeight: 40,
-  },
-  heroSubtitle: {
-    fontFamily: fonts.body,
-    fontSize: 16,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 28,
-    paddingHorizontal: spacing.md,
-  },
-  heroCta: {
-    backgroundColor: colors.electricBlue,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 12,
-    shadowColor: colors.electricBlue,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  heroCtaText: {
+  daysText: {
     fontFamily: fonts.bodySemiBold,
-    fontSize: 16,
+    fontSize: 12,
     color: '#FFFFFF',
-    letterSpacing: 0.3,
   },
-
-  // ─── Section ──────────────────────────────
-  section: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: 32,
+  curatedBadge: {
+    backgroundColor: colors.sunsetOrange + 'DD',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
-  sectionTitle: {
+  curatedText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  planName: {
     fontFamily: fonts.headingBold,
     fontSize: 24,
-    color: colors.deepOcean,
+    color: '#FFFFFF',
+    lineHeight: 30,
     marginBottom: 4,
-    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
-  sectionSubtitle: {
+  planDesc: {
     fontFamily: fonts.body,
     fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 20,
-    textAlign: 'center',
+    color: 'rgba(255,255,255,0.8)',
+    lineHeight: 20,
   },
 
-  // ─── Categories ───────────────────────────
-  categories: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 16,
+  /* ── SKELETON ──────────────────────────────────── */
+  skeleton: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 22,
+    backgroundColor: colors.borderColor,
   },
-  categoryCard: {
-    width: (SCREEN_WIDTH - spacing.lg * 2 - 24) / 3,
+
+  /* ── EDITORIAL FOOTER ──────────────────────────── */
+  footer: {
+    marginTop: 40,
+    paddingHorizontal: spacing.lg,
     alignItems: 'center',
-    paddingVertical: 16,
+  },
+  footerRule: {
+    width: 40,
+    height: 2,
+    backgroundColor: colors.sunsetOrange,
+    borderRadius: 1,
+    marginBottom: 18,
+  },
+  footerText: {
+    fontFamily: fonts.heading,
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 22,
+  },
+  footerStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.bgCard,
     borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+    width: '100%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
-  categoryIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  categoryIcon: {
-    fontSize: 22,
-  },
-  categoryLabel: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 13,
-    color: colors.textMain,
-  },
-
-  // ─── Plan Cards ───────────────────────────
-  planCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 3,
-  },
-  planImage: {
-    width: '100%',
-    height: 180,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  planImagePlaceholder: {
-    fontSize: 48,
-    opacity: 0.6,
-  },
-  planInfo: {
-    padding: 16,
-  },
-  planBadges: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  badge: {
-    backgroundColor: colors.bgMain,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  badgeText: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  badgeFeatured: {
-    backgroundColor: '#fef3c7',
-  },
-  badgeFeaturedText: {
-    color: '#92400e',
-  },
-  planName: {
-    fontFamily: fonts.headingSemiBold,
-    fontSize: 20,
-    color: colors.deepOcean,
-    marginBottom: 4,
-  },
-  planDescription: {
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
-
-  // ─── Loading Skeleton ─────────────────────
-  loadingContainer: {
-    gap: 16,
-  },
-  skeletonCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: 16,
-    padding: 16,
-    gap: 12,
-  },
-  skeletonImage: {
-    width: '100%',
-    height: 160,
-    borderRadius: 12,
-    backgroundColor: '#e5e5e5',
-  },
-  skeletonText: {
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#e5e5e5',
-    width: '80%',
-  },
-
-  // ─── Quality Promise ──────────────────────
-  qualitySection: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: 16,
-  },
-  qualityCard: {
-    backgroundColor: colors.deepOcean,
-    borderRadius: 20,
-    padding: 28,
-    alignItems: 'center',
-  },
-  qualityBadge: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: colors.sunsetOrange,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  qualityTitle: {
-    fontFamily: fonts.headingBold,
-    fontSize: 28,
-    color: '#FFFFFF',
-    marginBottom: 12,
-  },
-  qualityText: {
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: '#94a3b8',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  qualityStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  stat: {
+  footerStat: {
     flex: 1,
     alignItems: 'center',
   },
-  statValue: {
-    fontFamily: fonts.bodyBold,
+  footerStatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: colors.borderColor,
+  },
+  statNum: {
+    fontFamily: fonts.headingSemiBold,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: colors.deepOcean,
     marginBottom: 2,
   },
-  statLabel: {
+  statDesc: {
     fontFamily: fonts.body,
     fontSize: 11,
-    color: '#64748b',
-  },
-  statDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: '#334155',
+    color: colors.textSecondary,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
 });

@@ -33,12 +33,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => (
             <Text style={{ fontSize: 22, color }}>{'\u{1F3E0}'}</Text>
           ),
-          headerTitle: 'LocalList',
-          headerTitleStyle: {
-            fontSize: 22,
-            fontWeight: '700',
-            color: colors.deepOcean,
-          },
+          headerShown: false,
         }}
       />
       <Tabs.Screen
