@@ -189,7 +189,7 @@ const MOCK_RESULT: PlanResult = {
 
 export default function BuilderScreen() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isPro } = useAuth();
 
   // Form state
   const [phase, setPhase] = useState<BuilderPhase>('form');
@@ -321,18 +321,40 @@ export default function BuilderScreen() {
 
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.resultContent}>
+        {/* ── Plan Header ──────────────────────── */}
         <View style={styles.resultHeader}>
           <Text style={styles.resultTitle}>{plan.name}</Text>
           <Text style={styles.resultMeta}>
             {plan.city} &middot; {plan.durationDays} {plan.durationDays === 1 ? 'day' : 'days'} &middot; {stops.length} stops
           </Text>
-          {usage.remaining !== null && usage.limit !== null && (
-            <Text style={styles.usageText}>
-              {usage.remaining} of {usage.limit} plans remaining today
-            </Text>
-          )}
         </View>
 
+        {/* ── Usage Counter (non-Pro) ─────────── */}
+        {!isPro && usage.remaining !== null && usage.limit !== null && (
+          <View style={styles.usageBanner}>
+            <View style={styles.usageBarTrack}>
+              <View
+                style={[
+                  styles.usageBarFill,
+                  { width: `${((usage.limit - usage.remaining) / usage.limit) * 100}%` },
+                ]}
+              />
+            </View>
+            <View style={styles.usageRow}>
+              <Text style={styles.usageText}>
+                {usage.remaining} of {usage.limit} free plans left today
+              </Text>
+              <TouchableOpacity
+                onPress={() => isAuthenticated ? setShowPaywallModal(true) : setShowSignupModal(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.usageUpgrade}>Get 50/day {'\u2192'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* ── Day-by-day stops ─────────────────── */}
         {dayNumbers.map((dayNum) => (
           <View key={dayNum} style={styles.daySection}>
             <Text style={styles.dayTitle}>Day {dayNum}</Text>
@@ -367,32 +389,83 @@ export default function BuilderScreen() {
           </View>
         ))}
 
+        {/* ── Follow Mode Upsell (non-Pro) ─────── */}
+        {!isPro && (
+          <View style={styles.followUpsell}>
+            <LinearGradient
+              colors={[colors.deepOcean, '#1e3a5f']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.followUpsellCard}
+            >
+              <View style={styles.followUpsellCorner} />
+              <View style={styles.followUpsellBadge}>
+                <Text style={styles.followUpsellBadgeText}>PRO FEATURE</Text>
+              </View>
+              <Text style={styles.followUpsellTitle}>Follow This Plan{'\n'}Step by Step</Text>
+              <Text style={styles.followUpsellDesc}>
+                Real-time navigation from stop to stop. See where you are, what{'\u2019'}s next, and get directions — all without leaving the app.
+              </Text>
+              {/* Mini preview of Follow Mode */}
+              <View style={styles.followPreview}>
+                <View style={styles.followPreviewDot} />
+                <View style={styles.followPreviewContent}>
+                  <Text style={styles.followPreviewNow}>NOW</Text>
+                  <Text style={styles.followPreviewName}>
+                    {stops[0]?.place?.name ?? 'Your first stop'}
+                  </Text>
+                  <Text style={styles.followPreviewMeta}>
+                    Tap "Done" to move to the next spot {'\u2192'}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => isAuthenticated ? setShowPaywallModal(true) : setShowSignupModal(true)}
+              >
+                <View style={styles.followUpsellBtn}>
+                  <Text style={styles.followUpsellBtnText}>Unlock Follow Mode</Text>
+                </View>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        )}
+
+        {/* ── Actions ──────────────────────────── */}
         <View style={styles.resultActions}>
           {isEphemeral && !isAuthenticated && (
-            <Button
-              title="Sign Up to Save This Plan"
+            <TouchableOpacity
+              activeOpacity={0.9}
               onPress={() => router.push('/(auth)/login')}
-              variant="primary"
-              size="lg"
-              style={styles.resultAction}
-            />
+            >
+              <LinearGradient
+                colors={[colors.sunsetOrange, '#ea580c']}
+                style={styles.saveBtn}
+              >
+                <Text style={styles.saveBtnText}>Sign Up to Save This Plan</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           )}
           {!isEphemeral && (
-            <Button
-              title="View Full Plan"
+            <TouchableOpacity
+              activeOpacity={0.9}
               onPress={() => router.push(`/plan/${plan.id}`)}
-              variant="primary"
-              size="lg"
-              style={styles.resultAction}
-            />
+            >
+              <LinearGradient
+                colors={[colors.electricBlue, '#2563eb']}
+                style={styles.saveBtn}
+              >
+                <Text style={styles.saveBtnText}>View Full Plan</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           )}
-          <Button
-            title="Build Another Plan"
+          <TouchableOpacity
+            activeOpacity={0.8}
             onPress={handleReset}
-            variant="outline"
-            size="lg"
-            style={styles.resultAction}
-          />
+            style={styles.anotherBtn}
+          >
+            <Text style={styles.anotherBtnText}>Build Another Plan</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     );
@@ -809,5 +882,163 @@ const styles = StyleSheet.create({
   },
   resultAction: {
     width: '100%',
+  },
+
+  // ── Usage Banner ──────────────────────
+  usageBanner: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.bgCard,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.electricBlue + '20',
+  },
+  usageBarTrack: {
+    height: 6,
+    backgroundColor: colors.electricBlueLight,
+    borderRadius: 3,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  usageBarFill: {
+    height: '100%',
+    backgroundColor: colors.electricBlue,
+    borderRadius: 3,
+  },
+  usageRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  usageUpgrade: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.sunsetOrange,
+  },
+
+  // ── Follow Mode Upsell ────────────────
+  followUpsell: {
+    paddingHorizontal: spacing.lg,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  followUpsellCard: {
+    borderRadius: 20,
+    padding: 24,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  followUpsellCorner: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 80,
+    height: 80,
+    borderBottomLeftRadius: 80,
+    backgroundColor: colors.sunsetOrange + '18',
+  },
+  followUpsellBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.sunsetOrange,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 14,
+  },
+  followUpsellBadgeText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 10,
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
+  },
+  followUpsellTitle: {
+    fontFamily: fonts.headingBold,
+    fontSize: 24,
+    color: '#FFFFFF',
+    lineHeight: 30,
+    marginBottom: 10,
+  },
+  followUpsellDesc: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    lineHeight: 21,
+    marginBottom: 18,
+  },
+  followPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  followPreviewDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.sunsetOrange,
+    marginRight: 12,
+  },
+  followPreviewContent: {
+    flex: 1,
+  },
+  followPreviewNow: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 10,
+    color: colors.sunsetOrange,
+    letterSpacing: 1.5,
+    marginBottom: 2,
+  },
+  followPreviewName: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  followPreviewMeta: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  followUpsellBtn: {
+    backgroundColor: colors.sunsetOrange,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  followUpsellBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+
+  // ── Action Buttons ────────────────────
+  saveBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 14,
+  },
+  saveBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 17,
+    color: '#FFFFFF',
+  },
+  anotherBtn: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.borderColor,
+    backgroundColor: colors.bgCard,
+  },
+  anotherBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: colors.textSecondary,
   },
 });
