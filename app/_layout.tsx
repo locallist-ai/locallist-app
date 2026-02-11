@@ -4,6 +4,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
+import { DevPreferencesProvider } from '../lib/dev-preferences';
+import { DevPanel } from '../components/DevPanel';
 import { AuthProvider } from '../lib/auth';
 import { colors } from '../lib/theme';
 
@@ -86,46 +88,49 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <StatusBar style="dark" />
-        <Stack
-          screenOptions={{
-            headerStyle: { backgroundColor: colors.bgMain },
-            headerTintColor: colors.deepOcean,
-            headerTitleStyle: { fontWeight: '600' },
-            contentStyle: { backgroundColor: colors.bgMain },
-            headerShadowVisible: false,
-          }}
-        >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="(auth)/login"
-            options={{
-              title: 'Sign In',
-              presentation: 'modal',
+      <DevPreferencesProvider>
+        <AuthProvider>
+          <StatusBar style="dark" />
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: colors.bgMain },
+              headerTintColor: colors.deepOcean,
+              headerTitleStyle: { fontWeight: '600' },
+              contentStyle: { backgroundColor: colors.bgMain },
+              headerShadowVisible: false,
             }}
-          />
-          <Stack.Screen
-            name="plan/[id]"
-            options={{ title: 'Plan Details' }}
-          />
-          <Stack.Screen
-            name="place/[id]"
-            options={{ title: 'Place Details' }}
-          />
-          <Stack.Screen
-            name="builder"
-            options={{ title: 'Plan Builder' }}
-          />
-          <Stack.Screen
-            name="follow/[id]"
-            options={{
-              title: 'Follow Mode',
-              headerBackVisible: false,
-            }}
-          />
-        </Stack>
-      </AuthProvider>
+          >
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="(auth)/login"
+              options={{
+                title: 'Sign In',
+                presentation: 'modal',
+              }}
+            />
+            <Stack.Screen
+              name="plan/[id]"
+              options={{ title: 'Plan Details' }}
+            />
+            <Stack.Screen
+              name="place/[id]"
+              options={{ title: 'Place Details' }}
+            />
+            <Stack.Screen
+              name="builder"
+              options={{ title: 'Plan Builder' }}
+            />
+            <Stack.Screen
+              name="follow/[id]"
+              options={{
+                title: 'Follow Mode',
+                headerBackVisible: false,
+              }}
+            />
+          </Stack>
+          {__DEV__ && <DevPanel />}
+        </AuthProvider>
+      </DevPreferencesProvider>
     </SafeAreaProvider>
   );
 }

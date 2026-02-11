@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api, setTokens, clearTokens, getAccessToken } from './api';
+import { useDevPreferences, getMockUserForProfile } from './dev-preferences';
+
+const USE_MOCK = __DEV__;
 
 interface User {
   id: string;
@@ -27,10 +30,26 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { mockProfile } = USE_MOCK ? useDevPreferences() : { mockProfile: 'pro' as const };
+  const mockUser = USE_MOCK ? getMockUserForProfile(mockProfile) : null;
+
+  const [user, setUser] = useState<User | null>(USE_MOCK ? mockUser : null);
+  const [isLoading, setIsLoading] = useState(USE_MOCK ? false : true);
+
+  // Sync user state when mockProfile changes
+  useEffect(() => {
+    if (USE_MOCK) {
+      setUser(getMockUserForProfile(mockProfile));
+    }
+  }, [mockProfile]);
 
   const refreshUser = useCallback(async () => {
+    if (USE_MOCK) {
+      setUser(getMockUserForProfile(mockProfile));
+      setIsLoading(false);
+      return;
+    }
+
     const token = await getAccessToken();
     if (!token) {
       setUser(null);
@@ -38,14 +57,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const { data, error } = await api<User>('/account');
+    const { data } = await api<User>('/account');
     if (data) {
       setUser(data);
     } else {
       setUser(null);
     }
     setIsLoading(false);
-  }, []);
+  }, [mockProfile]);
 
   useEffect(() => {
     refreshUser();
