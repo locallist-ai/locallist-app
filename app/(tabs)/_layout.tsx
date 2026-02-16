@@ -1,58 +1,21 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
-import { colors } from '../../lib/theme';
+import { useTheme } from '../../lib/ThemeContext';
 
 export default function TabsLayout() {
+  const { colors: c } = useTheme();
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.electricBlue,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarStyle: {
-          backgroundColor: colors.bgCard,
-          borderTopColor: colors.borderColor,
-          borderTopWidth: 1,
-          paddingTop: 4,
-          height: 85,
-          paddingBottom: 28,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-        },
-        headerStyle: { backgroundColor: colors.bgMain },
-        headerTintColor: colors.deepOcean,
+        tabBarStyle: { display: 'none' },
+        headerStyle: { backgroundColor: c.bgMain },
+        headerTintColor: c.deepOcean,
         headerShadowVisible: false,
       }}
     >
       <Tabs.Screen
         name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 22, color }}>{'\u{1F3E0}'}</Text>
-          ),
-          headerShown: false,
-        }}
-      />
-      <Tabs.Screen
-        name="plans"
-        options={{
-          title: 'Plans',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 22, color }}>{'\u{1F5FA}'}</Text>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="account"
-        options={{
-          title: 'Account',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 22, color }}>{'\u{1F464}'}</Text>
-          ),
-        }}
+        options={{ headerShown: false }}
       />
     </Tabs>
   );

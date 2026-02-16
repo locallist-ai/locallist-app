@@ -1,15 +1,13 @@
+import '../lib/i18n';
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Image, StyleSheet, Animated } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
-import { DevPreferencesProvider } from '../lib/dev-preferences';
-import { DevPanel } from '../components/DevPanel';
-import { AuthProvider } from '../lib/auth';
 import { colors } from '../lib/theme';
+import { ThemeProvider, useTheme } from '../lib/ThemeContext';
 
-// Keep Expo splash visible while we load
 SplashScreen.preventAutoHideAsync();
 
 function AppSplash({ onFinish }: { onFinish: () => void }) {
@@ -17,7 +15,6 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
   const scaleAnim = new Animated.Value(0.8);
 
   useEffect(() => {
-    // Animate logo in
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -32,7 +29,6 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
       }),
     ]).start();
 
-    // Hold splash then fade out
     const timer = setTimeout(() => {
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -60,7 +56,7 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
 const splashStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2EFE9',
+    backgroundColor: colors.bgMain,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -87,50 +83,28 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <DevPreferencesProvider>
-        <AuthProvider>
-          <StatusBar style="dark" />
-          <Stack
-            screenOptions={{
-              headerStyle: { backgroundColor: colors.bgMain },
-              headerTintColor: colors.deepOcean,
-              headerTitleStyle: { fontWeight: '600' },
-              contentStyle: { backgroundColor: colors.bgMain },
-              headerShadowVisible: false,
-            }}
-          >
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="(auth)/login"
-              options={{
-                title: 'Sign In',
-                presentation: 'modal',
-              }}
-            />
-            <Stack.Screen
-              name="plan/[id]"
-              options={{ title: 'Plan Details' }}
-            />
-            <Stack.Screen
-              name="place/[id]"
-              options={{ title: 'Place Details' }}
-            />
-            <Stack.Screen
-              name="builder"
-              options={{ title: 'Plan Builder' }}
-            />
-            <Stack.Screen
-              name="follow/[id]"
-              options={{
-                title: 'Follow Mode',
-                headerBackVisible: false,
-              }}
-            />
-          </Stack>
-          {__DEV__ && <DevPanel />}
-        </AuthProvider>
-      </DevPreferencesProvider>
-    </SafeAreaProvider>
+    <ThemeProvider>
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <ThemedStack />
+      </SafeAreaProvider>
+    </ThemeProvider>
+  );
+}
+
+function ThemedStack() {
+  const { colors: c } = useTheme();
+  return (
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: c.bgMain },
+        headerTintColor: c.deepOcean,
+        headerTitleStyle: { fontWeight: '600' },
+        contentStyle: { backgroundColor: c.bgMain },
+        headerShadowVisible: false,
+      }}
+    >
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    </Stack>
   );
 }

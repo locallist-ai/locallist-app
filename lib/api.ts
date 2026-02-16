@@ -1,144 +1,164 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import { getDeviceId } from './device';
 
 function getApiUrl(): string {
   if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
-  // Android emulator uses 10.0.2.2 to reach host machine's localhost
   if (Platform.OS === 'android') return 'http://10.0.2.2:3000';
   return 'http://localhost:3000';
 }
 
 const API_URL = getApiUrl();
 
-interface ApiOptions {
-  method?: string;
-  body?: unknown;
-  auth?: boolean;
-}
+// ─── Token storage ───────────────────────────────────────
 
-interface ApiResponse<T> {
-  data: T | null;
-  error: string | null;
-  errorBody: Record<string, unknown> | null;
-  status: number;
-}
+let accessToken: string | null = null;
+let tokenLoadPromise: Promise<void> | null = null;
 
-async function getAccessToken(): Promise<string | null> {
+const TOKEN_KEY = 'locallist_access_token';
+const REFRESH_KEY = 'locallist_refresh_token';
+
+async function loadTokens() {
   if (Platform.OS === 'web') {
-    return typeof localStorage !== 'undefined'
-      ? localStorage.getItem('ll_access_token')
-      : null;
+    accessToken = localStorage.getItem(TOKEN_KEY);
+  } else {
+    accessToken = await SecureStore.getItemAsync(TOKEN_KEY);
   }
-  return SecureStore.getItemAsync('ll_access_token');
 }
 
-async function setTokens(access: string, refresh: string): Promise<void> {
+export async function setTokens(access: string, refresh?: string) {
+  accessToken = access;
   if (Platform.OS === 'web') {
-    localStorage.setItem('ll_access_token', access);
-    localStorage.setItem('ll_refresh_token', refresh);
-    return;
+    localStorage.setItem(TOKEN_KEY, access);
+    if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
+  } else {
+    await SecureStore.setItemAsync(TOKEN_KEY, access);
+    if (refresh) await SecureStore.setItemAsync(REFRESH_KEY, refresh);
   }
-  await SecureStore.setItemAsync('ll_access_token', access);
-  await SecureStore.setItemAsync('ll_refresh_token', refresh);
 }
 
-async function clearTokens(): Promise<void> {
+export async function clearTokens() {
+  accessToken = null;
   if (Platform.OS === 'web') {
-    localStorage.removeItem('ll_access_token');
-    localStorage.removeItem('ll_refresh_token');
-    return;
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+  } else {
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await SecureStore.deleteItemAsync(REFRESH_KEY);
   }
-  await SecureStore.deleteItemAsync('ll_access_token');
-  await SecureStore.deleteItemAsync('ll_refresh_token');
+}
+
+export async function getAccessToken(): Promise<string | null> {
+  // Ensure tokens are loaded before returning
+  if (tokenLoadPromise) await tokenLoadPromise;
+  return accessToken;
 }
 
 async function getRefreshToken(): Promise<string | null> {
   if (Platform.OS === 'web') {
-    return typeof localStorage !== 'undefined'
-      ? localStorage.getItem('ll_refresh_token')
-      : null;
+    return localStorage.getItem(REFRESH_KEY);
   }
-  return SecureStore.getItemAsync('ll_refresh_token');
+  return SecureStore.getItemAsync(REFRESH_KEY);
 }
 
-/** Try to refresh the access token using the stored refresh token */
-async function tryRefresh(): Promise<boolean> {
-  const refreshToken = await getRefreshToken();
-  if (!refreshToken) return false;
+// Init tokens on load — store the promise so callers can await it
+tokenLoadPromise = loadTokens().finally(() => {
+  tokenLoadPromise = null;
+});
 
-  try {
-    const res = await fetch(`${API_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    });
+// ─── API client ──────────────────────────────────────────
 
-    if (!res.ok) {
-      await clearTokens();
-      return false;
-    }
-
-    const data = await res.json();
-    await setTokens(data.accessToken, data.refreshToken);
-    return true;
-  } catch {
-    return false;
-  }
+interface ApiResult<T> {
+  data: T | null;
+  error: string | null;
+  errorBody: any;
+  status: number;
 }
 
-/** Typed API fetch wrapper with automatic token refresh */
 export async function api<T>(
   path: string,
-  options: ApiOptions = {}
-): Promise<ApiResponse<T>> {
-  const { method = 'GET', body, auth = true } = options;
+  options: { method?: string; body?: any } = {},
+): Promise<ApiResult<T>> {
+  const { method = 'GET', body } = options;
+
+  // Ensure token is loaded before first request
+  const token = await getAccessToken();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-
-  // Always send device ID for anonymous rate limiting
-  const deviceId = await getDeviceId();
-  headers['X-Device-Id'] = deviceId;
-
-  if (auth) {
-    const token = await getAccessToken();
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-  }
-
-  const fetchOptions: RequestInit = { method, headers };
-  if (body) {
-    fetchOptions.body = JSON.stringify(body);
-  }
+  if (token) headers['Authorization'] = `Bearer ${token}`;
 
   try {
-    let res = await fetch(`${API_URL}${path}`, fetchOptions);
+    const res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
 
-    // If 401 and we have a refresh token, try to refresh
-    if (res.status === 401 && auth) {
-      const refreshed = await tryRefresh();
+    const json = await res.json().catch(() => null);
+
+    // Auto-refresh on 401
+    if (res.status === 401 && token) {
+      const refreshed = await tryRefreshToken();
       if (refreshed) {
-        const newToken = await getAccessToken();
-        if (newToken) {
-          headers['Authorization'] = `Bearer ${newToken}`;
-          res = await fetch(`${API_URL}${path}`, { ...fetchOptions, headers });
-        }
+        // Retry the original request with new token
+        return api<T>(path, options);
       }
     }
 
-    const json = await res.json().catch(() => null);
-    const data = res.ok ? json : null;
-    const errorBody = res.ok ? null : json;
-    const error = res.ok ? null : json?.error ?? 'Request failed';
+    if (!res.ok) {
+      return {
+        data: null,
+        error: json?.error ?? `HTTP ${res.status}`,
+        errorBody: json,
+        status: res.status,
+      };
+    }
 
-    return { data, error, errorBody, status: res.status };
-  } catch {
-    // Network error (no connection, DNS failure, etc.)
-    return { data: null, error: 'Unable to connect to server', errorBody: null, status: 0 };
+    return { data: json as T, error: null, errorBody: null, status: res.status };
+  } catch (err: any) {
+    return {
+      data: null,
+      error: err.message ?? 'Network error',
+      errorBody: null,
+      status: 0,
+    };
   }
 }
 
-export { setTokens, clearTokens, getAccessToken, API_URL };
+// ─── Token refresh ──────────────────────────────────────
+
+let refreshInProgress: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  // Prevent concurrent refresh attempts
+  if (refreshInProgress) return refreshInProgress;
+
+  refreshInProgress = (async () => {
+    try {
+      const refreshToken = await getRefreshToken();
+      if (!refreshToken) return false;
+
+      const res = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!res.ok) {
+        await clearTokens();
+        return false;
+      }
+
+      const data = await res.json();
+      await setTokens(data.accessToken, data.refreshToken);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInProgress = null;
+    }
+  })();
+
+  return refreshInProgress;
+}

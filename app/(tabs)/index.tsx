@@ -1,798 +1,587 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
   Image,
-  Animated,
-  Dimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useApi } from '../../hooks/useApi';
-import { useAuth } from '../../lib/auth';
-import { colors, spacing, fonts } from '../../lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { fonts } from '../../lib/theme';
+import { useTheme } from '../../lib/ThemeContext';
+import { themes, themeOrder, type ThemeId } from '../../lib/themes';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-interface Plan {
-  id: string;
-  name: string;
-  description: string | null;
-  durationDays: number;
-  imageUrl: string | null;
-  type: string;
-  isShowcase: boolean;
-}
-
-const CATEGORIES = [
-  { label: 'Food', icon: '\u{1F37D}', accent: '#ef4444' },
-  { label: 'Nightlife', icon: '\u{1F378}', accent: '#8b5cf6' },
-  { label: 'Outdoors', icon: '\u{1F3D6}', accent: '#10b981' },
-  { label: 'Coffee', icon: '\u2615', accent: '#f59e0b' },
-  { label: 'Culture', icon: '\u{1F3A8}', accent: '#3b82f6' },
-  { label: 'Wellness', icon: '\u{1F9D8}', accent: '#ec4899' },
+const STYLE_OPTIONS = [
+  { id: 'adventure', icon: 'compass-outline' as const, label: 'Adventure' },
+  { id: 'relax', icon: 'leaf-outline' as const, label: 'Relax' },
+  { id: 'cultural', icon: 'color-palette-outline' as const, label: 'Cultural' },
 ];
 
+const COMPANY_OPTIONS = [
+  { id: 'solo', icon: 'person-outline' as const, label: 'Solo' },
+  { id: 'couple', icon: 'heart-outline' as const, label: 'Couple' },
+  { id: 'family', icon: 'people-outline' as const, label: 'Family' },
+];
+
+const softShadow = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.08,
+  shadowRadius: 16,
+  elevation: 4,
+};
+
 export default function HomeScreen() {
-  const router = useRouter();
-  const { isPro } = useAuth();
-  const { data, isLoading } = useApi<{ plans: Plan[] }>('/plans?showcase=true', {
-    auth: false,
-  });
+  const { themeId, colors, copy, visualStyle, setThemeId } = useTheme();
+  const [message, setMessage] = useState('');
+  const [style, setStyle] = useState<string | null>(null);
+  const [company, setCompany] = useState<string | null>(null);
 
-  // 5-part staggered entrance
-  const anims = useRef(
-    Array.from({ length: 5 }, () => ({
-      opacity: new Animated.Value(0),
-      translateY: new Animated.Value(28),
-    })),
-  ).current;
-
-  // Subtle scale for the CTA card
-  const ctaScale = useRef(new Animated.Value(0.96)).current;
-
-  useEffect(() => {
-    const entrance = anims.map((a, i) =>
-      Animated.parallel([
-        Animated.timing(a.opacity, {
-          toValue: 1,
-          duration: 520,
-          delay: i * 110,
-          useNativeDriver: true,
-        }),
-        Animated.timing(a.translateY, {
-          toValue: 0,
-          duration: 520,
-          delay: i * 110,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    Animated.stagger(60, [
-      ...entrance,
-      Animated.spring(ctaScale, {
-        toValue: 1,
-        delay: 180,
-        friction: 6,
-        tension: 80,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  const anim = (i: number) => ({
-    opacity: anims[i].opacity,
-    transform: [{ translateY: anims[i].translateY }],
-  });
+  const isClassic = visualStyle.layout === 'classic';
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
+    <KeyboardAvoidingView
+      style={[s.root, { backgroundColor: colors.bgMain }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* ═══ EDITORIAL HEADER ═══════════════════════ */}
-      <Animated.View style={[styles.header, anim(0)]}>
-        <View style={styles.headerRow}>
-          <Image
-            source={require('../../assets/images/icon.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <View style={styles.headerDot} />
-          <Text style={styles.headerLabel}>MIAMI</Text>
-        </View>
-        <Text style={styles.heroTitle}>LocalList</Text>
-        <View style={styles.taglineRow}>
-          <View style={styles.taglineRule} />
-          <Text style={styles.tagline}>Only The Best. Nothing Else.</Text>
-          <View style={styles.taglineRule} />
-        </View>
-      </Animated.View>
-
-      {/* ═══ BUILDER CTA ════════════════════════════ */}
-      <Animated.View
-        style={[
-          styles.ctaOuter,
-          anim(1),
-          { transform: [{ translateY: anims[1].translateY }, { scale: ctaScale }] },
+      <ScrollView
+        contentContainerStyle={[
+          s.scrollContent,
+          isClassic && s.scrollContentClassic,
         ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity
-          activeOpacity={0.92}
-          onPress={() => router.push('/builder')}
-        >
-          <LinearGradient
-            colors={[colors.deepOcean, '#1a2744']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.ctaCard}
-          >
-            <View style={styles.ctaTop}>
-              <View style={styles.ctaBadge}>
-                <Text style={styles.ctaBadgeText}>AI-POWERED</Text>
-              </View>
-            </View>
-            <Text style={styles.ctaTitle}>Build Your Plan</Text>
-            <Text style={styles.ctaSub}>
-              Tell us what you love — we craft the perfect itinerary in seconds.
-            </Text>
-            <View style={styles.ctaButton}>
-              <Text style={styles.ctaButtonText}>Get Started</Text>
-              <Text style={styles.ctaArrow}>{'\u2192'}</Text>
-            </View>
-            {/* Decorative corner accent */}
-            <View style={styles.ctaCornerAccent} />
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
-
-      {/* ═══ CATEGORIES ═════════════════════════════ */}
-      <Animated.View style={[styles.section, anim(2)]}>
-        <Text style={styles.sectionLabel}>EXPLORE</Text>
-        <Text style={styles.sectionHeading}>What draws you in?</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.catScroll}
-        >
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat.label}
-              style={styles.catPill}
-              activeOpacity={0.8}
-              onPress={() =>
-                router.push(`/(tabs)/plans?category=${cat.label.toLowerCase()}`)
-              }
-            >
-              <View style={[styles.catAccentBar, { backgroundColor: cat.accent }]} />
-              <Text style={styles.catEmoji}>{cat.icon}</Text>
-              <Text style={styles.catName}>{cat.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </Animated.View>
-
-      {/* ═══ FEATURED PLANS ═════════════════════════ */}
-      <Animated.View style={[styles.section, anim(3)]}>
-        <View style={styles.featuredHeader}>
-          <View>
-            <Text style={styles.sectionLabel}>CURATED FOR YOU</Text>
-            <Text style={styles.sectionHeading}>Featured Plans</Text>
-          </View>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push('/(tabs)/plans')}
-            style={styles.seeAllPill}
-          >
-            <Text style={styles.seeAllText}>See all</Text>
-          </TouchableOpacity>
-        </View>
-
-        {isLoading && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.planScroll}
-          >
-            {[1, 2].map((i) => (
-              <View key={i} style={styles.planCard}>
-                <View style={styles.skeleton} />
-              </View>
-            ))}
-          </ScrollView>
-        )}
-
-        {!isLoading && data?.plans && data.plans.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.planScroll}
-            snapToInterval={SCREEN_WIDTH * 0.78 + 14}
-            decelerationRate="fast"
-          >
-            {data.plans.map((plan) => (
+        {/* ── Theme Switcher ────────────────────── */}
+        <View style={[s.themeSwitcher, { backgroundColor: colors.bgCard + '90' }]}>
+          {themeOrder.map((id) => {
+            const t = themes[id];
+            const active = id === themeId;
+            return (
               <TouchableOpacity
-                key={plan.id}
-                style={styles.planCard}
-                activeOpacity={0.92}
-                onPress={() => router.push(`/plan/${plan.id}`)}
+                key={id}
+                style={[
+                  s.themeBtn,
+                  active && { backgroundColor: colors.deepOcean + '18' },
+                ]}
+                onPress={() => setThemeId(id)}
+                activeOpacity={0.7}
               >
-                {/* Top accent line */}
-                <View style={styles.planAccentTop} />
-                {plan.imageUrl ? (
-                  <Image source={{ uri: plan.imageUrl }} style={styles.planImage} />
-                ) : (
-                  <LinearGradient
-                    colors={['#0f172a', '#1e3a5f', '#3b82f6']}
-                    style={styles.planImage}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  />
-                )}
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.8)']}
-                  style={styles.planOverlay}
+                <View style={[s.themeDot, { backgroundColor: t.dot }]} />
+                <Text
+                  style={[
+                    s.themeBtnText,
+                    { color: active ? colors.deepOcean : colors.textSecondary },
+                    active && { fontFamily: fonts.bodySemiBold },
+                  ]}
                 >
-                  <View style={styles.planBadges}>
-                    <View style={styles.daysBadge}>
-                      <Text style={styles.daysText}>
-                        {plan.durationDays}d
-                      </Text>
-                    </View>
-                    <View style={styles.curatedBadge}>
-                      <Text style={styles.curatedText}>Curated</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.planName}>{plan.name}</Text>
-                  {plan.description && (
-                    <Text style={styles.planDesc} numberOfLines={2}>
-                      {plan.description}
-                    </Text>
-                  )}
-                </LinearGradient>
+                  {t.label}
+                </Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
-      </Animated.View>
+            );
+          })}
+        </View>
 
-      {/* ═══ PRO FEATURES TEASER ════════════════════ */}
-      {!isPro && (
-        <View style={styles.proTeaser}>
-          <LinearGradient
-            colors={[colors.deepOcean, '#1e3a5f']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.proTeaserCard}
-          >
-            <View style={styles.proTeaserCorner} />
-            <Text style={styles.proTeaserLabel}>LOCALLIST PRO</Text>
-            <Text style={styles.proTeaserTitle}>Get the full{'\n'}experience</Text>
-            <View style={styles.proTeaserFeatures}>
-              <View style={styles.proFeatureRow}>
-                <View style={styles.proFeatureIcon}>
-                  <Text style={styles.proFeatureEmoji}>{'\u{1F4CD}'}</Text>
-                </View>
-                <View style={styles.proFeatureText}>
-                  <Text style={styles.proFeatureName}>Follow Mode</Text>
-                  <Text style={styles.proFeatureDesc}>Navigate plans stop-by-stop with real-time guidance</Text>
-                </View>
-              </View>
-              <View style={styles.proFeatureRow}>
-                <View style={styles.proFeatureIcon}>
-                  <Text style={styles.proFeatureEmoji}>{'\u26A1'}</Text>
-                </View>
-                <View style={styles.proFeatureText}>
-                  <Text style={styles.proFeatureName}>50 Plans / Day</Text>
-                  <Text style={styles.proFeatureDesc}>Unlimited exploration with the AI plan builder</Text>
-                </View>
-              </View>
-              <View style={styles.proFeatureRow}>
-                <View style={styles.proFeatureIcon}>
-                  <Text style={styles.proFeatureEmoji}>{'\u{1F30E}'}</Text>
-                </View>
-                <View style={styles.proFeatureText}>
-                  <Text style={styles.proFeatureName}>Full Catalog</Text>
-                  <Text style={styles.proFeatureDesc}>Access every curated place in our database</Text>
-                </View>
+        {/* ── Title ──────────────────────────────── */}
+        <Text
+          style={[
+            isClassic ? s.titleClassic : s.title,
+            { color: colors.sunsetOrange },
+          ]}
+        >
+          {copy.title}
+        </Text>
+
+        {/* ── Subtitle (modern only) ─────────────── */}
+        {!isClassic && (
+          <Text style={[s.subtitle, { color: colors.textSecondary }]}>
+            {copy.subtitle}
+          </Text>
+        )}
+
+        {/* ── Chat bubble ────────────────────────── */}
+        <View style={isClassic ? s.chatAreaClassic : s.chatSection}>
+          <View style={s.botRow}>
+            <View style={[s.avatar, { backgroundColor: colors.sunsetOrange + '20' }]}>
+              <Image
+                source={require('../../assets/images/icon.png')}
+                style={s.avatarIcon}
+                resizeMode="contain"
+              />
+            </View>
+            <View style={[
+              s.bubble,
+              !isClassic && softShadow,
+              visualStyle.bubbleStyle === 'bordered'
+                ? { backgroundColor: colors.bgCard, borderWidth: 1, borderColor: visualStyle.bubbleBorderColor ?? colors.borderColor }
+                : { backgroundColor: colors.sunsetOrange + '18' },
+            ]}>
+              <Text style={[s.bubbleText, { color: colors.deepOcean }]}>
+                {copy.greeting}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Preferences ────────────────────────── */}
+        {isClassic ? (
+          /* Classic: two tinted cards side by side */
+          <View style={s.cardsRow}>
+            <View style={[s.card, { backgroundColor: colors.sunsetOrange + '18' }]}>
+              <Text style={[s.cardTitle, { color: colors.deepOcean }]}>Style</Text>
+              <View style={s.cardIcons}>
+                {STYLE_OPTIONS.map((o) => {
+                  const sel = style === o.id;
+                  return (
+                    <TouchableOpacity
+                      key={o.id}
+                      style={[
+                        s.cardIconCol,
+                        sel && { backgroundColor: colors.sunsetOrange + '30' },
+                      ]}
+                      onPress={() => setStyle(sel ? null : o.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={o.icon}
+                        size={22}
+                        color={sel ? colors.sunsetOrange : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          s.cardIconLabel,
+                          { color: sel ? colors.deepOcean : colors.textSecondary },
+                          sel && { fontFamily: fonts.bodySemiBold },
+                        ]}
+                      >
+                        {o.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => router.push('/(tabs)/account')}
-            >
-              <View style={styles.proTeaserBtn}>
-                <Text style={styles.proTeaserBtnText}>Learn More</Text>
+
+            <View style={[s.card, { backgroundColor: colors.electricBlue + '15' }]}>
+              <Text style={[s.cardTitle, { color: colors.deepOcean }]}>Company</Text>
+              <View style={s.cardIcons}>
+                {COMPANY_OPTIONS.map((o) => {
+                  const sel = company === o.id;
+                  return (
+                    <TouchableOpacity
+                      key={o.id}
+                      style={[
+                        s.cardIconCol,
+                        sel && { backgroundColor: colors.electricBlue + '25' },
+                      ]}
+                      onPress={() => setCompany(sel ? null : o.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={o.icon}
+                        size={22}
+                        color={sel ? colors.electricBlue : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          s.cardIconLabel,
+                          { color: sel ? colors.deepOcean : colors.textSecondary },
+                          sel && { fontFamily: fonts.bodySemiBold },
+                        ]}
+                      >
+                        {o.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
+            </View>
+          </View>
+        ) : (
+          /* Modern: horizontal pill chips */
+          <>
+            <View style={s.chipSection}>
+              <Text style={[s.chipSectionLabel, { color: colors.textSecondary }]}>
+                Style
+              </Text>
+              <View style={s.chipRow}>
+                {STYLE_OPTIONS.map((o) => {
+                  const sel = style === o.id;
+                  return (
+                    <TouchableOpacity
+                      key={o.id}
+                      style={[
+                        s.chip,
+                        { backgroundColor: colors.bgCard, borderColor: colors.borderColor },
+                        !sel && softShadow,
+                        sel && {
+                          backgroundColor: colors.sunsetOrange + '15',
+                          borderColor: colors.sunsetOrange,
+                        },
+                      ]}
+                      onPress={() => setStyle(sel ? null : o.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={o.icon}
+                        size={16}
+                        color={sel ? colors.sunsetOrange : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          s.chipLabel,
+                          { color: sel ? colors.deepOcean : colors.textSecondary },
+                          sel && { fontFamily: fonts.bodySemiBold },
+                        ]}
+                      >
+                        {o.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={s.chipSection}>
+              <Text style={[s.chipSectionLabel, { color: colors.textSecondary }]}>
+                Company
+              </Text>
+              <View style={s.chipRow}>
+                {COMPANY_OPTIONS.map((o) => {
+                  const sel = company === o.id;
+                  return (
+                    <TouchableOpacity
+                      key={o.id}
+                      style={[
+                        s.chip,
+                        { backgroundColor: colors.bgCard, borderColor: colors.borderColor },
+                        !sel && softShadow,
+                        sel && {
+                          backgroundColor: colors.electricBlue + '15',
+                          borderColor: colors.electricBlue,
+                        },
+                      ]}
+                      onPress={() => setCompany(sel ? null : o.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={o.icon}
+                        size={16}
+                        color={sel ? colors.electricBlue : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          s.chipLabel,
+                          { color: sel ? colors.deepOcean : colors.textSecondary },
+                          sel && { fontFamily: fonts.bodySemiBold },
+                        ]}
+                      >
+                        {o.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* ── Input ──────────────────────────────── */}
+        <View
+          style={[
+            isClassic ? s.inputWrapClassic : s.inputWrap,
+            !isClassic && softShadow,
+            { backgroundColor: colors.bgCard, borderColor: colors.borderColor },
+          ]}
+        >
+          <TextInput
+            style={[
+              isClassic ? s.inputClassic : s.input,
+              { color: colors.textMain },
+            ]}
+            value={message}
+            onChangeText={setMessage}
+            placeholder={copy.inputPlaceholder}
+            placeholderTextColor={colors.textSecondary}
+            multiline
+            maxLength={500}
+          />
+          {!isClassic && (
+            <TouchableOpacity
+              style={[s.sendBtn, { backgroundColor: colors.electricBlue }]}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
             </TouchableOpacity>
-          </LinearGradient>
+          )}
         </View>
-      )}
 
-      {/* ═══ EDITORIAL FOOTER ═══════════════════════ */}
-      <Animated.View style={[styles.footer, anim(4)]}>
-        <View style={styles.footerRule} />
-        <Text style={styles.footerText}>
-          Every place passes a multi-factor quality analysis.{'\n'}
-          If it{'\u2019'}s not genuinely great, it doesn{'\u2019'}t make the cut.
-        </Text>
-        <View style={styles.footerStats}>
-          <View style={styles.footerStat}>
-            <Text style={styles.statNum}>Top 5%</Text>
-            <Text style={styles.statDesc}>Acceptance</Text>
-          </View>
-          <View style={styles.footerStatDivider} />
-          <View style={styles.footerStat}>
-            <Text style={styles.statNum}>0 Ads</Text>
-            <Text style={styles.statDesc}>Unbiased</Text>
-          </View>
-          <View style={styles.footerStatDivider} />
-          <View style={styles.footerStat}>
-            <Text style={styles.statNum}>Local</Text>
-            <Text style={styles.statDesc}>Verified</Text>
-          </View>
-        </View>
-      </Animated.View>
+        {/* ── CTA ────────────────────────────────── */}
+        <TouchableOpacity
+          style={[
+            isClassic
+              ? [s.ctaClassic, { borderColor: colors.sunsetOrange }]
+              : [
+                  s.cta,
+                  softShadow,
+                  visualStyle.ctaVariant === 'filled'
+                    ? { backgroundColor: visualStyle.ctaFillColor, borderColor: 'transparent', shadowColor: visualStyle.ctaFillColor }
+                    : { borderColor: colors.sunsetOrange, backgroundColor: colors.bgCard },
+                ],
+          ]}
+          activeOpacity={0.8}
+        >
+          <Text style={[
+            s.ctaText,
+            isClassic
+              ? { color: colors.sunsetOrange }
+              : visualStyle.ctaVariant === 'filled'
+                ? { color: visualStyle.ctaTextColor ?? '#FFFFFF' }
+                : { color: colors.sunsetOrange },
+          ]}>
+            {copy.ctaText}
+          </Text>
+        </TouchableOpacity>
 
-      <View style={{ height: 32 }} />
-    </ScrollView>
+        <View style={{ height: Platform.OS === 'ios' ? 16 : 8 }} />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-/* ═══════════════════════════════════════════════════
-   STYLES — Editorial Travel Journal aesthetic
-   ═══════════════════════════════════════════════════ */
-const styles = StyleSheet.create({
-  container: {
+const s = StyleSheet.create({
+  root: {
     flex: 1,
-    backgroundColor: colors.bgMain,
+    paddingTop: 50,
   },
-  content: {
-    paddingBottom: 24,
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
-
-  /* ── HEADER ────────────────────────────────────── */
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: 64,
-    paddingBottom: 6,
-    alignItems: 'center',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  logo: {
-    width: 28,
-    height: 34,
-  },
-  headerDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.sunsetOrange,
-    marginHorizontal: 10,
-  },
-  headerLabel: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: colors.textSecondary,
-    letterSpacing: 3,
-  },
-  heroTitle: {
-    fontFamily: fonts.headingBold,
-    fontSize: 42,
-    color: colors.deepOcean,
-    letterSpacing: -0.5,
-    lineHeight: 48,
-  },
-  taglineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  taglineRule: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.deepOcean + '18',
-  },
-  tagline: {
-    fontFamily: fonts.heading,
-    fontSize: 13,
-    color: colors.textSecondary,
-    letterSpacing: 1.2,
-    marginHorizontal: 14,
-    textTransform: 'uppercase',
+  scrollContentClassic: {
+    flexGrow: 1,
   },
 
-  /* ── CTA CARD ──────────────────────────────────── */
-  ctaOuter: {
-    paddingHorizontal: spacing.lg,
-    marginTop: 22,
-  },
-  ctaCard: {
+  /* Theme switcher */
+  themeSwitcher: {
+    flexDirection: 'row',
+    alignSelf: 'center',
     borderRadius: 20,
-    padding: 24,
-    position: 'relative',
-    overflow: 'hidden',
+    padding: 3,
+    marginBottom: 12,
+    gap: 2,
   },
-  ctaTop: {
-    flexDirection: 'row',
-    marginBottom: 14,
-  },
-  ctaBadge: {
-    backgroundColor: colors.sunsetOrange,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  ctaBadgeText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 10,
-    color: '#FFFFFF',
-    letterSpacing: 1.5,
-  },
-  ctaTitle: {
-    fontFamily: fonts.headingBold,
-    fontSize: 28,
-    color: '#FFFFFF',
-    lineHeight: 34,
-    marginBottom: 8,
-  },
-  ctaSub: {
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: '#94a3b8',
-    lineHeight: 21,
-    marginBottom: 20,
-  },
-  ctaButton: {
+  themeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: colors.electricBlue,
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  ctaButtonText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 15,
-    color: '#FFFFFF',
-    marginRight: 8,
-  },
-  ctaArrow: {
-    fontSize: 16,
-    color: '#FFFFFF',
-  },
-  ctaCornerAccent: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 80,
-    height: 80,
-    borderBottomLeftRadius: 80,
-    backgroundColor: colors.sunsetOrange + '12',
-  },
-
-  /* ── SECTIONS ──────────────────────────────────── */
-  section: {
-    marginTop: 36,
-  },
-  sectionLabel: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 11,
-    color: colors.sunsetOrange,
-    letterSpacing: 2.5,
-    marginHorizontal: spacing.lg,
-    marginBottom: 4,
-    alignSelf: 'flex-start',
-    backgroundColor: colors.sunsetOrange + '28',
+    paddingVertical: 5,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  sectionHeading: {
-    fontFamily: fonts.headingBold,
-    fontSize: 24,
-    color: colors.deepOcean,
-    paddingHorizontal: spacing.lg,
-    marginBottom: 18,
-  },
-  seeAllPill: {
-    borderWidth: 1,
-    borderColor: colors.electricBlue + '40',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  seeAllText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 13,
-    color: colors.electricBlue,
-  },
-
-  /* ── CATEGORIES ────────────────────────────────── */
-  catScroll: {
-    paddingHorizontal: spacing.lg,
-    gap: 10,
-  },
-  catPill: {
-    backgroundColor: colors.bgCard,
     borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    minWidth: 80,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    position: 'relative',
-    overflow: 'hidden',
+    gap: 5,
   },
-  catAccentBar: {
-    position: 'absolute',
-    top: 0,
-    left: 16,
-    right: 16,
-    height: 3,
-    borderBottomLeftRadius: 3,
-    borderBottomRightRadius: 3,
+  themeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
-  catEmoji: {
-    fontSize: 26,
+  themeBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+  },
+
+  /* ── Classic title (centered, original spacing) */
+  titleClassic: {
+    fontFamily: fonts.headingBold,
+    fontSize: 30,
+    lineHeight: 36,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+
+  /* ── Modern title (left-aligned) + subtitle */
+  title: {
+    fontFamily: fonts.headingBold,
+    fontSize: 30,
+    lineHeight: 36,
     marginBottom: 6,
   },
-  catName: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
-    color: colors.textMain,
-    letterSpacing: 0.3,
-  },
-
-  /* ── FEATURED PLANS ────────────────────────────── */
-  featuredHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingHorizontal: spacing.lg,
-    marginBottom: 18,
-  },
-  planScroll: {
-    paddingHorizontal: spacing.lg,
-    gap: 14,
-  },
-  planCard: {
-    width: SCREEN_WIDTH * 0.78,
-    height: 260,
-    borderRadius: 22,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 8,
-    position: 'relative',
-  },
-  planAccentTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: colors.sunsetOrange,
-    zIndex: 10,
-  },
-  planImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
-  },
-  planOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
-    padding: 22,
-  },
-  planBadges: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  daysBadge: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-  },
-  daysText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: '#FFFFFF',
-  },
-  curatedBadge: {
-    backgroundColor: colors.sunsetOrange + 'DD',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  curatedText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  planName: {
-    fontFamily: fonts.headingBold,
-    fontSize: 24,
-    color: '#FFFFFF',
-    lineHeight: 30,
-    marginBottom: 4,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
-  },
-  planDesc: {
+  subtitle: {
     fontFamily: fonts.body,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
     lineHeight: 20,
+    marginBottom: 24,
   },
 
-  /* ── PRO TEASER ──────────────────────────────────── */
-  proTeaser: {
-    paddingHorizontal: spacing.lg,
-    marginTop: 36,
+  /* ── Classic chat area (flex fills remaining space) */
+  chatAreaClassic: {
+    flex: 1,
   },
-  proTeaserCard: {
-    borderRadius: 20,
-    padding: 24,
-    position: 'relative',
-    overflow: 'hidden',
+
+  /* ── Modern chat section (fixed spacing) */
+  chatSection: {
+    marginBottom: 24,
   },
-  proTeaserCorner: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 80,
-    height: 80,
-    borderBottomLeftRadius: 80,
-    backgroundColor: colors.sunsetOrange + '18',
-  },
-  proTeaserLabel: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 10,
-    color: colors.sunsetOrange,
-    letterSpacing: 2,
-    marginBottom: 10,
-  },
-  proTeaserTitle: {
-    fontFamily: fonts.headingBold,
-    fontSize: 28,
-    color: '#FFFFFF',
-    lineHeight: 34,
-    marginBottom: 22,
-  },
-  proTeaserFeatures: {
-    gap: 16,
-    marginBottom: 22,
-  },
-  proFeatureRow: {
+
+  /* Chat shared */
+  botRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 14,
+    gap: 10,
   },
-  proFeatureIcon: {
+  avatar: {
     width: 36,
     height: 36,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  proFeatureEmoji: {
-    fontSize: 18,
+  avatarIcon: {
+    width: 20,
+    height: 24,
   },
-  proFeatureText: {
+  bubble: {
+    borderRadius: 16,
+    borderTopLeftRadius: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    maxWidth: '78%',
+  },
+  bubbleText: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+
+  /* ── Classic cards */
+  cardsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  card: {
     flex: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    overflow: 'hidden',
   },
-  proFeatureName: {
+  cardTitle: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 15,
-    color: '#FFFFFF',
-    marginBottom: 2,
+    marginBottom: 10,
   },
-  proFeatureDesc: {
-    fontFamily: fonts.body,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.55)',
-    lineHeight: 19,
-  },
-  proTeaserBtn: {
-    backgroundColor: colors.sunsetOrange,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-  },
-  proTeaserBtnText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 16,
-    color: '#FFFFFF',
-  },
-
-  /* ── SKELETON ──────────────────────────────────── */
-  skeleton: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 22,
-    backgroundColor: colors.borderColor,
-  },
-
-  /* ── EDITORIAL FOOTER ──────────────────────────── */
-  footer: {
-    marginTop: 40,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-  },
-  footerRule: {
-    width: 40,
-    height: 2,
-    backgroundColor: colors.sunsetOrange,
-    borderRadius: 1,
-    marginBottom: 18,
-  },
-  footerText: {
-    fontFamily: fonts.heading,
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 22,
-  },
-  footerStats: {
+  cardIcons: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgCard,
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 8,
+    justifyContent: 'space-evenly',
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  footerStat: {
+  cardIconCol: {
     flex: 1,
     alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
-  footerStatDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: colors.borderColor,
-  },
-  statNum: {
-    fontFamily: fonts.headingSemiBold,
-    fontSize: 16,
-    color: colors.deepOcean,
-    marginBottom: 2,
-  },
-  statDesc: {
+  cardIconLabel: {
     fontFamily: fonts.body,
-    fontSize: 11,
-    color: colors.textSecondary,
-    letterSpacing: 0.5,
+    fontSize: 10,
+  },
+
+  /* ── Modern chips */
+  chipSection: {
+    marginBottom: 16,
+  },
+  chipSectionLabel: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
     textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  chipLabel: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+  },
+
+  /* ── Classic input (simple bordered) */
+  inputWrapClassic: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  inputClassic: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    maxHeight: 80,
+    minHeight: 20,
+  },
+
+  /* ── Modern input (with send button) */
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingLeft: 16,
+    paddingRight: 6,
+    paddingVertical: 6,
+    marginBottom: 16,
+  },
+  input: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    maxHeight: 80,
+    minHeight: 28,
+    paddingVertical: 4,
+  },
+  sendBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* ── Classic CTA (rounded rect, outline only) */
+  ctaClassic: {
+    borderWidth: 2,
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+
+  /* ── Modern CTA (pill, shadow) */
+  cta: {
+    borderWidth: 2,
+    borderRadius: 9999,
+    paddingVertical: 18,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  ctaText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 17,
   },
 });
