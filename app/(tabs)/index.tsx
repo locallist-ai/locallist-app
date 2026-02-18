@@ -1,19 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  ScrollView,
+  Pressable,
   Platform,
   Image,
+  ActivityIndicator,
+  Animated as RNAnimated,
+  useWindowDimensions,
 } from 'react-native';
+import Animated, {
+  FadeInUp,
+  FadeInDown,
+  FadeIn,
+  ZoomIn,
+  LinearTransition,
+} from 'react-native-reanimated';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { fonts } from '../../lib/theme';
-import { useTheme } from '../../lib/ThemeContext';
-import { themes, themeOrder, type ThemeId } from '../../lib/themes';
+import * as Haptics from 'expo-haptics';
+import { colors, fonts } from '../../lib/theme';
+import { api } from '../../lib/api';
+import { setPreviewPlan } from '../../lib/plan-store';
+import type { BuilderResponse } from '../../lib/types';
 
 const STYLE_OPTIONS = [
   { id: 'adventure', icon: 'compass-outline' as const, label: 'Adventure' },
@@ -27,561 +37,656 @@ const COMPANY_OPTIONS = [
   { id: 'family', icon: 'people-outline' as const, label: 'Family' },
 ];
 
-const softShadow = {
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.08,
-  shadowRadius: 16,
-  elevation: 4,
+const DURATION_OPTIONS = [
+  { id: '1', icon: 'sunny-outline' as const, label: '1 day' },
+  { id: '2-3', icon: 'flower-outline' as const, label: '2-3 days' },
+  { id: '4+', icon: 'airplane-outline' as const, label: '4+ days' },
+];
+
+const BUDGET_OPTIONS = [
+  { id: 'budget', icon: 'wallet-outline' as const, label: 'Budget' },
+  { id: 'moderate', icon: 'cash-outline' as const, label: 'Moderate' },
+  { id: 'premium', icon: 'trophy-outline' as const, label: 'Premium' },
+];
+
+const hapticSelect = () => {
+  if (Platform.OS === 'ios') {
+    Haptics.selectionAsync();
+  }
 };
 
-export default function HomeScreen() {
-  const { themeId, colors, copy, visualStyle, setThemeId } = useTheme();
-  const [message, setMessage] = useState('');
-  const [style, setStyle] = useState<string | null>(null);
-  const [company, setCompany] = useState<string | null>(null);
+// Glass-like translucent backgrounds
+const GLASS_BG = 'rgba(255, 255, 255, 0.82)';
+const GLASS_BG_LIGHT = 'rgba(255, 255, 255, 0.68)';
+const GLASS_BORDER = 'rgba(255, 255, 255, 0.50)';
 
-  const isClassic = visualStyle.layout === 'classic';
+// ─── Typing dots (RN Animated — lightweight loops) ────
+
+function TypingDots() {
+  const dots = useRef([
+    new RNAnimated.Value(0),
+    new RNAnimated.Value(0),
+    new RNAnimated.Value(0),
+  ]).current;
+
+  useEffect(() => {
+    const animations = dots.map((dot, i) =>
+      RNAnimated.loop(
+        RNAnimated.sequence([
+          RNAnimated.timing(dot, {
+            toValue: -6,
+            duration: 500,
+            delay: i * 250,
+            useNativeDriver: true,
+          }),
+          RNAnimated.timing(dot, {
+            toValue: 0,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ]),
+      ),
+    );
+    RNAnimated.parallel(animations).start();
+    return () => animations.forEach((a) => a.stop());
+  }, []);
 
   return (
-    <KeyboardAvoidingView
-      style={[s.root, { backgroundColor: colors.bgMain }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={[
-          s.scrollContent,
-          isClassic && s.scrollContentClassic,
-        ]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* ── Theme Switcher ────────────────────── */}
-        <View style={[s.themeSwitcher, { backgroundColor: colors.bgCard + '90' }]}>
-          {themeOrder.map((id) => {
-            const t = themes[id];
-            const active = id === themeId;
-            return (
-              <TouchableOpacity
-                key={id}
-                style={[
-                  s.themeBtn,
-                  active && { backgroundColor: colors.deepOcean + '18' },
-                ]}
-                onPress={() => setThemeId(id)}
-                activeOpacity={0.7}
-              >
-                <View style={[s.themeDot, { backgroundColor: t.dot }]} />
-                <Text
-                  style={[
-                    s.themeBtnText,
-                    { color: active ? colors.deepOcean : colors.textSecondary },
-                    active && { fontFamily: fonts.bodySemiBold },
-                  ]}
-                >
-                  {t.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* ── Title ──────────────────────────────── */}
-        <Text
-          style={[
-            isClassic ? s.titleClassic : s.title,
-            { color: colors.sunsetOrange },
-          ]}
-        >
-          {copy.title}
-        </Text>
-
-        {/* ── Subtitle (modern only) ─────────────── */}
-        {!isClassic && (
-          <Text style={[s.subtitle, { color: colors.textSecondary }]}>
-            {copy.subtitle}
-          </Text>
-        )}
-
-        {/* ── Chat bubble ────────────────────────── */}
-        <View style={isClassic ? s.chatAreaClassic : s.chatSection}>
-          <View style={s.botRow}>
-            <View style={[s.avatar, { backgroundColor: colors.sunsetOrange + '20' }]}>
-              <Image
-                source={require('../../assets/images/icon.png')}
-                style={s.avatarIcon}
-                resizeMode="contain"
-              />
-            </View>
-            <View style={[
-              s.bubble,
-              !isClassic && softShadow,
-              visualStyle.bubbleStyle === 'bordered'
-                ? { backgroundColor: colors.bgCard, borderWidth: 1, borderColor: visualStyle.bubbleBorderColor ?? colors.borderColor }
-                : { backgroundColor: colors.sunsetOrange + '18' },
-            ]}>
-              <Text style={[s.bubbleText, { color: colors.deepOcean }]}>
-                {copy.greeting}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Preferences ────────────────────────── */}
-        {isClassic ? (
-          /* Classic: two tinted cards side by side */
-          <View style={s.cardsRow}>
-            <View style={[s.card, { backgroundColor: colors.sunsetOrange + '18' }]}>
-              <Text style={[s.cardTitle, { color: colors.deepOcean }]}>Style</Text>
-              <View style={s.cardIcons}>
-                {STYLE_OPTIONS.map((o) => {
-                  const sel = style === o.id;
-                  return (
-                    <TouchableOpacity
-                      key={o.id}
-                      style={[
-                        s.cardIconCol,
-                        sel && { backgroundColor: colors.sunsetOrange + '30' },
-                      ]}
-                      onPress={() => setStyle(sel ? null : o.id)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={o.icon}
-                        size={22}
-                        color={sel ? colors.sunsetOrange : colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          s.cardIconLabel,
-                          { color: sel ? colors.deepOcean : colors.textSecondary },
-                          sel && { fontFamily: fonts.bodySemiBold },
-                        ]}
-                      >
-                        {o.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View style={[s.card, { backgroundColor: colors.electricBlue + '15' }]}>
-              <Text style={[s.cardTitle, { color: colors.deepOcean }]}>Company</Text>
-              <View style={s.cardIcons}>
-                {COMPANY_OPTIONS.map((o) => {
-                  const sel = company === o.id;
-                  return (
-                    <TouchableOpacity
-                      key={o.id}
-                      style={[
-                        s.cardIconCol,
-                        sel && { backgroundColor: colors.electricBlue + '25' },
-                      ]}
-                      onPress={() => setCompany(sel ? null : o.id)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={o.icon}
-                        size={22}
-                        color={sel ? colors.electricBlue : colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          s.cardIconLabel,
-                          { color: sel ? colors.deepOcean : colors.textSecondary },
-                          sel && { fontFamily: fonts.bodySemiBold },
-                        ]}
-                      >
-                        {o.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          </View>
-        ) : (
-          /* Modern: horizontal pill chips */
-          <>
-            <View style={s.chipSection}>
-              <Text style={[s.chipSectionLabel, { color: colors.textSecondary }]}>
-                Style
-              </Text>
-              <View style={s.chipRow}>
-                {STYLE_OPTIONS.map((o) => {
-                  const sel = style === o.id;
-                  return (
-                    <TouchableOpacity
-                      key={o.id}
-                      style={[
-                        s.chip,
-                        { backgroundColor: colors.bgCard, borderColor: colors.borderColor },
-                        !sel && softShadow,
-                        sel && {
-                          backgroundColor: colors.sunsetOrange + '15',
-                          borderColor: colors.sunsetOrange,
-                        },
-                      ]}
-                      onPress={() => setStyle(sel ? null : o.id)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={o.icon}
-                        size={16}
-                        color={sel ? colors.sunsetOrange : colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          s.chipLabel,
-                          { color: sel ? colors.deepOcean : colors.textSecondary },
-                          sel && { fontFamily: fonts.bodySemiBold },
-                        ]}
-                      >
-                        {o.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View style={s.chipSection}>
-              <Text style={[s.chipSectionLabel, { color: colors.textSecondary }]}>
-                Company
-              </Text>
-              <View style={s.chipRow}>
-                {COMPANY_OPTIONS.map((o) => {
-                  const sel = company === o.id;
-                  return (
-                    <TouchableOpacity
-                      key={o.id}
-                      style={[
-                        s.chip,
-                        { backgroundColor: colors.bgCard, borderColor: colors.borderColor },
-                        !sel && softShadow,
-                        sel && {
-                          backgroundColor: colors.electricBlue + '15',
-                          borderColor: colors.electricBlue,
-                        },
-                      ]}
-                      onPress={() => setCompany(sel ? null : o.id)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={o.icon}
-                        size={16}
-                        color={sel ? colors.electricBlue : colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          s.chipLabel,
-                          { color: sel ? colors.deepOcean : colors.textSecondary },
-                          sel && { fontFamily: fonts.bodySemiBold },
-                        ]}
-                      >
-                        {o.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          </>
-        )}
-
-        {/* ── Input ──────────────────────────────── */}
-        <View
-          style={[
-            isClassic ? s.inputWrapClassic : s.inputWrap,
-            !isClassic && softShadow,
-            { backgroundColor: colors.bgCard, borderColor: colors.borderColor },
-          ]}
-        >
-          <TextInput
-            style={[
-              isClassic ? s.inputClassic : s.input,
-              { color: colors.textMain },
-            ]}
-            value={message}
-            onChangeText={setMessage}
-            placeholder={copy.inputPlaceholder}
-            placeholderTextColor={colors.textSecondary}
-            multiline
-            maxLength={500}
-          />
-          {!isClassic && (
-            <TouchableOpacity
-              style={[s.sendBtn, { backgroundColor: colors.electricBlue }]}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* ── CTA ────────────────────────────────── */}
-        <TouchableOpacity
-          style={[
-            isClassic
-              ? [s.ctaClassic, { borderColor: colors.sunsetOrange }]
-              : [
-                  s.cta,
-                  softShadow,
-                  visualStyle.ctaVariant === 'filled'
-                    ? { backgroundColor: visualStyle.ctaFillColor, borderColor: 'transparent', shadowColor: visualStyle.ctaFillColor }
-                    : { borderColor: colors.sunsetOrange, backgroundColor: colors.bgCard },
-                ],
-          ]}
-          activeOpacity={0.8}
-        >
-          <Text style={[
-            s.ctaText,
-            isClassic
-              ? { color: colors.sunsetOrange }
-              : visualStyle.ctaVariant === 'filled'
-                ? { color: visualStyle.ctaTextColor ?? '#FFFFFF' }
-                : { color: colors.sunsetOrange },
-          ]}>
-            {copy.ctaText}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={{ height: Platform.OS === 'ios' ? 16 : 8 }} />
-      </ScrollView>
-    </KeyboardAvoidingView>
+    <View style={{ flexDirection: 'row', gap: 5, paddingVertical: 4 }}>
+      {dots.map((dot, i) => (
+        <RNAnimated.View
+          key={i}
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: colors.sunsetOrange + '60',
+            transform: [{ translateY: dot }],
+          }}
+        />
+      ))}
+    </View>
   );
 }
 
-const s = StyleSheet.create({
-  root: {
-    flex: 1,
-    paddingTop: 50,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  scrollContentClassic: {
-    flexGrow: 1,
-  },
+// ─── Home Screen ───────────────────────────────────────────
 
-  /* Theme switcher */
-  themeSwitcher: {
-    flexDirection: 'row',
-    alignSelf: 'center',
-    borderRadius: 20,
-    padding: 3,
-    marginBottom: 12,
-    gap: 2,
-  },
-  themeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 16,
-    gap: 5,
-  },
-  themeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  themeBtnText: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-  },
+export default function HomeScreen() {
+  const [message, setMessage] = useState('');
+  const [style, setStyle] = useState<string | null>(null);
+  const [company, setCompany] = useState<string | null>(null);
+  const [duration, setDuration] = useState<string | null>(null);
+  const [budget, setBudget] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showBubbleText, setShowBubbleText] = useState(false);
+  const { height: screenHeight } = useWindowDimensions();
 
-  /* ── Classic title (centered, original spacing) */
-  titleClassic: {
-    fontFamily: fonts.headingBold,
-    fontSize: 30,
-    lineHeight: 36,
-    marginBottom: 20,
-    textAlign: 'center',
-  },
+  useEffect(() => {
+    const timer = setTimeout(() => setShowBubbleText(true), 1600);
+    return () => clearTimeout(timer);
+  }, []);
 
-  /* ── Modern title (left-aligned) + subtitle */
-  title: {
-    fontFamily: fonts.headingBold,
-    fontSize: 30,
-    lineHeight: 36,
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontFamily: fonts.body,
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 24,
-  },
+  const handleCTA = useCallback(async () => {
+    if (loading) return;
+    setError(null);
+    setLoading(true);
 
-  /* ── Classic chat area (flex fills remaining space) */
-  chatAreaClassic: {
-    flex: 1,
-  },
+    const body = {
+      message: message.trim() || 'Plan a great day',
+      tripContext: {
+        groupType: company ?? 'solo',
+        preferences: style ? [style] : [],
+        vibes: style ? [style] : [],
+        duration: duration ?? undefined,
+        budget: budget ?? undefined,
+      },
+    };
 
-  /* ── Modern chat section (fixed spacing) */
-  chatSection: {
-    marginBottom: 24,
-  },
+    const res = await api<BuilderResponse>('/builder/chat', { method: 'POST', body });
+    setLoading(false);
 
-  /* Chat shared */
-  botRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarIcon: {
-    width: 20,
-    height: 24,
-  },
-  bubble: {
-    borderRadius: 16,
-    borderTopLeftRadius: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    maxWidth: '78%',
-  },
-  bubbleText: {
-    fontFamily: fonts.body,
-    fontSize: 15,
-    lineHeight: 22,
-  },
+    if (res.data) {
+      setPreviewPlan(res.data);
+      router.push('/plan/preview');
+    } else {
+      setError(res.error ?? 'Something went wrong');
+    }
+  }, [loading, message, company, style, duration, budget]);
 
-  /* ── Classic cards */
-  cardsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  card: {
-    flex: 1,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  cardTitle: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 15,
-    marginBottom: 10,
-  },
-  cardIcons: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    width: '100%',
-  },
-  cardIconCol: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  cardIconLabel: {
-    fontFamily: fonts.body,
-    fontSize: 10,
-  },
+  return (
+    <View style={{ flex: 1 }}>
+      {/* ── Full-screen background image (extends behind tab bar) ── */}
+      <Image
+        source={require('../../assets/images/hero-bg.jpg')}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: -100, // extend behind tab bar to eliminate grey gap
+          width: '100%',
+          height: screenHeight + 100,
+        }}
+        resizeMode="cover"
+      />
+      {/* Soft overlay for readability */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: -100,
+          backgroundColor: 'rgba(0, 0, 0, 0.15)',
+        }}
+      />
 
-  /* ── Modern chips */
-  chipSection: {
-    marginBottom: 16,
-  },
-  chipSectionLabel: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 13,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1.5,
-  },
-  chipLabel: {
-    fontFamily: fonts.body,
-    fontSize: 13,
-  },
+      <View style={{ flex: 1, paddingHorizontal: 20 }}>
+        {/* ── TOP HALF: Title + Chat ──────────────── */}
+        <View style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 12 }}>
+          <View style={{ height: 56 }} />
 
-  /* ── Classic input (simple bordered) */
-  inputWrapClassic: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  inputClassic: {
-    fontFamily: fonts.body,
-    fontSize: 15,
-    maxHeight: 80,
-    minHeight: 20,
-  },
+          {/* ── Title ──────────────────────────────── */}
+          <Animated.Text
+            entering={FadeInDown.duration(800).delay(300).springify().damping(14)}
+            style={{
+              fontFamily: fonts.headingBold,
+              fontSize: 30,
+              lineHeight: 36,
+              color: '#FFFFFF',
+              marginBottom: 24,
+              textAlign: 'center',
+              textShadowColor: 'rgba(0, 0, 0, 0.35)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 6,
+            }}
+          >
+            {'Your trip,\nyour way'}
+          </Animated.Text>
 
-  /* ── Modern input (with send button) */
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingLeft: 16,
-    paddingRight: 6,
-    paddingVertical: 6,
-    marginBottom: 16,
-  },
-  input: {
-    flex: 1,
-    fontFamily: fonts.body,
-    fontSize: 15,
-    maxHeight: 80,
-    minHeight: 28,
-    paddingVertical: 4,
-  },
-  sendBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+          {/* ── Chat area (bubble + input unified) ──── */}
+          <Animated.View
+            entering={FadeInUp.duration(800).delay(550).springify().damping(14)}
+            style={{
+              backgroundColor: GLASS_BG,
+              borderRadius: 20,
+              borderCurve: 'continuous',
+              borderWidth: 1,
+              borderColor: GLASS_BORDER,
+              padding: 16,
+              marginBottom: 20,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.10)',
+            }}
+          >
+            {/* AI message */}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: colors.sunsetOrange + '18',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Image
+                  source={require('../../assets/images/icon.png')}
+                  style={{ width: 18, height: 22 }}
+                  resizeMode="contain"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                {showBubbleText ? (
+                  <Text
+                    selectable
+                    style={{
+                      fontFamily: fonts.body,
+                      fontSize: 15,
+                      lineHeight: 22,
+                      color: colors.deepOcean,
+                    }}
+                  >
+                    Hey! Tell me about your ideal trip and I'll build the perfect plan for you.
+                  </Text>
+                ) : (
+                  <TypingDots />
+                )}
+              </View>
+            </View>
 
-  /* ── Classic CTA (rounded rect, outline only) */
-  ctaClassic: {
-    borderWidth: 2,
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+            {/* Divider */}
+            <View
+              style={{
+                height: 1,
+                backgroundColor: colors.deepOcean + '10',
+                marginBottom: 12,
+              }}
+            />
 
-  /* ── Modern CTA (pill, shadow) */
-  cta: {
-    borderWidth: 2,
-    borderRadius: 9999,
-    paddingVertical: 18,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  ctaText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 17,
-  },
-});
+            {/* User input */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-end',
+                gap: 10,
+              }}
+            >
+              <TextInput
+                style={{
+                  flex: 1,
+                  fontFamily: fonts.body,
+                  fontSize: 15,
+                  color: colors.textMain,
+                  maxHeight: 80,
+                  minHeight: 20,
+                  paddingVertical: 0,
+                }}
+                value={message}
+                onChangeText={setMessage}
+                placeholder="Tell me what you'd like..."
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                maxLength={500}
+              />
+              <Pressable
+                onPress={handleCTA}
+                disabled={loading}
+                style={({ pressed }) => ({
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: colors.sunsetOrange,
+                  alignItems: 'center' as const,
+                  justifyContent: 'center' as const,
+                  opacity: loading ? 0.5 : pressed ? 0.8 : 1,
+                  transform: [{ scale: pressed ? 0.92 : 1 }],
+                })}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+                )}
+              </Pressable>
+            </View>
+          </Animated.View>
+        </View>
+
+        {/* ── BOTTOM HALF: Preferences + CTA ──────── */}
+        <View style={{ flex: 1, justifyContent: 'flex-start', paddingTop: 8 }}>
+          <Animated.View
+            layout={LinearTransition}
+            style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}
+          >
+            {/* Style card */}
+            <Animated.View
+              entering={FadeInUp.duration(800).delay(800).springify().damping(14)}
+              style={{
+                flex: 1,
+                borderRadius: 16,
+                borderCurve: 'continuous',
+                paddingVertical: 14,
+                paddingHorizontal: 10,
+                alignItems: 'center' as const,
+                overflow: 'hidden' as const,
+                backgroundColor: GLASS_BG_LIGHT,
+                borderWidth: 1,
+                borderColor: GLASS_BORDER,
+                boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: fonts.bodySemiBold,
+                  fontSize: 15,
+                  color: colors.deepOcean,
+                  marginBottom: 10,
+                }}
+              >
+                Style
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-evenly',
+                  width: '100%',
+                }}
+              >
+                {STYLE_OPTIONS.map((o) => {
+                  const sel = style === o.id;
+                  return (
+                    <Pressable
+                      key={o.id}
+                      style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingVertical: 6,
+                        borderRadius: 10,
+                        borderCurve: 'continuous',
+                        backgroundColor: sel ? colors.sunsetOrange + '30' : 'transparent',
+                      }}
+                      onPress={() => {
+                        hapticSelect();
+                        setStyle(sel ? null : o.id);
+                      }}
+                    >
+                      <Ionicons
+                        name={o.icon}
+                        size={22}
+                        color={sel ? colors.sunsetOrange : colors.textSecondary}
+                      />
+                      <Text
+                        style={{
+                          fontFamily: sel ? fonts.bodySemiBold : fonts.body,
+                          fontSize: 10,
+                          color: sel ? colors.deepOcean : colors.textSecondary,
+                        }}
+                      >
+                        {o.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Animated.View>
+
+            {/* Company card */}
+            <Animated.View
+              entering={FadeInUp.duration(800).delay(1050).springify().damping(14)}
+              style={{
+                flex: 1,
+                borderRadius: 16,
+                borderCurve: 'continuous',
+                paddingVertical: 14,
+                paddingHorizontal: 10,
+                alignItems: 'center' as const,
+                overflow: 'hidden' as const,
+                backgroundColor: GLASS_BG_LIGHT,
+                borderWidth: 1,
+                borderColor: GLASS_BORDER,
+                boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: fonts.bodySemiBold,
+                  fontSize: 15,
+                  color: colors.deepOcean,
+                  marginBottom: 10,
+                }}
+              >
+                Company
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-evenly',
+                  width: '100%',
+                }}
+              >
+                {COMPANY_OPTIONS.map((o) => {
+                  const sel = company === o.id;
+                  return (
+                    <Pressable
+                      key={o.id}
+                      style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingVertical: 6,
+                        borderRadius: 10,
+                        borderCurve: 'continuous',
+                        backgroundColor: sel ? colors.sunsetOrange + '25' : 'transparent',
+                      }}
+                      onPress={() => {
+                        hapticSelect();
+                        setCompany(sel ? null : o.id);
+                      }}
+                    >
+                      <Ionicons
+                        name={o.icon}
+                        size={22}
+                        color={sel ? colors.sunsetOrange : colors.textSecondary}
+                      />
+                      <Text
+                        style={{
+                          fontFamily: sel ? fonts.bodySemiBold : fonts.body,
+                          fontSize: 10,
+                          color: sel ? colors.deepOcean : colors.textSecondary,
+                        }}
+                      >
+                        {o.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Animated.View>
+          </Animated.View>
+
+          {/* ── Duration + Budget row ────────────── */}
+          <Animated.View
+            layout={LinearTransition}
+            style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}
+          >
+            {/* Duration card */}
+            <Animated.View
+              entering={FadeInUp.duration(800).delay(1200).springify().damping(14)}
+              style={{
+                flex: 1,
+                borderRadius: 16,
+                borderCurve: 'continuous',
+                paddingVertical: 14,
+                paddingHorizontal: 10,
+                alignItems: 'center' as const,
+                overflow: 'hidden' as const,
+                backgroundColor: GLASS_BG_LIGHT,
+                borderWidth: 1,
+                borderColor: GLASS_BORDER,
+                boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: fonts.bodySemiBold,
+                  fontSize: 15,
+                  color: colors.deepOcean,
+                  marginBottom: 10,
+                }}
+              >
+                Duration
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-evenly',
+                  width: '100%',
+                }}
+              >
+                {DURATION_OPTIONS.map((o) => {
+                  const sel = duration === o.id;
+                  return (
+                    <Pressable
+                      key={o.id}
+                      style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingVertical: 6,
+                        borderRadius: 10,
+                        borderCurve: 'continuous',
+                        backgroundColor: sel ? colors.sunsetOrange + '30' : 'transparent',
+                      }}
+                      onPress={() => {
+                        hapticSelect();
+                        setDuration(sel ? null : o.id);
+                      }}
+                    >
+                      <Ionicons
+                        name={o.icon}
+                        size={22}
+                        color={sel ? colors.sunsetOrange : colors.textSecondary}
+                      />
+                      <Text
+                        style={{
+                          fontFamily: sel ? fonts.bodySemiBold : fonts.body,
+                          fontSize: 10,
+                          color: sel ? colors.deepOcean : colors.textSecondary,
+                        }}
+                      >
+                        {o.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Animated.View>
+
+            {/* Budget card */}
+            <Animated.View
+              entering={FadeInUp.duration(800).delay(1350).springify().damping(14)}
+              style={{
+                flex: 1,
+                borderRadius: 16,
+                borderCurve: 'continuous',
+                paddingVertical: 14,
+                paddingHorizontal: 10,
+                alignItems: 'center' as const,
+                overflow: 'hidden' as const,
+                backgroundColor: GLASS_BG_LIGHT,
+                borderWidth: 1,
+                borderColor: GLASS_BORDER,
+                boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: fonts.bodySemiBold,
+                  fontSize: 15,
+                  color: colors.deepOcean,
+                  marginBottom: 10,
+                }}
+              >
+                Budget
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-evenly',
+                  width: '100%',
+                }}
+              >
+                {BUDGET_OPTIONS.map((o) => {
+                  const sel = budget === o.id;
+                  return (
+                    <Pressable
+                      key={o.id}
+                      style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingVertical: 6,
+                        borderRadius: 10,
+                        borderCurve: 'continuous',
+                        backgroundColor: sel ? colors.sunsetOrange + '30' : 'transparent',
+                      }}
+                      onPress={() => {
+                        hapticSelect();
+                        setBudget(sel ? null : o.id);
+                      }}
+                    >
+                      <Ionicons
+                        name={o.icon}
+                        size={22}
+                        color={sel ? colors.sunsetOrange : colors.textSecondary}
+                      />
+                      <Text
+                        style={{
+                          fontFamily: sel ? fonts.bodySemiBold : fonts.body,
+                          fontSize: 10,
+                          color: sel ? colors.deepOcean : colors.textSecondary,
+                        }}
+                      >
+                        {o.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Animated.View>
+          </Animated.View>
+
+          {/* ── Error ──────────────────────────────── */}
+          {error && (
+            <Animated.View
+              entering={FadeIn.duration(300)}
+              layout={LinearTransition}
+              style={{
+                backgroundColor: colors.error + '18',
+                borderRadius: 12,
+                borderCurve: 'continuous',
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                marginBottom: 12,
+                borderWidth: 1,
+                borderColor: colors.error + '30',
+              }}
+            >
+              <Text
+                selectable
+                style={{
+                  fontFamily: fonts.body,
+                  fontSize: 14,
+                  color: colors.error,
+                  textAlign: 'center',
+                }}
+              >
+                {error}
+              </Text>
+            </Animated.View>
+          )}
+
+          {/* ── CTA ────────────────────────────────── */}
+          <Animated.View
+            entering={ZoomIn.duration(600).delay(1550).springify().damping(10)}
+          >
+            <Pressable
+              style={({ pressed }) => ({
+                borderRadius: 16,
+                borderCurve: 'continuous',
+                paddingVertical: 16,
+                alignItems: 'center' as const,
+                marginBottom: 8,
+                backgroundColor: colors.sunsetOrange,
+                opacity: loading ? 0.6 : pressed ? 0.9 : 1,
+                transform: [{ scale: pressed ? 0.97 : 1 }],
+                boxShadow: '0 4px 16px rgba(249, 115, 22, 0.35)',
+              })}
+              onPress={handleCTA}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text
+                  style={{
+                    fontFamily: fonts.bodySemiBold,
+                    fontSize: 17,
+                    color: '#FFFFFF',
+                  }}
+                >
+                  Start your plan
+                </Text>
+              )}
+            </Pressable>
+          </Animated.View>
+
+          <View style={{ height: Platform.OS === 'ios' ? 16 : 8 }} />
+        </View>
+      </View>
+    </View>
+  );
+}
