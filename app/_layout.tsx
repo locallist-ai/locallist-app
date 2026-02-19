@@ -5,6 +5,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
 import { colors } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import LoginScreen from './login';
@@ -89,7 +90,7 @@ const splashStyles = StyleSheet.create({
   tagline: {
     marginTop: 16,
     fontSize: 14,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    fontFamily: 'InterSemiBold',
     color: '#94a3b8',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -102,9 +103,21 @@ const splashStyles = StyleSheet.create({
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
 
+  const [fontsLoaded] = useFonts({
+    Inter: require('../assets/fonts/Inter-Regular.ttf'),
+    InterMedium: require('../assets/fonts/Inter-Medium.ttf'),
+    InterSemiBold: require('../assets/fonts/Inter-SemiBold.ttf'),
+    InterBold: require('../assets/fonts/Inter-Bold.ttf'),
+    PlayfairDisplay: require('../assets/fonts/PlayfairDisplay-Regular.ttf'),
+    PlayfairDisplaySemiBold: require('../assets/fonts/PlayfairDisplay-SemiBold.ttf'),
+    PlayfairDisplayBold: require('../assets/fonts/PlayfairDisplay-Bold.ttf'),
+  });
+
   const onLayoutReady = useCallback(async () => {
     await SplashScreen.hideAsync();
   }, []);
+
+  if (!fontsLoaded) return null;
 
   return (
     <AuthProvider>
