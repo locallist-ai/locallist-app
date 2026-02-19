@@ -38,6 +38,8 @@ export type Plan = {
   isPublic: boolean;
   isShowcase?: boolean;
   isEphemeral?: boolean;
+  category?: string; // Category for PhotoHero fallback gradient
+  image?: string | null; // Primary image URL
 };
 
 export type BuilderResponse = {
