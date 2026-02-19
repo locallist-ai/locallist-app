@@ -69,18 +69,27 @@ Pulsar `a` para abrir en Android. Hot reload funciona automaticamente para cambi
 
 ## Key Files
 
-- `app/_layout.tsx` — Root layout (ThemeProvider, SafeAreaProvider, splash animation)
+- `app/_layout.tsx` — Root layout (ThemeProvider, SafeAreaProvider, splash animation, AuthGate)
 - `app/(tabs)/_layout.tsx` — Tab navigation layout
-- `app/(tabs)/index.tsx` — Home screen (chat interface, theme switcher, style/company chips, CTA)
+- `app/(tabs)/index.tsx` — Home screen (editorial hero, CTA, preference chips)
+- `app/(tabs)/plans.tsx` — Plans list (PhotoHero covers, filter chips, skeleton loading)
+- `app/(tabs)/account.tsx` — Account (profile, tier badge, sign out)
+- `app/login.tsx` — Login (Apple Sign In, Google OAuth, email/password)
+- `app/plan/[id].tsx` — Plan detail (parallax hero, day-by-day stops, Follow button)
+- `app/follow/[id].tsx` — Follow Mode (full-screen PlanMap, BottomSheetStop, progress bar)
+- `components/ui/PhotoHero.tsx` — Full-bleed image with gradient fallback by category
+- `components/ui/SkeletonCard.tsx` — Shimmer skeleton loader
+- `components/map/PlanMap.tsx` — MapLibre map with pins, route line, animated camera
+- `components/map/useOfflineTiles.ts` — Offline tile caching hook
+- `components/follow/StopCard.tsx` — Stop display card with photo + WhyThisPlace
+- `components/follow/BottomSheetStop.tsx` — Animated bottom sheet with swipe gestures
 - `lib/theme.ts` — Brand tokens (colors, typography, spacing, borderRadius)
 - `lib/api.ts` — API client with auto JWT refresh, SecureStore token storage
 - `lib/auth.ts` — AuthContext (user state, logout, isPro flag)
+- `lib/types.ts` — Shared TypeScript types (Plan, Place, Stop, etc.)
 - `lib/i18n/` — i18n infrastructure (i18next + expo-localization, EN/ES translations)
 
 ## Screens NOT yet implemented (backend ready, no UI)
 
-- Plans list, Plan detail (day-by-day), Place detail
-- Account (profile, delete account, privacy policy link)
-- Login (Apple Sign In, Google, email/password)
-- Builder (AI plan wizard)
-- Follow Mode (step-by-step navigation)
+- Place detail screen
+- Builder UI (AI plan wizard) — API endpoint exists, no app screen
