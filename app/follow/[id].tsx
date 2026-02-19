@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,20 +10,44 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { PlanMap } from '../../components/map/PlanMap';
+import { BottomSheetStop } from '../../components/follow/BottomSheetStop';
+import { useOfflineTiles } from '../../components/map/useOfflineTiles';
 import type { PlanStop, PlanDetailResponse } from '../../lib/types';
+import type { MapStop } from '../../components/map/PlanMap';
 
 type FollowSession = { id: string; planId: string; status: string };
 
-const TIME_BLOCK_ICONS: Record<string, string> = {
-  morning: 'sunny-outline',
-  lunch: 'restaurant-outline',
-  afternoon: 'cafe-outline',
-  dinner: 'moon-outline',
-  evening: 'musical-notes-outline',
-};
+/** Map PlanStop to the Stop shape expected by BottomSheetStop */
+const mapToStop = (planStop: PlanStop) => ({
+  id: planStop.placeId,
+  name: planStop.place?.name ?? 'Unknown place',
+  category: planStop.place?.category,
+  neighborhood: planStop.place?.neighborhood ?? undefined,
+  photos: planStop.place?.photos?.map((url) => ({ url })),
+  whyThisPlace: planStop.place?.whyThisPlace,
+  duration: planStop.suggestedDurationMin ?? undefined,
+  priceRange: planStop.place?.priceRange ?? undefined,
+});
+
+/** Map PlanStop to the MapStop shape expected by PlanMap */
+const mapToMapStop = (planStop: PlanStop): MapStop => ({
+  id: planStop.placeId,
+  name: planStop.place?.name ?? 'Unknown',
+  latitude: parseFloat(planStop.place?.latitude ?? '0'),
+  longitude: parseFloat(planStop.place?.longitude ?? '0'),
+  category: planStop.place?.category,
+});
 
 export default function FollowModeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,6 +61,47 @@ export default function FollowModeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Animated progress bar width (0..1)
+  const progressAnim = useSharedValue(0);
+
+  // Convert PlanStops to MapStop[] for PlanMap (memoised)
+  const mapStops = useMemo<MapStop[]>(
+    () => allStops.map(mapToMapStop),
+    [allStops],
+  );
+
+  // Current stop mapped for BottomSheetStop (memoised)
+  const currentStop = useMemo(
+    () => (allStops.length > 0 ? mapToStop(allStops[currentIndex]) : null),
+    [allStops, currentIndex],
+  );
+
+  // Offline tiles
+  const offlineTileStops = useMemo(
+    () =>
+      mapStops.map((s) => ({
+        latitude: s.latitude,
+        longitude: s.longitude,
+      })),
+    [mapStops],
+  );
+  const { tileUrl, isDownloading, hasCache } = useOfflineTiles(offlineTileStops);
+
+  // ─── Animate progress bar when currentIndex or total changes ───
+  useEffect(() => {
+    if (allStops.length === 0) return;
+    const target = (currentIndex + 1) / allStops.length;
+    progressAnim.value = withTiming(target, {
+      duration: 400,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [currentIndex, allStops.length, progressAnim]);
+
+  const progressBarStyle = useAnimatedStyle(() => ({
+    width: `${progressAnim.value * 100}%`,
+  }));
+
+  // ─── Auth guard + load plan ───
   useEffect(() => {
     if (!isAuthenticated) {
       router.replace('/login');
@@ -72,11 +137,18 @@ export default function FollowModeScreen() {
     setLoading(false);
   };
 
+  // ─── Navigation handlers ───
   const handleNext = () => {
     if (currentIndex < allStops.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
       handleComplete();
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
     }
   };
 
@@ -89,6 +161,9 @@ export default function FollowModeScreen() {
   };
 
   const handleComplete = async () => {
+    // Haptic feedback for completion
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
     if (session) {
       await api(`/follow/${session.id}/complete`, { method: 'PATCH' });
     }
@@ -101,6 +176,7 @@ export default function FollowModeScreen() {
     router.back();
   };
 
+  // ─── Loading state ───
   if (loading) {
     return (
       <View style={s.center}>
@@ -110,6 +186,7 @@ export default function FollowModeScreen() {
     );
   }
 
+  // ─── Error state ───
   if (error || allStops.length === 0) {
     return (
       <View style={s.center}>
@@ -122,125 +199,69 @@ export default function FollowModeScreen() {
     );
   }
 
-  const current = allStops[currentIndex];
-  const next = currentIndex < allStops.length - 1 ? allStops[currentIndex + 1] : null;
-  const isLastStop = currentIndex === allStops.length - 1;
-  const tb = current.timeBlock ? TIME_BLOCK_ICONS[current.timeBlock] : null;
-
+  // ─── Main layout: full-screen map + overlays ───
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
-      {/* Top bar */}
-      <View style={s.topBar}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="close" size={28} color={colors.deepOcean} />
-        </TouchableOpacity>
-        <Text style={s.topTitle} numberOfLines={1}>{planName}</Text>
-        <View style={{ width: 28 }} />
-      </View>
+    <View style={s.root}>
+      {/* Full-screen map background */}
+      <PlanMap
+        stops={mapStops}
+        activePinIndex={currentIndex}
+        style={s.map}
+      />
 
-      {/* Progress */}
-      <View style={s.progressWrap}>
+      {/* Transparent top bar overlay */}
+      <View style={[s.topBarOverlay, { paddingTop: insets.top + spacing.xs }]}>
+        <View style={s.topBarRow}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={s.closeButton}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="close" size={24} color={colors.deepOcean} />
+          </TouchableOpacity>
+
+          <Text style={s.topTitle} numberOfLines={1}>
+            {planName}
+          </Text>
+
+          <Text style={s.stopCounter}>
+            Stop {currentIndex + 1}/{allStops.length}
+          </Text>
+        </View>
+
+        {/* Animated progress bar */}
         <View style={s.progressBg}>
-          <View
-            style={[
-              s.progressFill,
-              { width: `${((currentIndex + 1) / allStops.length) * 100}%` },
-            ]}
-          />
+          <Animated.View style={[s.progressFill, progressBarStyle]} />
         </View>
-        <Text style={s.progressText}>
-          Stop {currentIndex + 1} of {allStops.length}
-        </Text>
       </View>
 
-      {/* Current stop card */}
-      <View style={s.mainCard}>
-        <View style={s.stopTimeRow}>
-          {tb && (
-            <Ionicons name={tb as any} size={20} color={colors.sunsetOrange} />
-          )}
-          {current.suggestedArrival && (
-            <Text style={s.arrivalTime}>{current.suggestedArrival}</Text>
-          )}
-          {current.timeBlock && (
-            <View style={s.timeBlockBadge}>
-              <Text style={s.timeBlockText}>{current.timeBlock}</Text>
-            </View>
-          )}
-        </View>
-
-        <Text style={s.currentPlaceName}>{current.place?.name ?? 'Unknown place'}</Text>
-
-        {current.place?.category && (
-          <View style={s.categoryChip}>
-            <Text style={s.categoryText}>{current.place.category}</Text>
-          </View>
-        )}
-
-        {current.place?.neighborhood && (
-          <Text style={s.neighborhood}>{current.place.neighborhood}</Text>
-        )}
-
-        {current.place?.whyThisPlace && (
-          <Text style={s.whyText}>{current.place.whyThisPlace}</Text>
-        )}
-
-        {current.suggestedDurationMin != null && (
-          <View style={s.durationRow}>
-            <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-            <Text style={s.durationText}>~{current.suggestedDurationMin} min</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Next stop preview */}
-      {next && (
-        <View style={s.nextPreview}>
-          {next.travelFromPrevious && (
-            <View style={s.travelInfo}>
-              <Ionicons
-                name={next.travelFromPrevious.mode === 'walk' ? 'walk-outline' : 'car-outline'}
-                size={16}
-                color={colors.textSecondary}
-              />
-              <Text style={s.travelText}>
-                {Math.round(next.travelFromPrevious.duration_min)} min {next.travelFromPrevious.mode} to next stop
-              </Text>
-            </View>
-          )}
-          <View style={s.nextCard}>
-            <Text style={s.nextLabel}>Up next</Text>
-            <Text style={s.nextName} numberOfLines={1}>{next.place?.name ?? 'Unknown place'}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Bottom actions */}
-      <View style={[s.bottomActions, { paddingBottom: insets.bottom + spacing.md }]}>
-        <TouchableOpacity style={s.pauseBtn} activeOpacity={0.7} onPress={handlePause}>
-          <Ionicons name="pause-outline" size={20} color={colors.textMain} />
-          <Text style={s.pauseBtnText}>Pause</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={s.skipBtn} activeOpacity={0.7} onPress={handleSkip}>
-          <Text style={s.skipBtnText}>Skip</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={s.nextBtn} activeOpacity={0.8} onPress={handleNext}>
-          <Text style={s.nextBtnText}>{isLastStop ? 'Finish' : 'Next Stop'}</Text>
-          <Ionicons
-            name={isLastStop ? 'checkmark' : 'arrow-forward'}
-            size={20}
-            color="#FFFFFF"
+      {/* Bottom sheet stop overlay */}
+      <View style={[s.bottomSheetWrap, { paddingBottom: insets.bottom }]}>
+        {currentStop && (
+          <BottomSheetStop
+            stop={currentStop}
+            index={currentIndex}
+            totalStops={allStops.length}
+            onSwipeLeft={handleNext}
+            onSwipeRight={handlePrev}
+            onPause={handlePause}
+            onSkip={handleSkip}
+            onNext={handleNext}
+            style={s.bottomSheet}
           />
-        </TouchableOpacity>
+        )}
       </View>
     </View>
   );
 }
 
+const BOTTOM_SHEET_HEIGHT = 350;
+
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bgMain },
+  root: {
+    flex: 1,
+    backgroundColor: colors.bgMain,
+  },
   center: {
     flex: 1,
     backgroundColor: colors.bgMain,
@@ -268,15 +289,41 @@ const s = StyleSheet.create({
     borderRadius: borderRadius.md,
     backgroundColor: colors.electricBlue,
   },
-  backBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: '#FFFFFF' },
+  backBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
 
-  // Top bar
-  topBar: {
+  // Full-screen map
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+
+  // Top bar overlay (positioned absolutely over the map)
+  topBarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(242, 239, 233, 0.92)',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    zIndex: 10,
+  },
+  topBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   topTitle: {
     fontFamily: fonts.bodySemiBold,
@@ -286,133 +333,37 @@ const s = StyleSheet.create({
     textAlign: 'center',
     marginHorizontal: spacing.sm,
   },
+  stopCounter: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.textSecondary,
+    minWidth: 60,
+    textAlign: 'right',
+  },
 
-  // Progress
-  progressWrap: { paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  // Animated progress bar
   progressBg: {
     height: 4,
     backgroundColor: colors.borderColor,
     borderRadius: 2,
-    marginBottom: 6,
+    overflow: 'hidden',
   },
   progressFill: {
     height: 4,
     backgroundColor: colors.electricBlue,
     borderRadius: 2,
   },
-  progressText: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
 
-  // Main card
-  mainCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.lg,
-    marginHorizontal: spacing.lg,
-    padding: spacing.lg,
+  // Bottom sheet wrapper
+  bottomSheetWrap: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: BOTTOM_SHEET_HEIGHT,
+    zIndex: 10,
+  },
+  bottomSheet: {
     flex: 1,
-    minHeight: 200,
   },
-  stopTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
-  arrivalTime: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.sunsetOrange },
-  timeBlockBadge: {
-    backgroundColor: colors.sunsetOrange + '12',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: borderRadius.full,
-  },
-  timeBlockText: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.sunsetOrange, textTransform: 'capitalize' },
-  currentPlaceName: {
-    fontFamily: fonts.headingBold,
-    fontSize: 24,
-    lineHeight: 30,
-    color: colors.deepOcean,
-    marginBottom: spacing.sm,
-  },
-  categoryChip: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.electricBlue + '12',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: borderRadius.full,
-    marginBottom: spacing.sm,
-  },
-  categoryText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.electricBlue },
-  neighborhood: {
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  whyText: {
-    fontFamily: fonts.body,
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textMain,
-    fontStyle: 'italic',
-    marginBottom: spacing.md,
-  },
-  durationRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  durationText: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary },
-
-  // Next preview
-  nextPreview: { paddingHorizontal: spacing.lg, marginTop: spacing.md },
-  travelInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: spacing.sm,
-    justifyContent: 'center',
-  },
-  travelText: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary },
-  nextCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-  },
-  nextLabel: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-  nextName: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.deepOcean },
-
-  // Bottom actions
-  bottomActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  pauseBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.borderColor,
-    backgroundColor: colors.bgCard,
-  },
-  pauseBtnText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.textMain },
-  skipBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.borderColor,
-    backgroundColor: colors.bgCard,
-  },
-  skipBtnText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.textSecondary },
-  nextBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.electricBlue,
-  },
-  nextBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' },
 });
