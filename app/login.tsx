@@ -49,11 +49,14 @@ export default function LoginScreen() {
     AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
   }, []);
 
-  // Google OAuth setup
+  // Google OAuth setup — pass a dummy clientId when env vars are missing to satisfy
+  // the hook's invariant (can't skip hooks conditionally). The Google button is hidden
+  // when unconfigured so the dummy value is never used for a real auth flow.
+  const googleConfigured = !!process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
   const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || 'unconfigured.apps.googleusercontent.com',
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || (Platform.OS === 'android' ? 'not-configured' : undefined),
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
   });
 
   // Handle Google OAuth response
@@ -325,37 +328,39 @@ export default function LoginScreen() {
               </Pressable>
             )}
 
-            {/* Google */}
-            <Pressable
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                width: '100%',
-                paddingVertical: 16,
-                borderRadius: borderRadius.lg,
-                borderCurve: 'continuous',
-                backgroundColor: colors.bgCard,
-                borderWidth: 1.5,
-                borderColor: colors.borderColor,
-                opacity: loading ? 0.6 : pressed ? 0.85 : 1,
-                transform: [{ scale: pressed ? 0.98 : 1 }],
-              })}
-              onPress={handleGoogleSignIn}
-              disabled={!!loading}
-            >
-              {loading === 'google' ? (
-                <ActivityIndicator size="small" color={colors.deepOcean} />
-              ) : (
-                <>
-                  <Ionicons name="logo-google" size={20} color={colors.deepOcean} />
-                  <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.deepOcean }}>
-                    Continue with Google
-                  </Text>
-                </>
-              )}
-            </Pressable>
+            {/* Google — only shown when EXPO_PUBLIC_GOOGLE_CLIENT_ID is set */}
+            {googleConfigured && (
+              <Pressable
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  width: '100%',
+                  paddingVertical: 16,
+                  borderRadius: borderRadius.lg,
+                  borderCurve: 'continuous',
+                  backgroundColor: colors.bgCard,
+                  borderWidth: 1.5,
+                  borderColor: colors.borderColor,
+                  opacity: loading ? 0.6 : pressed ? 0.85 : 1,
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                })}
+                onPress={handleGoogleSignIn}
+                disabled={!!loading}
+              >
+                {loading === 'google' ? (
+                  <ActivityIndicator size="small" color={colors.deepOcean} />
+                ) : (
+                  <>
+                    <Ionicons name="logo-google" size={20} color={colors.deepOcean} />
+                    <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.deepOcean }}>
+                      Continue with Google
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            )}
 
             {/* Email */}
             <Pressable
