@@ -69,7 +69,7 @@ Pulsar `a` para abrir en Android. Hot reload funciona automaticamente para cambi
 
 ## Key Files
 
-- `app/_layout.tsx` — Root layout (ThemeProvider, SafeAreaProvider, splash animation, AuthGate)
+- `app/_layout.tsx` — Root layout (useFonts, SafeAreaProvider, splash animation, AuthGate)
 - `app/(tabs)/_layout.tsx` — Tab navigation layout
 - `app/(tabs)/index.tsx` — Home screen (editorial hero, CTA, preference chips)
 - `app/(tabs)/plans.tsx` — Plans list (PhotoHero covers, filter chips, skeleton loading)
@@ -88,6 +88,7 @@ Pulsar `a` para abrir en Android. Hot reload funciona automaticamente para cambi
 - `lib/auth.ts` — AuthContext (user state, logout, isPro flag)
 - `lib/types.ts` — Shared TypeScript types (Plan, Place, Stop, etc.)
 - `lib/i18n/` — i18n infrastructure (i18next + expo-localization, EN/ES translations)
+- `assets/fonts/` — Inter (4 weights) + Playfair Display (3 weights), loaded via useFonts in _layout.tsx
 
 ## Screens NOT yet implemented (backend ready, no UI)
 
