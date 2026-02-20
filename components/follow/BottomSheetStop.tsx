@@ -13,10 +13,12 @@ import Animated, {
   useAnimatedGestureHandler,
   runOnJS,
 } from 'react-native-reanimated';
-import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
 import { StopCard } from './StopCard';
+import { colors, fonts, borderRadius, spacing } from '../../lib/theme';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface Stop {
   id: string;
@@ -76,6 +78,10 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
   }, [stop.id, translateY]);
 
   // Gesture handler for swipes
+  const callSwipeLeft = () => { if (onSwipeLeft) onSwipeLeft(); };
+  const callSwipeRight = () => { if (onSwipeRight) onSwipeRight(); };
+
+  // Gesture handler for swipes
   const gestureHandler = useAnimatedGestureHandler({
     onStart: (_, ctx: any) => {
       ctx.startX = translateX.value;
@@ -88,13 +94,13 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
       if (event.translationX < -SWIPE_THRESHOLD) {
         translateX.value = withSpring(-400, { damping: 10 });
         runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
-        runOnJS(onSwipeLeft)?.();
+        runOnJS(callSwipeLeft)();
       }
       // Swipe right (previous)
       else if (event.translationX > SWIPE_THRESHOLD) {
         translateX.value = withSpring(400, { damping: 10 });
         runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
-        runOnJS(onSwipeRight)?.();
+        runOnJS(callSwipeRight)();
       }
       // No swipe, reset
       else {
@@ -147,7 +153,7 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
               <MaterialCommunityIcons
                 name={isPaused ? 'play' : 'pause'}
                 size={20}
-                color="#3b82f6"
+                color={colors.electricBlue}
               />
               <Text style={styles.buttonText}>{isPaused ? 'Resume' : 'Pause'}</Text>
             </TouchableOpacity>
@@ -157,21 +163,28 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
               onPress={handleSkip}
               activeOpacity={0.7}
             >
-              <MaterialCommunityIcons name="skip-forward" size={20} color="#f97316" />
+              <MaterialCommunityIcons name="skip-forward" size={20} color={colors.sunsetOrange} />
               <Text style={styles.buttonText}>Skip</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.button, styles.buttonPrimary]}
+              activeOpacity={0.8}
               onPress={handleNext}
-              activeOpacity={0.7}
+              style={{ flex: 1.2 }}
             >
-              <Text style={styles.buttonTextPrimary}>Next</Text>
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={20}
-                color="#FFFFFF"
-              />
+              <LinearGradient
+                colors={[colors.electricBlue, '#2563eb']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.buttonPrimaryGradient}
+              >
+                <Text style={styles.buttonTextPrimary}>Next</Text>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color="#FFFFFF"
+                />
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -186,34 +199,35 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.bgCard,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
     overflow: 'hidden',
   },
   handleBar: {
     alignItems: 'center',
-    paddingVertical: 8,
-    backgroundColor: '#F2EFE9',
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.bgMain,
   },
   handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#cbd5e1',
+    backgroundColor: colors.borderColor,
   },
   actionBar: {
     flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: colors.borderColor,
+    backgroundColor: colors.bgCard,
   },
   button: {
     flex: 1,
@@ -221,23 +235,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.bgMain,
   },
   buttonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0f172a',
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.deepOcean,
   },
-  buttonPrimary: {
-    backgroundColor: '#3b82f6',
-    flex: 1.2,
+  buttonPrimaryGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: borderRadius.md,
   },
   buttonTextPrimary: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 14,
     color: '#FFFFFF',
   },
 });

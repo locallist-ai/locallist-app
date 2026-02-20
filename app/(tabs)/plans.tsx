@@ -7,18 +7,19 @@ import {
   TouchableOpacity,
   RefreshControl,
   ScrollView,
-  Image,
-  useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
+import { getCached, setCache, isFresh } from '../../lib/api-cache';
 import { PhotoHero } from '../../components/ui/PhotoHero';
 import { SkeletonCard } from '../../components/ui/SkeletonCard';
 import type { Plan } from '../../lib/types';
 import type { ImageSourcePropType } from 'react-native';
+
+const PLANS_CACHE_KEY = 'plans_showcase';
 
 // Local cover images generated with Remotion (keyed by plan name)
 const PLAN_COVERS: Record<string, ImageSourcePropType> = {
@@ -33,25 +34,43 @@ const PLAN_COVERS: Record<string, ImageSourcePropType> = {
 const GLASS_BG = 'rgba(255, 255, 255, 0.82)';
 const GLASS_BORDER = 'rgba(255, 255, 255, 0.50)';
 
+/** Sort plans with "Family Fun in Miami" pinned first */
+function sortPlans(list: Plan[]): Plan[] {
+  return [...list].sort((a, b) => {
+    if (a.name === 'Family Fun in Miami') return -1;
+    if (b.name === 'Family Fun in Miami') return 1;
+    return 0;
+  });
+}
+
 export default function PlansScreen() {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Stale-while-revalidate: show cached data instantly (preloaded during splash)
+  const cached = getCached<Plan[]>(PLANS_CACHE_KEY);
+  const [plans, setPlans] = useState<Plan[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const { height: screenHeight } = useWindowDimensions();
 
   const fetchPlans = useCallback(async () => {
     const res = await api<{ plans: Plan[] }>('/plans?showcase=true');
     if (res.data) {
-      setPlans(res.data.plans ?? []);
+      const list = sortPlans(res.data.plans ?? []);
+      setPlans(list);
+      setCache(PLANS_CACHE_KEY, list);
       setError(null);
-    } else {
+    } else if (!cached) {
       setError(res.error ?? 'Failed to load plans');
     }
   }, []);
 
   useEffect(() => {
+    if (cached && isFresh(PLANS_CACHE_KEY)) {
+      // Data was preloaded during splash — skip network call
+      setLoading(false);
+      return;
+    }
+    // Fetch from API (cached data already shown if available)
     fetchPlans().finally(() => setLoading(false));
   }, [fetchPlans]);
 
@@ -72,32 +91,6 @@ export default function PlansScreen() {
   if (loading) {
     return (
       <View style={s.root}>
-        {/* Background image with overlay */}
-        <Image
-          source={require('../../assets/images/plans-bg.webp')}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: -100,
-            width: '100%',
-            height: screenHeight + 100,
-          }}
-          resizeMode="cover"
-        />
-        {/* Soft overlay */}
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: -100,
-            backgroundColor: 'rgba(0, 0, 0, 0.05)',
-          }}
-        />
-
         <View style={s.skeletonContainer}>
           <SkeletonCard height={280} imageHeight={180} />
           <SkeletonCard height={280} imageHeight={180} />
@@ -109,32 +102,6 @@ export default function PlansScreen() {
 
   return (
     <View style={s.root}>
-      {/* Background image with overlay */}
-      <Image
-        source={require('../../assets/images/plans-bg.webp')}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: -100,
-          width: '100%',
-          height: screenHeight + 100,
-        }}
-        resizeMode="cover"
-      />
-      {/* Soft overlay */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: -100,
-          backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        }}
-      />
-
       {/* Filter Chips */}
       <Animated.View entering={FadeInDown.duration(600).delay(300).springify()}>
         <ScrollView
@@ -344,20 +311,17 @@ const s = StyleSheet.create({
 
   // Card with full-bleed image
   card: {
-    backgroundColor: colors.bgCard,
+    backgroundColor: '#FFFFFF',
     borderRadius: borderRadius.lg,
     marginBottom: spacing.md,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
   },
 
   // Card content (below image)
   cardContent: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    paddingTop: 0,
   },
 
   cardHeader: {

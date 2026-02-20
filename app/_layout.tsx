@@ -8,6 +8,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { colors } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
+import { preloadPlans } from '../lib/preload';
 import LoginScreen from './login';
 
 SplashScreen.preventAutoHideAsync();
@@ -21,8 +22,11 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
   const scaleAnim = useRef(new Animated.Value(0.85)).current;
   const [animatedIn, setAnimatedIn] = useState(false);
 
-  // Step 1: Fade in logo
+  // Step 1: Fade in logo + preload data in parallel
   useEffect(() => {
+    // Start preloading plans data & images while splash animates
+    preloadPlans();
+
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,

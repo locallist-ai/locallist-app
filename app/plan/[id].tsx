@@ -220,6 +220,7 @@ export default function PlanDetailScreen() {
           title={plan.name}
           subtitle={heroSubtitle}
           height={HERO_MAX}
+          withSafeArea
         />
       </Animated.View>
 
@@ -233,11 +234,11 @@ export default function PlanDetailScreen() {
         {/* Badges below hero */}
         <View style={s.badges}>
           <View style={s.badge}>
-            <Ionicons name="location-outline" size={14} color={colors.electricBlue} />
+            <Ionicons name="location-outline" size={14} color={colors.deepOcean} />
             <Text style={s.badgeText}>{plan.city}</Text>
           </View>
           <View style={s.badge}>
-            <Ionicons name="calendar-outline" size={14} color={colors.electricBlue} />
+            <Ionicons name="calendar-outline" size={14} color={colors.deepOcean} />
             <Text style={s.badgeText}>
               {plan.durationDays} {plan.durationDays === 1 ? 'day' : 'days'}
             </Text>
@@ -497,18 +498,20 @@ const s = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // Badges
+  // Badges (glass-style, aligned with plans page chips)
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.electricBlue + '12',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.82)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.50)',
   },
-  badgeText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.electricBlue },
+  badgeText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.deepOcean },
   description: {
     fontFamily: fonts.body,
     fontSize: 15,
@@ -519,10 +522,12 @@ const s = StyleSheet.create({
 
   // Builder message
   messageCard: {
-    backgroundColor: colors.sunsetOrange + '10',
+    backgroundColor: '#FFFFFF',
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.sunsetOrange + '20',
   },
   messageText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.deepOcean },
 
@@ -530,7 +535,7 @@ const s = StyleSheet.create({
   daySection: { marginBottom: spacing.lg },
   dayTitle: {
     fontFamily: fonts.headingSemiBold,
-    fontSize: 20,
+    fontSize: 22,
     color: colors.deepOcean,
     marginBottom: spacing.sm,
   },
@@ -544,20 +549,20 @@ const s = StyleSheet.create({
     paddingRight: spacing.sm,
   },
   dayGalleryItem: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius.md,
+    width: 72,
+    height: 72,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
   },
   dayGalleryImage: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius.md,
+    width: 72,
+    height: 72,
+    borderRadius: borderRadius.lg,
   },
 
-  // Stop card
+  // Stop card (clean, bright — aligned with plans page cards)
   stopCard: {
-    backgroundColor: colors.bgCard,
+    backgroundColor: '#FFFFFF',
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginBottom: spacing.sm,
@@ -567,25 +572,25 @@ const s = StyleSheet.create({
     alignItems: 'flex-start',
   },
   stopThumbContainer: {
-    width: 60,
-    height: 60,
+    width: 64,
+    height: 64,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
     marginRight: spacing.md,
     flexShrink: 0,
   },
   stopThumb: {
-    width: 60,
-    height: 60,
+    width: 64,
+    height: 64,
     borderRadius: borderRadius.md,
   },
   stopTextContent: {
     flex: 1,
-    minHeight: 60,
+    minHeight: 64,
     justifyContent: 'center',
   },
   stopHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  arrivalTime: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.sunsetOrange },
+  arrivalTime: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.sunsetOrange },
   placeName: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 17,
@@ -616,13 +621,13 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
 
-  // Travel pill
+  // Travel pill (glass-style)
   travelPill: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
     gap: 4,
-    backgroundColor: colors.bgCard,
+    backgroundColor: 'rgba(255, 255, 255, 0.82)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: borderRadius.full,
@@ -630,7 +635,7 @@ const s = StyleSheet.create({
   },
   travelText: { fontFamily: fonts.body, fontSize: 12, color: colors.textSecondary },
 
-  // Bottom bar
+  // Bottom bar (clean, no heavy border)
   bottomBar: {
     position: 'absolute',
     bottom: 0,
@@ -640,8 +645,6 @@ const s = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingBottom: spacing.xl,
     backgroundColor: colors.bgMain,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderColor,
   },
   followBtnGradient: {
     flexDirection: 'row',

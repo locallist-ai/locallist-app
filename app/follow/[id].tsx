@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -210,7 +211,7 @@ export default function FollowModeScreen() {
       />
 
       {/* Transparent top bar overlay */}
-      <View style={[s.topBarOverlay, { paddingTop: insets.top + spacing.xs }]}>
+      <BlurView intensity={70} tint="light" style={[s.topBarOverlay, { paddingTop: insets.top + spacing.xs }]}>
         <View style={s.topBarRow}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -233,13 +234,13 @@ export default function FollowModeScreen() {
         <View style={s.progressBg}>
           <Animated.View style={[s.progressFill, progressBarStyle]} />
         </View>
-      </View>
+      </BlurView>
 
       {/* Bottom sheet stop overlay */}
       <View style={[s.bottomSheetWrap, { paddingBottom: insets.bottom }]}>
         {currentStop && (
           <BottomSheetStop
-            stop={currentStop}
+            stop={currentStop as any}
             index={currentIndex}
             totalStops={allStops.length}
             onSwipeLeft={handleNext}
@@ -247,11 +248,10 @@ export default function FollowModeScreen() {
             onPause={handlePause}
             onSkip={handleSkip}
             onNext={handleNext}
-            style={s.bottomSheet}
           />
         )}
       </View>
-    </View>
+    </View >
   );
 }
 
@@ -306,10 +306,11 @@ const s = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(242, 239, 233, 0.92)',
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
     zIndex: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
   topBarRow: {
     flexDirection: 'row',

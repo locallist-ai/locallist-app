@@ -14,6 +14,8 @@ interface PhotoHeroProps {
   title?: string;
   subtitle?: string;
   height?: number;
+  /** When true, adds safe area inset padding at top (for full-screen heroes) */
+  withSafeArea?: boolean;
   onImageLoadError?: () => void;
 }
 
@@ -33,6 +35,7 @@ export const PhotoHero: React.FC<PhotoHeroProps> = ({
   title,
   subtitle,
   height = 250,
+  withSafeArea = false,
   onImageLoadError,
 }) => {
   const insets = useSafeAreaInsets();
@@ -43,34 +46,41 @@ export const PhotoHero: React.FC<PhotoHeroProps> = ({
   const shouldShowImage = (localImage || isValidUrl) && !imageLoadFailed;
   const imageSource = localImage || { uri: imageUrl };
 
-  const [overlayColor1, overlayColor2] = CATEGORY_GRADIENTS[fallbackCategory];
+  const gradientColors = CATEGORY_GRADIENTS[fallbackCategory] ?? CATEGORY_GRADIENTS.Culture;
+  const [overlayColor1, overlayColor2] = gradientColors;
 
   return (
-    <View style={[styles.container, { height, paddingTop: insets.top }]}>
-      {shouldShowImage ? (
-        <>
-          <Image
-            source={imageSource}
-            style={styles.image}
-            contentFit="cover"
-            onError={() => {
-              setImageLoadFailed(true);
-              onImageLoadError?.();
-            }}
-          />
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.7)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.overlay}
-          />
-        </>
-      ) : (
-        <LinearGradient
-          colors={[overlayColor1, overlayColor2]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+    <View style={[styles.container, { height, paddingTop: withSafeArea ? insets.top : 0 }]}>
+      {/* Always show category gradient as base (instant color, never grey) */}
+      <LinearGradient
+        colors={[overlayColor1, overlayColor2]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.image}
+      />
+
+      {/* Image loads on top with fade-in transition */}
+      {shouldShowImage && (
+        <Image
+          source={imageSource}
           style={styles.image}
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
+          onError={() => {
+            setImageLoadFailed(true);
+            onImageLoadError?.();
+          }}
+        />
+      )}
+
+      {/* Dark overlay for text readability (only when text is shown) */}
+      {shouldShowImage && (title || subtitle) && (
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.7)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.overlay}
         />
       )}
 
