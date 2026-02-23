@@ -2,8 +2,13 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 function getApiUrl(): string {
-  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
-  return 'https://locallist-api-production.up.railway.app';
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  if (!apiUrl) {
+    throw new Error("CRITICAL: EXPO_PUBLIC_API_URL is missing. Check your .env file or EAS Build configuration.");
+  }
+
+  return apiUrl;
 }
 
 const API_URL = getApiUrl();
