@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
-import MapLibreGL from '@maplibre/maplibre-react-native';
+import MapLibreGL, { type MapViewRef, type CameraRef } from '@maplibre/maplibre-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -32,8 +32,8 @@ export const PlanMap: React.FC<PlanMapProps> = ({
   onCameraUpdate,
   style,
 }) => {
-  const mapRef = useRef<MapLibreGL.MapView>(null);
-  const cameraRef = useRef<MapLibreGL.Camera>(null);
+  const mapRef = useRef<MapViewRef>(null);
+  const cameraRef = useRef<CameraRef>(null);
   const scaleAnim = useSharedValue(1);
 
   // Pulsing animation for active pin
@@ -114,9 +114,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
       <MapLibreGL.MapView
         ref={mapRef}
         style={styles.map}
-        styleURL="https://demotiles.maplibre.org/style.json"
-        zoomLevel={13}
-        centerCoordinate={center as [number, number]}
+        mapStyle="https://demotiles.maplibre.org/style.json"
         pitchEnabled={false}
         rotateEnabled={false}
       >

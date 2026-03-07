@@ -86,7 +86,7 @@ export default function PlansScreen() {
     : plans;
 
   // Get unique categories from plans
-  const categories = Array.from(new Set(plans.map(p => p.category).filter(Boolean)));
+  const categories = Array.from(new Set(plans.map(p => p.category).filter((c): c is string => Boolean(c))));
 
   if (loading) {
     return (
@@ -179,7 +179,7 @@ export default function PlansScreen() {
                 {/* Full-bleed image with PhotoHero */}
                 <PhotoHero
                   localImage={PLAN_COVERS[item.name]}
-                  imageUrl={item.image}
+                  imageUrl={item.image ?? undefined}
                   fallbackCategory={(item.category as any) || 'Culture'}
                   height={200}
                 />

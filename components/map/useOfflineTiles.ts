@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
 
 export interface MapStop {
