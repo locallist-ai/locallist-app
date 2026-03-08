@@ -71,6 +71,6 @@ export default {
     privacyPolicy: 'Privacy Policy',
     termsOfService: 'Terms of Service',
     shareLocalList: 'Share LocalList',
-    shareMessage: "Check out LocalList - Your AI travel curator. Stop Researching. Start Traveling.\nhttps://locallist.app",
+    shareMessage: "Check out LocalList - Your AI travel curator. Stop Researching. Start Traveling.\nhttps://locallist.ai",
   },
 } as const;
