@@ -71,6 +71,6 @@ export default {
     privacyPolicy: 'Política de Privacidad',
     termsOfService: 'Términos de Servicio',
     shareLocalList: 'Compartir LocalList',
-    shareMessage: "Descubre LocalList - Tu curador de viajes con IA. Deja de buscar. Empieza a viajar.\nhttps://locallist.app",
+    shareMessage: "Descubre LocalList - Tu curador de viajes con IA. Deja de buscar. Empieza a viajar.\nhttps://locallist.ai",
   },
 } as const;
