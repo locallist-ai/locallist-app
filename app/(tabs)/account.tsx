@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  ScrollView,
+
   Modal,
   Pressable,
   Share,
@@ -215,7 +215,7 @@ export default function AccountScreen() {
 
   return (
     <View style={s.root}>
-      <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+      <View style={s.scrollContent}>
         {/* Plus upsell — first card, eye-catching */}
         {!isPro && <PlusUpsellCard t={t} />}
 
@@ -295,7 +295,7 @@ export default function AccountScreen() {
 
         {/* Footer */}
         <Text style={s.version}>LocalList v1.0.0</Text>
-      </ScrollView>
+      </View>
 
       {/* Language Picker Modal */}
       <Modal
@@ -388,7 +388,7 @@ export default function AccountScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bgMain },
-  scrollContent: { paddingHorizontal: spacing.lg, paddingTop: 56, paddingBottom: spacing.xxl },
+  scrollContent: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: 56 },
 
   // Guest state
   guestContent: {
@@ -588,7 +588,8 @@ const s = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary + '80',
     textAlign: 'center',
-    marginTop: spacing.lg,
+    marginTop: 'auto',
+    marginBottom: spacing.lg,
   },
 
   // Language picker modal

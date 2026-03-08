@@ -17,10 +17,7 @@ export default function TabsLayout() {
         },
         tabBarActiveTintColor: colors.sunsetOrange,
         tabBarInactiveTintColor: colors.textSecondary,
-        tabBarLabelStyle: {
-          fontFamily: fonts.bodyMedium,
-          fontSize: 11,
-        },
+        tabBarShowLabel: false,
         headerStyle: { backgroundColor: colors.bgMain },
         headerTintColor: colors.deepOcean,
         headerShadowVisible: false,

@@ -8,9 +8,10 @@ import {
   RefreshControl,
   ScrollView,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { getCached, setCache, isFresh } from '../../lib/api-cache';
@@ -43,7 +44,44 @@ function sortPlans(list: Plan[]): Plan[] {
   });
 }
 
+type PlansMode = 'chooser' | 'curated';
+
 export default function PlansScreen() {
+  const { t } = useTranslation();
+  const navigation = useNavigation();
+  const [mode, setMode] = useState<PlansMode>('chooser');
+
+  // Show/hide native header with back button based on mode
+  useEffect(() => {
+    if (mode === 'curated') {
+      navigation.setOptions({
+        headerShown: true,
+        title: '',
+        headerLeft: () => (
+          <TouchableOpacity
+            onPress={() => setMode('chooser')}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: colors.bgCard,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginLeft: spacing.sm,
+            }}
+          >
+            <Ionicons name="close" size={24} color={colors.textMain} />
+          </TouchableOpacity>
+        ),
+      });
+    } else {
+      navigation.setOptions({
+        headerShown: false,
+        headerLeft: undefined,
+      });
+    }
+  }, [mode, navigation, t]);
+
   // Stale-while-revalidate: show cached data instantly (preloaded during splash)
   const cached = getCached<Plan[]>(PLANS_CACHE_KEY);
   const [plans, setPlans] = useState<Plan[]>(cached ?? []);
@@ -66,11 +104,9 @@ export default function PlansScreen() {
 
   useEffect(() => {
     if (cached && isFresh(PLANS_CACHE_KEY)) {
-      // Data was preloaded during splash — skip network call
       setLoading(false);
       return;
     }
-    // Fetch from API (cached data already shown if available)
     fetchPlans().finally(() => setLoading(false));
   }, [fetchPlans]);
 
@@ -88,7 +124,7 @@ export default function PlansScreen() {
   // Get unique categories from plans
   const categories = Array.from(new Set(plans.map(p => p.category).filter((c): c is string => Boolean(c))));
 
-  if (loading) {
+  if (loading && mode === 'curated') {
     return (
       <View style={s.root}>
         <View style={s.skeletonContainer}>
@@ -100,39 +136,101 @@ export default function PlansScreen() {
     );
   }
 
+  if (mode === 'chooser') {
+    return (
+      <View style={s.root}>
+        <View style={s.chooserContainer}>
+          {/* Explore curated plans */}
+          <TouchableOpacity
+            style={s.chooserCard}
+            activeOpacity={0.8}
+            onPress={() => {
+              setMode('curated');
+              if (!cached) fetchPlans().finally(() => setLoading(false));
+            }}
+          >
+            <View style={s.chooserIconWrap}>
+              <Ionicons name="compass-outline" size={32} color={colors.electricBlue} />
+            </View>
+            <View style={s.chooserTextWrap}>
+              <Text style={s.chooserTitle}>{t('plans.exploreCurated')}</Text>
+              <Text style={s.chooserSub}>{t('plans.exploreCuratedSub')}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          {/* Build your own (Premium) */}
+          <TouchableOpacity
+            style={s.chooserCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/builder/custom')}
+          >
+            <View style={[s.chooserIconWrap, { backgroundColor: colors.sunsetOrangeLight }]}>
+              <Ionicons name="sparkles-outline" size={32} color={colors.sunsetOrange} />
+            </View>
+            <View style={s.chooserTextWrap}>
+              <View style={s.chooserTitleRow}>
+                <Text style={s.chooserTitle}>{t('plans.buildYourOwn')}</Text>
+                <View style={s.plusBadge}>
+                  <Text style={s.plusBadgeText}>Plus</Text>
+                </View>
+              </View>
+              <Text style={s.chooserSub}>{t('plans.buildYourOwnSub')}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          {/* Import from video */}
+          <TouchableOpacity
+            style={s.chooserCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/builder/import-video')}
+          >
+            <View style={[s.chooserIconWrap, { backgroundColor: '#fce7f3' }]}>
+              <Ionicons name="videocam-outline" size={32} color="#ec4899" />
+            </View>
+            <View style={s.chooserTextWrap}>
+              <Text style={s.chooserTitle}>{t('plans.importVideo')}</Text>
+              <Text style={s.chooserSub}>{t('plans.importVideoSub')}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={s.root}>
       {/* Filter Chips */}
-      <Animated.View entering={FadeInDown.duration(600).delay(300).springify()}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.chipsContainer}
-        >
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category}
-              onPress={() =>
-                setSelectedCategory(prev => prev === category ? null : category)
-              }
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={s.chipsContainer}
+      >
+        {categories.map((category) => (
+          <TouchableOpacity
+            key={category}
+            onPress={() =>
+              setSelectedCategory(prev => prev === category ? null : category)
+            }
+            style={[
+              s.chip,
+              selectedCategory === category && s.chipActive,
+            ]}
+            activeOpacity={0.7}
+          >
+            <Text
               style={[
-                s.chip,
-                selectedCategory === category && s.chipActive,
+                s.chipText,
+                selectedCategory === category && s.chipTextActive,
               ]}
-              activeOpacity={0.7}
             >
-              <Text
-                style={[
-                  s.chipText,
-                  selectedCategory === category && s.chipTextActive,
-                ]}
-              >
-                {category}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </Animated.View>
+              {category}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {/* Plans List */}
       {error ? (
@@ -176,7 +274,6 @@ export default function PlansScreen() {
                 activeOpacity={0.7}
                 onPress={() => router.push(`/plan/${item.id}`)}
               >
-                {/* Full-bleed image with PhotoHero */}
                 <PhotoHero
                   localImage={PLAN_COVERS[item.name]}
                   imageUrl={item.image ?? undefined}
@@ -184,7 +281,6 @@ export default function PlansScreen() {
                   height={200}
                 />
 
-                {/* Card content with gradient overlay on lower half */}
                 <View style={s.cardContent}>
                   <View style={s.cardHeader}>
                     <Text style={s.cardName} numberOfLines={2}>
@@ -198,11 +294,7 @@ export default function PlansScreen() {
                   </View>
 
                   <View style={s.cardMeta}>
-                    <Ionicons
-                      name="location-outline"
-                      size={14}
-                      color={colors.textSecondary}
-                    />
+                    <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
                     <Text style={s.metaText}>{item.city}</Text>
                     <Ionicons
                       name="calendar-outline"
@@ -232,6 +324,62 @@ export default function PlansScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bgMain },
+
+  // Chooser cards
+  chooserContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  chooserCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  chooserIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.electricBlueLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chooserTextWrap: {
+    flex: 1,
+  },
+  chooserTitle: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 17,
+    color: colors.deepOcean,
+    marginBottom: 2,
+  },
+  chooserTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  plusBadge: {
+    backgroundColor: colors.sunsetOrange,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+  },
+  plusBadgeText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 10,
+    color: '#FFFFFF',
+  },
+  chooserSub: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+
   center: {
     flex: 1,
     backgroundColor: colors.bgMain,
@@ -239,13 +387,12 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.lg,
   },
-  // Skeleton loading
   skeletonContainer: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxl,
   },
 
-  // Filter chips (glass-morphism effect)
+  // Filter chips
   chipsContainer: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -309,21 +456,18 @@ const s = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Card with full-bleed image
+  // Card
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: borderRadius.lg,
     marginBottom: spacing.md,
     overflow: 'hidden',
   },
-
-  // Card content (below image)
   cardContent: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
     paddingTop: 0,
   },
-
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
