@@ -39,7 +39,7 @@ const LANGUAGES = [
 
 // ── Plus Upsell Card with animations ──
 
-function PlusUpsellCard({ t }: { t: (key: string) => string }) {
+function PlusUpsellCard({ t }: { t: ReturnType<typeof useTranslation>['t'] }) {
   const shimmer = useSharedValue(0);
   const sparkleScale = useSharedValue(1);
 

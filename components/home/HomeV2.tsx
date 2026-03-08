@@ -376,13 +376,15 @@ function StepDecorations({ step, screenWidth, screenHeight }: { step: number; sc
 
 // ── Animated option card ──
 
+type StepOption = { id: string; icon: any; labelKey: string; emoji: string };
+
 function OptionCard({
   option,
   index,
   selected,
   onSelect,
 }: {
-  option: typeof DURATION_OPTIONS[0];
+  option: StepOption;
   index: number;
   selected: boolean;
   onSelect: () => void;
@@ -470,7 +472,7 @@ function OptionCard({
                     color: selected ? colors.deepOcean : 'rgba(15, 23, 42, 0.8)',
                   }}
                 >
-                  {t(option.labelKey)}
+                  {t(option.labelKey as any)}
                 </Text>
               </View>
               {selected && (
@@ -917,7 +919,7 @@ export function HomeV2() {
                     marginBottom: 8,
                   }}
                 >
-                  {t(currentStep.titleKey)}
+                  {t(currentStep.titleKey as any)}
                 </Text>
                 <Text
                   style={{
@@ -932,7 +934,7 @@ export function HomeV2() {
                     textShadowRadius: 4,
                   }}
                 >
-                  {t(currentStep.subtitleKey)}
+                  {t(currentStep.subtitleKey as any)}
                 </Text>
 
                 {/* Option cards */}
