@@ -45,6 +45,14 @@ import { api } from '../../lib/api';
 import { setPreviewPlan } from '../../lib/plan-store';
 import type { BuilderResponse } from '../../lib/types';
 
+// ── City data ──
+
+type City = { name: string; emoji: string; color: string };
+
+const CITIES: City[] = [
+  { name: 'Miami', emoji: '\u{1F334}', color: '#f97316' },
+];
+
 // ── Step data (labels are i18n keys) ──
 
 const DURATION_OPTIONS = [
@@ -81,6 +89,99 @@ const STEPS = [
 const hapticSelect = () => {
   if (Platform.OS === 'ios') Haptics.selectionAsync();
 };
+
+// ── City card with pulse animation ──
+
+function CityCard({ city, index, onSelect }: { city: City; index: number; onSelect: (name: string) => void }) {
+  const pulse = useSharedValue(1);
+  const glowOpacity = useSharedValue(0.4);
+
+  useEffect(() => {
+    const delay = 600 + index * 200;
+    const timer = setTimeout(() => {
+      pulse.value = withRepeat(
+        withSequence(
+          withTiming(1.04, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0.97, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        true,
+      );
+      glowOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.8, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0.3, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        true,
+      );
+    }, delay);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }],
+  }));
+
+  const borderStyle = useAnimatedStyle(() => ({
+    borderColor: `rgba(249, 115, 22, ${glowOpacity.value})`,
+  }));
+
+  return (
+    <Animated.View entering={FadeInUp.duration(700).delay(200 + index * 150).springify().damping(12)}>
+      <Animated.View style={cardStyle}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => onSelect(city.name)}
+          style={{ marginBottom: 12 }}
+        >
+          <Animated.View
+            style={[
+              {
+                borderRadius: 24,
+                borderCurve: 'continuous',
+                overflow: 'hidden',
+                borderWidth: 1.5,
+                boxShadow: '0 8px 36px rgba(249, 115, 22, 0.3)',
+              },
+              borderStyle,
+            ]}
+          >
+            <BlurView intensity={60} tint="light" style={{ paddingHorizontal: 24, paddingVertical: 20 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                  <Text style={{ fontSize: 36 }}>{city.emoji}</Text>
+                  <Text
+                    style={{
+                      fontFamily: fonts.headingBold,
+                      fontSize: 28,
+                      color: colors.deepOcean,
+                    }}
+                  >
+                    {city.name}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: colors.sunsetOrange,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 14px rgba(249, 115, 22, 0.4)',
+                  }}
+                >
+                  <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
+                </View>
+              </View>
+            </BlurView>
+          </Animated.View>
+        </TouchableOpacity>
+      </Animated.View>
+    </Animated.View>
+  );
+}
 
 // ── Floating decorative emoji ──
 
@@ -182,6 +283,20 @@ function StepDecorations({ step, screenWidth, screenHeight }: { step: number; sc
     floatB.value = 0;
 
     if (step === 0) {
+      // City: classic float like destination screen
+      logoScale.value = withDelay(200, withSpring(1, { damping: 10, stiffness: 110 }));
+      const t = setTimeout(() => {
+        floatA.value = withRepeat(withSequence(
+          withTiming(-14, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
+          withTiming(14, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
+        ), -1, true);
+        floatB.value = withRepeat(withSequence(
+          withTiming(5, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
+          withTiming(-5, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
+        ), -1, true);
+      }, 700);
+      return () => clearTimeout(t);
+    } else if (step === 1) {
       // Duration: logo swings like a pendulum from top-right
       logoScale.value = withDelay(200, withSpring(1, { damping: 8, stiffness: 100 }));
       logoRotate.value = withDelay(200, withSequence(
@@ -201,7 +316,7 @@ function StepDecorations({ step, screenWidth, screenHeight }: { step: number; sc
         ), -1, true);
       }, 1200);
       return () => clearTimeout(t);
-    } else if (step === 1) {
+    } else if (step === 2) {
       // Company: logo bounces in from left side
       logoX.value = -screenWidth;
       logoX.value = withDelay(150, withSpring(0, { damping: 10, stiffness: 90 }));
@@ -217,7 +332,7 @@ function StepDecorations({ step, screenWidth, screenHeight }: { step: number; sc
         ), -1, true);
       }, 900);
       return () => clearTimeout(t);
-    } else if (step === 2) {
+    } else if (step === 3) {
       // Style: logo spins in from center with a full rotation
       logoScale.value = withDelay(100, withSpring(1, { damping: 8, stiffness: 80 }));
       logoRotate.value = withDelay(100, withSequence(
@@ -235,7 +350,7 @@ function StepDecorations({ step, screenWidth, screenHeight }: { step: number; sc
         ), -1, true);
       }, 1000);
       return () => clearTimeout(t);
-    } else if (step === 3) {
+    } else if (step === 4) {
       // Budget: logo drops in from top with a bounce
       logoY.value = -400;
       logoY.value = withDelay(100, withSpring(0, { damping: 6, stiffness: 120, mass: 1.2 }));
@@ -311,38 +426,51 @@ function StepDecorations({ step, screenWidth, screenHeight }: { step: number; sc
 
   // Positions per step: [top, left/right]
   const positions: Record<number, any> = {
-    0: { top: '42%', right: -8 },
-    1: { bottom: '18%', left: -6 },
-    2: { top: '35%', right: 20 },
-    3: { top: '28%', left: -4 },
-    4: { top: '38%', right: 10 },
+    0: { top: '38%', right: 10 },   // City
+    1: { top: '42%', right: -8 },   // Duration
+    2: { bottom: '18%', left: -6 }, // Company
+    3: { top: '35%', right: 20 },   // Style
+    4: { top: '28%', left: -4 },    // Budget
+    5: { top: '38%', right: 10 },   // Chat
   };
 
-  const logoStyles = [logoStyle0, logoStyle1, logoStyle2, logoStyle3, logoStyle4];
+  const logoStyles: Record<number, any> = {
+    0: logoStyle4,  // City: classic float
+    1: logoStyle0,  // Duration
+    2: logoStyle1,  // Company
+    3: logoStyle2,  // Style
+    4: logoStyle3,  // Budget
+    5: logoStyle4,  // Chat
+  };
 
   // Floating emojis config per step
   const emojiConfigs: Record<number, { emoji: string; size: number; x: number; y: number; delay: number; dx: number; dy: number; dur: number; rot: number }[]> = {
-    0: [
+    0: [ // City
+      { emoji: '\u{1F334}', size: 28, x: 30, y: screenHeight * 0.15, delay: 400, dx: 18, dy: -12, dur: 3200, rot: 12 },
+      { emoji: '\u2708\uFE0F', size: 24, x: screenWidth - 70, y: screenHeight * 0.22, delay: 800, dx: -15, dy: 16, dur: 3600, rot: -15 },
+      { emoji: '\u{1F30D}', size: 26, x: screenWidth * 0.5, y: screenHeight * 0.6, delay: 600, dx: 20, dy: -10, dur: 4000, rot: 8 },
+    ],
+    1: [ // Duration
       { emoji: '\u2600\uFE0F', size: 28, x: 30, y: screenHeight * 0.22, delay: 400, dx: 20, dy: -15, dur: 3000, rot: 12 },
       { emoji: '\u{1F338}', size: 22, x: screenWidth - 80, y: screenHeight * 0.55, delay: 800, dx: -15, dy: 18, dur: 3500, rot: -15 },
       { emoji: '\u2708\uFE0F', size: 26, x: screenWidth * 0.5, y: screenHeight * 0.15, delay: 600, dx: 25, dy: -10, dur: 4000, rot: 20 },
     ],
-    1: [
+    2: [ // Company
       { emoji: '\u{1F9D1}', size: 24, x: screenWidth - 60, y: screenHeight * 0.25, delay: 300, dx: -12, dy: 18, dur: 3200, rot: -10 },
       { emoji: '\u2764\uFE0F', size: 20, x: 40, y: screenHeight * 0.52, delay: 700, dx: 18, dy: -12, dur: 2800, rot: 15 },
       { emoji: '\u{1F46A}', size: 22, x: screenWidth * 0.6, y: screenHeight * 0.12, delay: 500, dx: -20, dy: 14, dur: 3600, rot: -8 },
     ],
-    2: [
+    3: [ // Style
       { emoji: '\u{1F9ED}', size: 26, x: 20, y: screenHeight * 0.18, delay: 300, dx: 15, dy: -20, dur: 3400, rot: 25 },
       { emoji: '\u{1F33F}', size: 22, x: screenWidth - 50, y: screenHeight * 0.42, delay: 600, dx: -18, dy: 12, dur: 3000, rot: -18 },
       { emoji: '\u{1F3A8}', size: 24, x: 50, y: screenHeight * 0.58, delay: 900, dx: 22, dy: -8, dur: 3800, rot: 12 },
     ],
-    3: [
+    4: [ // Budget
       { emoji: '\u{1F4B0}', size: 22, x: screenWidth - 70, y: screenHeight * 0.2, delay: 200, dx: -10, dy: 22, dur: 2600, rot: -20 },
       { emoji: '\u{1F48E}', size: 20, x: 35, y: screenHeight * 0.35, delay: 600, dx: 16, dy: -14, dur: 3200, rot: 15 },
       { emoji: '\u{1F451}', size: 24, x: screenWidth * 0.5 - 10, y: screenHeight * 0.55, delay: 400, dx: -14, dy: 16, dur: 3600, rot: -12 },
     ],
-    4: [
+    5: [ // Chat
       { emoji: '\u{1F680}', size: 26, x: screenWidth - 60, y: screenHeight * 0.18, delay: 400, dx: -15, dy: -18, dur: 3000, rot: 20 },
       { emoji: '\u2728', size: 22, x: 30, y: screenHeight * 0.48, delay: 600, dx: 18, dy: 12, dur: 3400, rot: -15 },
       { emoji: '\u{1F30D}', size: 24, x: screenWidth * 0.4, y: screenHeight * 0.6, delay: 800, dx: -12, dy: -16, dur: 3800, rot: 10 },
@@ -369,7 +497,7 @@ function StepDecorations({ step, screenWidth, screenHeight }: { step: number; sc
         />
       ))}
       {/* Logo in unique position */}
-      <LogoPiece posStyle={positions[step]} animStyle={logoStyles[step]} />
+      <LogoPiece posStyle={positions[step] ?? positions[0]} animStyle={logoStyles[step] ?? logoStyles[0]} />
     </View>
   );
 }
@@ -642,48 +770,13 @@ function HomeLanding({
         paddingBottom: insets.bottom,
       }}
     >
-      {/* Animated logo */}
-      <View style={{ alignItems: 'center', marginBottom: 32 }}>
-        <Animated.View style={logoStyle}>
-          <View
-            style={{
-              width: 88,
-              height: 88,
-              borderRadius: 44,
-              backgroundColor: 'rgba(255, 255, 255, 0.15)',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Image
-              source={require('../../assets/images/icon.png')}
-              style={{ width: 64, height: 64 }}
-              resizeMode="contain"
-            />
-          </View>
-        </Animated.View>
-        {/* Ground shadow */}
-        <Animated.View
-          style={[
-            {
-              width: 50,
-              height: 10,
-              borderRadius: 25,
-              backgroundColor: 'rgba(0, 0, 0, 0.15)',
-              marginTop: 8,
-            },
-            shadowStyle,
-          ]}
-        />
-      </View>
-
       <Animated.Text
         entering={FadeInDown.duration(700).delay(400).springify().damping(14)}
         style={{
-          fontFamily: fonts.body,
-          fontSize: 16,
-          lineHeight: 24,
-          color: 'rgba(255, 255, 255, 0.75)',
+          fontFamily: fonts.headingSemiBold,
+          fontSize: 32,
+          lineHeight: 40,
+          color: 'rgba(255, 255, 255, 0.9)',
           textAlign: 'center',
           marginBottom: 48,
           textShadowColor: 'rgba(0, 0, 0, 0.2)',
@@ -709,21 +802,15 @@ function HomeLanding({
             borderRadius: 24,
             borderCurve: 'continuous',
             overflow: 'hidden',
-            boxShadow: '0 8px 36px rgba(249, 115, 22, 0.4)',
+            backgroundColor: colors.sunsetOrange,
+            paddingVertical: 20,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: 10,
+            boxShadow: '0 8px 36px rgba(249, 115, 22, 0.5)',
           }}
         >
-          <BlurView
-            intensity={60}
-            tint="light"
-            style={{
-              paddingVertical: 20,
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'row',
-              gap: 10,
-              backgroundColor: 'rgba(249, 115, 22, 0.85)',
-            }}
-          >
             <Ionicons name="sparkles" size={22} color="#FFFFFF" />
             <Text
               style={{
@@ -734,7 +821,6 @@ function HomeLanding({
             >
               {t('home.createPlan')}
             </Text>
-          </BlurView>
         </TouchableOpacity>
       </Animated.View>
 
@@ -755,6 +841,20 @@ export function HomeV2() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [showWizard, setShowWizard] = useState(false);
+
+  // Crossfade: both views stay mounted, animate opacity on UI thread
+  const wizardProgress = useSharedValue(0);
+  useEffect(() => {
+    wizardProgress.value = withTiming(showWizard ? 1 : 0, { duration: 350 });
+  }, [showWizard]);
+  const landingStyle = useAnimatedStyle(() => ({
+    opacity: 1 - wizardProgress.value,
+  }));
+  const wizardStyle = useAnimatedStyle(() => ({
+    opacity: wizardProgress.value,
+  }));
+  const landingPointerEvents = showWizard ? 'none' as const : 'auto' as const;
+  const wizardPointerEvents = showWizard ? 'auto' as const : 'none' as const;
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [selections, setSelections] = useState<(string | null)[]>([null, null, null, null]);
@@ -764,7 +864,7 @@ export function HomeV2() {
   const [showBubbleText, setShowBubbleText] = useState(false);
 
   useEffect(() => {
-    if (step === 4) {
+    if (step === 5) {
       const timer = setTimeout(() => setShowBubbleText(true), 800);
       return () => clearTimeout(timer);
     }
@@ -783,16 +883,24 @@ export function HomeV2() {
     };
   });
 
-  const handleSelect = (optionId: string) => {
-    const newSelections = [...selections];
-    newSelections[step] = newSelections[step] === optionId ? null : optionId;
-    setSelections(newSelections);
-  };
-
-  const handleNext = () => {
+  // Selecting any card (city or preference) auto-advances to next step
+  const advanceToNext = useCallback(() => {
     if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDirection('forward');
-    setStep((s) => Math.min(s + 1, 4));
+    setStep((s) => Math.min(s + 1, 5));
+  }, []);
+
+  const handleSelect = (optionId: string) => {
+    const prefIdx = step - 1;
+    const newSelections = [...selections];
+    newSelections[prefIdx] = optionId;
+    setSelections(newSelections);
+    // Auto-advance after brief visual feedback
+    setTimeout(advanceToNext, 350);
+  };
+
+  const handleCitySelect = (_cityName: string) => {
+    advanceToNext();
   };
 
   const handleBack = () => {
@@ -836,9 +944,9 @@ export function HomeV2() {
   const entering = direction === 'forward' ? SlideInRight.duration(400).springify().damping(18) : SlideInLeft.duration(400).springify().damping(18);
   const exiting = direction === 'forward' ? SlideOutLeft.duration(300) : SlideOutRight.duration(300);
 
-  const currentStep = step < 4 ? STEPS[step] : null;
-  const isLastPreferenceStep = step === 3;
-  const isChatStep = step === 4;
+  const isCityStep = step === 0;
+  const currentStep = (step >= 1 && step <= 4) ? STEPS[step - 1] : null;
+  const isChatStep = step === 5;
 
   return (
     <View style={{ flex: 1 }}>
@@ -863,8 +971,8 @@ export function HomeV2() {
         }}
       />
 
-      {/* Home Landing or Wizard */}
-      {!showWizard ? (
+      {/* Home Landing + Wizard — both mounted, crossfade via opacity */}
+      <Animated.View pointerEvents={landingPointerEvents} style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }, landingStyle]}>
         <HomeLanding
           onCreatePlan={() => {
             setDirection('forward');
@@ -877,8 +985,9 @@ export function HomeV2() {
           screenWidth={screenWidth}
           screenHeight={screenHeight}
         />
-      ) : (
-        <View style={{ flex: 1, paddingTop: insets.top + 12 }}>
+      </Animated.View>
+
+      <Animated.View pointerEvents={wizardPointerEvents} style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, paddingTop: insets.top + 12 }, wizardStyle]}>
           {/* Header: back button + progress dots */}
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 }}>
             <TouchableOpacity
@@ -893,7 +1002,7 @@ export function HomeV2() {
               <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
             </TouchableOpacity>
             <View style={{ flex: 1, alignItems: 'center' }}>
-              <ProgressDots current={step} total={5} />
+              <ProgressDots current={step} total={6} />
             </View>
             <View style={{ width: 40 }} />
           </View>
@@ -903,6 +1012,53 @@ export function HomeV2() {
 
           {/* Step content */}
           <View style={{ flex: 1, paddingHorizontal: 24 }}>
+            {/* Step 0: City selection */}
+            {isCityStep && (
+              <Animated.View key="step-city" entering={entering} exiting={exiting} style={{ flex: 1, justifyContent: 'center' }}>
+                <Text
+                  style={{
+                    fontFamily: fonts.headingBold,
+                    fontSize: 38,
+                    lineHeight: 46,
+                    color: '#FFFFFF',
+                    textAlign: 'center',
+                    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+                    textShadowOffset: { width: 0, height: 2 },
+                    textShadowRadius: 8,
+                  }}
+                >
+                  {t('destination.title')}
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: fonts.body,
+                    fontSize: 15,
+                    lineHeight: 22,
+                    color: 'rgba(255, 255, 255, 0.75)',
+                    textAlign: 'center',
+                    marginTop: 12,
+                    marginBottom: 36,
+                    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+                    textShadowOffset: { width: 0, height: 1 },
+                    textShadowRadius: 4,
+                  }}
+                >
+                  {t('destination.subtitle')}
+                </Text>
+                <View style={{ width: '100%' }}>
+                  {CITIES.map((city, index) => (
+                    <CityCard
+                      key={city.name}
+                      city={city}
+                      index={index}
+                      onSelect={handleCitySelect}
+                    />
+                  ))}
+                </View>
+              </Animated.View>
+            )}
+
+            {/* Steps 1-4: Preference steps */}
             {currentStep && (
               <Animated.View key={`step-${step}`} entering={entering} exiting={exiting} style={{ flex: 1, justifyContent: 'center' }}>
                 {/* Title */}
@@ -944,24 +1100,22 @@ export function HomeV2() {
                       key={option.id}
                       option={option}
                       index={index}
-                      selected={selections[step] === option.id}
+                      selected={selections[step - 1] === option.id}
                       onSelect={() => handleSelect(option.id)}
                     />
                   ))}
                 </View>
 
-                {/* Next button */}
+                {/* Skip button */}
                 <View style={{ marginTop: 20, paddingBottom: insets.bottom + 20 }}>
                   <TouchableOpacity
                     activeOpacity={0.85}
-                    onPress={handleNext}
+                    onPress={advanceToNext}
                     style={{
                       borderRadius: 20,
                       borderCurve: 'continuous',
                       overflow: 'hidden',
-                      boxShadow: selections[step]
-                        ? '0 6px 24px rgba(249, 115, 22, 0.4)'
-                        : '0 4px 16px rgba(0, 0, 0, 0.15)',
+                      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
                     }}
                   >
                     <BlurView
@@ -973,9 +1127,7 @@ export function HomeV2() {
                         justifyContent: 'center',
                         flexDirection: 'row',
                         gap: 8,
-                        backgroundColor: selections[step]
-                          ? 'rgba(249, 115, 22, 0.85)'
-                          : 'rgba(255, 255, 255, 0.3)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.3)',
                       }}
                     >
                       <Text
@@ -985,7 +1137,7 @@ export function HomeV2() {
                           color: '#FFFFFF',
                         }}
                       >
-                        {selections[step] ? (isLastPreferenceStep ? t('wizard.almostThere') : t('wizard.continue')) : t('wizard.skip')}
+                        {t('wizard.skip')}
                       </Text>
                       <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
                     </BlurView>
@@ -1163,8 +1315,7 @@ export function HomeV2() {
               </Animated.View>
             )}
           </View>
-        </View>
-      )}
+        </Animated.View>
     </View>
   );
 }

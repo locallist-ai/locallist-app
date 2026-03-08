@@ -1,6 +1,6 @@
 import '../lib/i18n';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, Animated as RNAnimated, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -10,7 +10,6 @@ import { colors } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { preloadPlans } from '../lib/preload';
 import LoginScreen from './login';
-import DestinationScreen from '../components/DestinationScreen';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -19,8 +18,8 @@ SplashScreen.preventAutoHideAsync();
 
 function AppSplash({ onFinish }: { onFinish: () => void }) {
   const { isLoading: authLoading } = useAuth();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const fadeAnim = useRef(new RNAnimated.Value(0)).current;
+  const scaleAnim = useRef(new RNAnimated.Value(0.85)).current;
   const [animatedIn, setAnimatedIn] = useState(false);
 
   // Step 1: Fade in logo + preload data in parallel
@@ -28,13 +27,13 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
     // Start preloading plans data & images while splash animates
     preloadPlans();
 
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
+    RNAnimated.parallel([
+      RNAnimated.timing(fadeAnim, {
         toValue: 1,
         duration: 600,
         useNativeDriver: true,
       }),
-      Animated.spring(scaleAnim, {
+      RNAnimated.spring(scaleAnim, {
         toValue: 1,
         tension: 50,
         friction: 7,
@@ -49,7 +48,7 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
 
     // Minimum visible time so the splash feels intentional
     const timer = setTimeout(() => {
-      Animated.timing(fadeAnim, {
+      RNAnimated.timing(fadeAnim, {
         toValue: 0,
         duration: 300,
         useNativeDriver: true,
@@ -61,19 +60,19 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
 
   return (
     <View style={splashStyles.container}>
-      <Animated.View
+      <RNAnimated.View
         style={[
           splashStyles.content,
           { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
         ]}
       >
-        <Animated.Image
+        <RNAnimated.Image
           source={require('../assets/images/icon-text.png')}
           style={splashStyles.logo}
           resizeMode="contain"
         />
         <Text style={splashStyles.tagline}>Stop Researching. Start Traveling.</Text>
-      </Animated.View>
+      </RNAnimated.View>
     </View>
   );
 }
@@ -103,7 +102,7 @@ const splashStyles = StyleSheet.create({
 });
 
 // ─── Root Layout ─────────────────────────────────────────
-// Flow: Splash → Login (if not authenticated) → Destination → App
+// Flow: Splash → Login (if not authenticated) → App
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
@@ -143,7 +142,6 @@ export default function RootLayout() {
 // Shows login if not authenticated, app stack if authenticated
 function AuthGate() {
   const { isAuthenticated, isLoading } = useAuth();
-  const [showDestination, setShowDestination] = useState(true);
 
   // Still checking stored tokens
   if (isLoading) {
@@ -156,10 +154,6 @@ function AuthGate() {
 
   if (!isAuthenticated) {
     return <LoginScreen />;
-  }
-
-  if (showDestination) {
-    return <DestinationScreen onCitySelect={() => setShowDestination(false)} />;
   }
 
   return <AppStack />;
@@ -177,6 +171,7 @@ function AppStack() {
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="builder" options={{ headerShown: false }} />
       <Stack.Screen
         name="plan/[id]"
         options={{
