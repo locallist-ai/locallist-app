@@ -10,6 +10,7 @@ import { colors } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { preloadPlans } from '../lib/preload';
 import LoginScreen from './login';
+import DestinationScreen from '../components/DestinationScreen';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -71,7 +72,7 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
           style={splashStyles.logo}
           resizeMode="contain"
         />
-        <Text style={splashStyles.tagline}>Only The Best. Nothing Else.</Text>
+        <Text style={splashStyles.tagline}>Stop Researching. Start Traveling.</Text>
       </Animated.View>
     </View>
   );
@@ -102,7 +103,7 @@ const splashStyles = StyleSheet.create({
 });
 
 // ─── Root Layout ─────────────────────────────────────────
-// Flow: Splash → Login (if not authenticated) → App
+// Flow: Splash → Login (if not authenticated) → Destination → App
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
@@ -142,6 +143,7 @@ export default function RootLayout() {
 // Shows login if not authenticated, app stack if authenticated
 function AuthGate() {
   const { isAuthenticated, isLoading } = useAuth();
+  const [showDestination, setShowDestination] = useState(true);
 
   // Still checking stored tokens
   if (isLoading) {
@@ -153,8 +155,11 @@ function AuthGate() {
   }
 
   if (!isAuthenticated) {
-    // Mandatory login — not a modal, it's the full screen
     return <LoginScreen />;
+  }
+
+  if (showDestination) {
+    return <DestinationScreen onCitySelect={() => setShowDestination(false)} />;
   }
 
   return <AppStack />;
@@ -191,12 +196,6 @@ function AppStack() {
         options={{
           title: 'Sign In',
           presentation: Platform.OS === 'ios' ? 'modal' : 'card',
-        }}
-      />
-      <Stack.Screen
-        name="auth/verify"
-        options={{
-          headerShown: false,
         }}
       />
     </Stack>
