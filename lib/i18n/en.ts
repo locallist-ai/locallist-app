@@ -42,6 +42,15 @@ export default {
     budgetModerate: 'Moderate',
     budgetPremium: 'Premium',
   },
+  plans: {
+    exploreCurated: 'Explore curated plans',
+    exploreCuratedSub: 'Hand-picked by locals who know best',
+    buildYourOwn: 'Build your own plan',
+    buildYourOwnSub: 'Tell us your vibe, we do the rest',
+    buildYourOwnLocked: 'Plus feature',
+    importVideo: 'Import from Reels or TikTok',
+    importVideoSub: 'Paste a link and we turn it into a plan',
+  },
   destination: {
     title: 'Where are\nwe going?',
     subtitle: "Pick a city and I'll show you\nonly the best spots",
