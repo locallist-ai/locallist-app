@@ -1,6 +1,6 @@
 import '../lib/i18n';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Animated as RNAnimated, Platform } from 'react-native';
+import { View, Text, StyleSheet, Animated as RNAnimated, Platform, TouchableOpacity } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { useFonts } from 'expo-font';
 import { colors } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { preloadPlans } from '../lib/preload';
+import { logger } from '../lib/logger';
 import LoginScreen from './login';
 
 SplashScreen.preventAutoHideAsync();
@@ -196,3 +197,58 @@ function AppStack() {
     </Stack>
   );
 }
+
+// ─── Global Error Boundary ──────────────────────────────
+// Catches unhandled JS exceptions and shows a recovery UI instead of a white screen.
+
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  useEffect(() => {
+    logger.error('Unhandled error caught by ErrorBoundary', error);
+  }, [error]);
+
+  return (
+    <View style={errorStyles.container}>
+      <Text style={errorStyles.emoji}>😵</Text>
+      <Text style={errorStyles.title}>Something went wrong</Text>
+      <Text style={errorStyles.message}>{error.message}</Text>
+      <TouchableOpacity style={errorStyles.button} onPress={retry}>
+        <Text style={errorStyles.buttonText}>Try Again</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const errorStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.bgMain,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  emoji: { fontSize: 48, marginBottom: 16 },
+  title: {
+    fontSize: 20,
+    fontFamily: 'InterBold',
+    color: colors.deepOcean,
+    marginBottom: 8,
+  },
+  message: {
+    fontSize: 14,
+    fontFamily: 'Inter',
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  button: {
+    backgroundColor: colors.electricBlue,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: '#fff',
+    fontFamily: 'InterSemiBold',
+    fontSize: 16,
+  },
+});
