@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
@@ -13,7 +13,7 @@ import Animated, {
 interface SkeletonCardProps {
   height?: number;
   imageHeight?: number;
-  style?: any;
+  style?: ViewStyle;
 }
 
 export const SkeletonCard: React.FC<SkeletonCardProps> = ({

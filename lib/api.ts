@@ -78,16 +78,18 @@ tokenLoadPromise = loadTokens().finally(() => {
  * Error-as-value pattern: every API call returns `{ data, error, status }` instead of
  * throwing, so callers handle errors explicitly without try/catch boilerplate.
  */
+const REQUEST_TIMEOUT_MS = 15_000;
+
 interface ApiResult<T> {
   data: T | null;
   error: string | null;
-  errorBody: any;
+  errorBody: unknown;
   status: number;
 }
 
 export async function api<T>(
   path: string,
-  options: { method?: string; body?: any; _retryCount?: number } = {},
+  options: { method?: string; body?: unknown; _retryCount?: number } = {},
 ): Promise<ApiResult<T>> {
   const { method = 'GET', body, _retryCount = 0 } = options;
 
@@ -99,11 +101,15 @@ export async function api<T>(
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   try {
     const res = await fetch(`${API_URL}${path}`, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
 
     const json = await res.json().catch(() => null);
@@ -127,14 +133,18 @@ export async function api<T>(
     }
 
     return { data: json as T, error: null, errorBody: null, status: res.status };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Network error';
+    const isTimeout = err instanceof DOMException && err.name === 'AbortError';
     logger.error('API request failed', err);
     return {
       data: null,
-      error: err.message ?? 'Network error',
+      error: isTimeout ? 'Request timed out' : message,
       errorBody: null,
       status: 0,
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

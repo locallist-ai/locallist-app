@@ -34,7 +34,7 @@ export type Plan = {
   type: string;
   description: string | null;
   durationDays: number;
-  tripContext: any;
+  tripContext: Record<string, unknown> | null;
   isPublic: boolean;
   isShowcase?: boolean;
   isEphemeral?: boolean;
@@ -51,6 +51,20 @@ export type BuilderResponse = {
     remaining: number | null;
     limit: number | null;
   };
+};
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+  tier: 'free' | 'pro';
+};
+
+export type AuthResponse = {
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUser;
 };
 
 export type PlanDetailResponse = Plan & {
