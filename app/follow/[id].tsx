@@ -22,7 +22,7 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { PlanMap } from '../../components/map/PlanMap';
-import { BottomSheetStop } from '../../components/follow/BottomSheetStop';
+import { BottomSheetStop, type Stop } from '../../components/follow/BottomSheetStop';
 import { useOfflineTiles } from '../../components/map/useOfflineTiles';
 import type { PlanStop, PlanDetailResponse } from '../../lib/types';
 import type { MapStop } from '../../components/map/PlanMap';
@@ -30,7 +30,7 @@ import type { MapStop } from '../../components/map/PlanMap';
 type FollowSession = { id: string; planId: string; status: string };
 
 /** Map PlanStop to the Stop shape expected by BottomSheetStop */
-const mapToStop = (planStop: PlanStop) => ({
+const mapToStop = (planStop: PlanStop): Stop => ({
   id: planStop.placeId,
   name: planStop.place?.name ?? 'Unknown place',
   category: planStop.place?.category,
@@ -240,7 +240,7 @@ export default function FollowModeScreen() {
       <View style={[s.bottomSheetWrap, { paddingBottom: insets.bottom }]}>
         {currentStop && (
           <BottomSheetStop
-            stop={currentStop as any}
+            stop={currentStop}
             index={currentIndex}
             totalStops={allStops.length}
             onSwipeLeft={handleNext}
