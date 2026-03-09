@@ -6,6 +6,7 @@ import {
   Pressable,
   Platform,
   Image,
+  ImageSourcePropType,
   ActivityIndicator,
   useWindowDimensions,
   TouchableOpacity,
@@ -44,6 +45,13 @@ import { colors, fonts } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { setPreviewPlan } from '../../lib/plan-store';
 import type { BuilderResponse } from '../../lib/types';
+import type en from '../../lib/i18n/en';
+
+/** Flatten nested keys from the translation file into dot-notation union */
+type FlatKeys<T, Prefix extends string = ''> = T extends Record<string, unknown>
+  ? { [K in keyof T & string]: FlatKeys<T[K], Prefix extends '' ? K : `${Prefix}.${K}`> }[keyof T & string]
+  : Prefix;
+type TKeys = FlatKeys<typeof en>;
 
 // ── City data ──
 
@@ -244,7 +252,7 @@ function FloatingEmoji({
 
 // ── Logo piece (reused across steps in different positions) ──
 
-function LogoPiece({ posStyle, animStyle }: { posStyle: any; animStyle: any }) {
+function LogoPiece({ posStyle, animStyle }: { posStyle: Record<string, string | number>; animStyle: ReturnType<typeof useAnimatedStyle> }) {
   return (
     <Animated.View style={[{ position: 'absolute' }, posStyle, animStyle]}>
       <View
@@ -425,7 +433,7 @@ function StepDecorations({ step, screenWidth, screenHeight }: { step: number; sc
   }));
 
   // Positions per step: [top, left/right]
-  const positions: Record<number, any> = {
+  const positions: Record<number, Record<string, string | number>> = {
     0: { top: '38%', right: 10 },   // City
     1: { top: '42%', right: -8 },   // Duration
     2: { bottom: '18%', left: -6 }, // Company
@@ -434,7 +442,7 @@ function StepDecorations({ step, screenWidth, screenHeight }: { step: number; sc
     5: { top: '38%', right: 10 },   // Chat
   };
 
-  const logoStyles: Record<number, any> = {
+  const logoStyles: Record<number, ReturnType<typeof useAnimatedStyle>> = {
     0: logoStyle4,  // City: classic float
     1: logoStyle0,  // Duration
     2: logoStyle1,  // Company
@@ -504,7 +512,7 @@ function StepDecorations({ step, screenWidth, screenHeight }: { step: number; sc
 
 // ── Animated option card ──
 
-type StepOption = { id: string; icon: any; labelKey: string; emoji: string };
+type StepOption = { id: string; icon: ImageSourcePropType; labelKey: string; emoji: string };
 
 function OptionCard({
   option,
@@ -600,7 +608,7 @@ function OptionCard({
                     color: selected ? colors.deepOcean : 'rgba(15, 23, 42, 0.8)',
                   }}
                 >
-                  {t(option.labelKey as any)}
+                  {t(option.labelKey as TKeys)}
                 </Text>
               </View>
               {selected && (
@@ -1075,7 +1083,7 @@ export function HomeV2() {
                     marginBottom: 8,
                   }}
                 >
-                  {t(currentStep.titleKey as any)}
+                  {t(currentStep.titleKey as TKeys)}
                 </Text>
                 <Text
                   style={{
@@ -1090,7 +1098,7 @@ export function HomeV2() {
                     textShadowRadius: 4,
                   }}
                 >
-                  {t(currentStep.subtitleKey as any)}
+                  {t(currentStep.subtitleKey as TKeys)}
                 </Text>
 
                 {/* Option cards */}

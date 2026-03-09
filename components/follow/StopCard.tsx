@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { PhotoHero } from '../ui/PhotoHero';
+import { PhotoHero, type Category } from '../ui/PhotoHero';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface Stop {
@@ -69,7 +69,7 @@ export const StopCard: React.FC<StopCardProps> = ({
       {/* Photo */}
       <PhotoHero
         imageUrl={photoUrl}
-        fallbackCategory={(stop.category as any) || 'Culture'}
+        fallbackCategory={(stop.category as Category) || 'Culture'}
         height={200}
       />
 

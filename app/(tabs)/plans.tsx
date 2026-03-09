@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { getCached, setCache, isFresh } from '../../lib/api-cache';
-import { PhotoHero } from '../../components/ui/PhotoHero';
+import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
 import { SkeletonCard } from '../../components/ui/SkeletonCard';
 import type { Plan } from '../../lib/types';
 import type { ImageSourcePropType } from 'react-native';
@@ -277,7 +277,7 @@ export default function PlansScreen() {
                 <PhotoHero
                   localImage={PLAN_COVERS[item.name]}
                   imageUrl={item.image ?? undefined}
-                  fallbackCategory={(item.category as any) || 'Culture'}
+                  fallbackCategory={(item.category as Category) || 'Culture'}
                   height={200}
                 />
 

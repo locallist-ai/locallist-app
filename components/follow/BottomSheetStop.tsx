@@ -20,7 +20,7 @@ import { StopCard } from './StopCard';
 import { colors, fonts, borderRadius, spacing } from '../../lib/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
-interface Stop {
+export interface Stop {
   id: string;
   name: string;
   category?: string;
@@ -83,10 +83,10 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
 
   // Gesture handler for swipes
   const gestureHandler = useAnimatedGestureHandler({
-    onStart: (_, ctx: any) => {
+    onStart: (_, ctx: { startX: number }) => {
       ctx.startX = translateX.value;
     },
-    onActive: (event, ctx: any) => {
+    onActive: (event, ctx: { startX: number }) => {
       translateX.value = ctx.startX + event.translationX;
     },
     onEnd: (event) => {

@@ -130,7 +130,7 @@ export default function PlanDetailScreen() {
     const key = `${placeId}-${idx}`;
     const y = stopCardPositions.current[key];
     if (y != null && scrollViewRef.current) {
-      (scrollViewRef.current as any).scrollTo({ y, animated: true });
+      (scrollViewRef.current as unknown as { scrollTo(opts: { y: number; animated: boolean }): void }).scrollTo({ y, animated: true });
     }
   }, []);
 
@@ -409,7 +409,7 @@ function StopCard({ stop }: { stop: PlanStop }) {
           <View style={s.stopHeader}>
             {tb && (
               <Ionicons
-                name={tb.icon as any}
+                name={tb.icon as keyof typeof Ionicons.glyphMap}
                 size={18}
                 color={colors.sunsetOrange}
                 style={{ marginRight: 6 }}
@@ -452,7 +452,7 @@ function TravelPill({ travel }: { travel: { distance_km: number; duration_min: n
   const modeIcon = travel.mode === 'walk' ? 'walk-outline' : 'car-outline';
   return (
     <View style={s.travelPill}>
-      <Ionicons name={modeIcon as any} size={14} color={colors.textSecondary} />
+      <Ionicons name={modeIcon as keyof typeof Ionicons.glyphMap} size={14} color={colors.textSecondary} />
       <Text style={s.travelText}>
         {Math.round(travel.duration_min)} min {travel.mode}
       </Text>
