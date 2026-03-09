@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
+import { logger } from '../../lib/logger';
 
 export interface MapStop {
   latitude: number;
@@ -81,7 +82,7 @@ export const useOfflineTiles = (stops: MapStop[]): UseTilesCacheResult => {
         setHasCache(true);
         setTileUrl(`file://${TILES_CACHE_DIR}{z}-{x}-{y}.png`);
       } catch (error) {
-        console.warn('Failed to initialize offline tiles:', error);
+        logger.warn('Failed to initialize offline tiles', error);
         // Fall back to online tiles
         setTileUrl('https://tile.openstreetmap.org/{z}/{x}/{y}.png');
       } finally {

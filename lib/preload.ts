@@ -5,6 +5,7 @@
 import { Image as ExpoImage } from 'expo-image';
 import { api } from './api';
 import { getCached, setCache } from './api-cache';
+import { logger } from './logger';
 import type { Plan } from './types';
 
 // Local cover images to decode during splash
@@ -50,7 +51,7 @@ export async function preloadPlans(): Promise<void> {
         ExpoImage.prefetch(src).catch(() => {}),
       ),
     ]);
-  } catch {
-    // Preload is best-effort — never block the app
+  } catch (error) {
+    logger.warn('Preload failed', error);
   }
 }

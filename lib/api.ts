@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { logger } from './logger';
 
 function getApiUrl(): string {
   const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -14,6 +15,8 @@ function getApiUrl(): string {
 const API_URL = getApiUrl();
 
 // ─── Token storage ───────────────────────────────────────
+// Uses SecureStore on native (encrypted keychain) and localStorage on web.
+// In-memory `accessToken` avoids async reads on every request.
 
 let accessToken: string | null = null;
 let tokenLoadPromise: Promise<void> | null = null;
@@ -71,6 +74,10 @@ tokenLoadPromise = loadTokens().finally(() => {
 
 // ─── API client ──────────────────────────────────────────
 
+/**
+ * Error-as-value pattern: every API call returns `{ data, error, status }` instead of
+ * throwing, so callers handle errors explicitly without try/catch boilerplate.
+ */
 interface ApiResult<T> {
   data: T | null;
   error: string | null;
@@ -101,11 +108,11 @@ export async function api<T>(
 
     const json = await res.json().catch(() => null);
 
-    // Auto-refresh on 401
+    // Auto-refresh on 401: if the access token expired, silently obtain a new
+    // pair via the refresh token and retry the original request exactly once.
     if (res.status === 401 && token) {
       const refreshed = await tryRefreshToken();
       if (refreshed) {
-        // Retry the original request with new token
         return api<T>(path, options);
       }
     }
@@ -121,6 +128,7 @@ export async function api<T>(
 
     return { data: json as T, error: null, errorBody: null, status: res.status };
   } catch (err: any) {
+    logger.error('API request failed', err);
     return {
       data: null,
       error: err.message ?? 'Network error',
@@ -132,10 +140,10 @@ export async function api<T>(
 
 // ─── Token refresh ──────────────────────────────────────
 
+/** Singleton promise prevents concurrent refresh attempts (e.g., multiple 401s firing at once). */
 let refreshInProgress: Promise<boolean> | null = null;
 
 async function tryRefreshToken(): Promise<boolean> {
-  // Prevent concurrent refresh attempts
   if (refreshInProgress) return refreshInProgress;
 
   refreshInProgress = (async () => {
@@ -157,7 +165,8 @@ async function tryRefreshToken(): Promise<boolean> {
       const data = await res.json();
       await setTokens(data.accessToken, data.refreshToken);
       return true;
-    } catch {
+    } catch (error) {
+      logger.warn('Token refresh failed', error);
       return false;
     } finally {
       refreshInProgress = null;
