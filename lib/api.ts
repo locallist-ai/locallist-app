@@ -87,9 +87,9 @@ interface ApiResult<T> {
 
 export async function api<T>(
   path: string,
-  options: { method?: string; body?: any } = {},
+  options: { method?: string; body?: any; _retryCount?: number } = {},
 ): Promise<ApiResult<T>> {
-  const { method = 'GET', body } = options;
+  const { method = 'GET', body, _retryCount = 0 } = options;
 
   // Ensure token is loaded before first request
   const token = await getAccessToken();
@@ -110,10 +110,10 @@ export async function api<T>(
 
     // Auto-refresh on 401: if the access token expired, silently obtain a new
     // pair via the refresh token and retry the original request exactly once.
-    if (res.status === 401 && token) {
+    if (res.status === 401 && token && _retryCount < 1) {
       const refreshed = await tryRefreshToken();
       if (refreshed) {
-        return api<T>(path, options);
+        return api<T>(path, { method, body, _retryCount: _retryCount + 1 });
       }
     }
 
