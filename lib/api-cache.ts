@@ -8,7 +8,7 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 
-const cache = new Map<string, CacheEntry<any>>();
+const cache = new Map<string, CacheEntry<unknown>>();
 
 /** Default: cache is fresh for 5 minutes */
 const DEFAULT_MAX_AGE_MS = 5 * 60 * 1000;
@@ -18,7 +18,7 @@ const DEFAULT_MAX_AGE_MS = 5 * 60 * 1000;
  */
 export function getCached<T>(key: string): T | null {
   const entry = cache.get(key);
-  return entry ? entry.data : null;
+  return entry ? (entry.data as T) : null;
 }
 
 /**

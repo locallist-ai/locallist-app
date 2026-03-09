@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, type ViewStyle } from 'react-native';
 import MapLibreGL, { type MapViewRef, type CameraRef } from '@maplibre/maplibre-react-native';
 import Animated, {
   useSharedValue,
@@ -20,7 +20,7 @@ interface PlanMapProps {
   stops: MapStop[];
   activePinIndex?: number;
   onCameraUpdate?: (center: { latitude: number; longitude: number }) => void;
-  style?: any;
+  style?: ViewStyle;
 }
 
 const PIN_COLOR = '#3b82f6'; // electric-blue

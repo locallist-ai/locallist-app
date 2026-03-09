@@ -17,6 +17,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { colors, fonts, spacing, borderRadius } from '../lib/theme';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import type { AuthResponse } from '../lib/types';
 
 // Required for Google Auth redirect to close the browser on web
 WebBrowser.maybeCompleteAuthSession();
@@ -71,7 +72,7 @@ export default function LoginScreen() {
     }
 
     (async () => {
-      const res = await api<{ accessToken: string; refreshToken: string; user: any }>(
+      const res = await api<AuthResponse>(
         '/auth/signin',
         {
           method: 'POST',
@@ -103,7 +104,7 @@ export default function LoginScreen() {
         ? [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(' ')
         : undefined;
 
-      const res = await api<{ accessToken: string; refreshToken: string; user: any }>(
+      const res = await api<AuthResponse>(
         '/auth/signin',
         {
           method: 'POST',
@@ -120,8 +121,8 @@ export default function LoginScreen() {
       } else {
         setError(res.error ?? 'Sign in failed');
       }
-    } catch (err: any) {
-      if (err.code === 'ERR_REQUEST_CANCELED') return;
+    } catch (err: unknown) {
+      if (err instanceof Error && 'code' in err && (err as { code: string }).code === 'ERR_REQUEST_CANCELED') return;
       setError('Apple Sign In failed');
     } finally {
       setLoading(null);
@@ -161,7 +162,7 @@ export default function LoginScreen() {
 
     setLoading('email');
 
-    const res = await api<{ accessToken: string; refreshToken: string; user: any }>(
+    const res = await api<AuthResponse>(
       '/auth/register',
       {
         method: 'POST',
@@ -197,7 +198,7 @@ export default function LoginScreen() {
 
     setLoading('email');
 
-    const res = await api<{ accessToken: string; refreshToken: string; user: any }>(
+    const res = await api<AuthResponse>(
       '/auth/login',
       {
         method: 'POST',
