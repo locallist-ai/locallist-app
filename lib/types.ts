@@ -4,12 +4,20 @@ export type Place = {
   id: string;
   name: string;
   category: string;
+  subcategory: string | null;
   neighborhood: string | null;
+  city: string;
   whyThisPlace: string;
+  bestFor: string[] | null;
+  suitableFor: string[] | null;
+  bestTime: string | null;
   priceRange: string | null;
   photos: string[] | null;
   latitude: string | null;
   longitude: string | null;
+  googleRating: number | null;
+  googleReviewCount: number | null;
+  source: string;
 };
 
 export type PlanStop = {
