@@ -30,19 +30,19 @@ import type { Place } from '../../lib/types';
 const HERO_MAX = 280;
 const HERO_MIN = 120;
 
-const PRICE_KEYS: Record<string, string> = {
+const PRICE_KEYS = {
   $: 'place.priceBudget',
   $$: 'place.priceModerate',
   $$$: 'place.priceUpscale',
   $$$$: 'place.priceFineDining',
-};
+} as const;
 
-const TIME_BLOCK_KEYS: Record<string, { icon: keyof typeof Ionicons.glyphMap; labelKey: string }> = {
-  morning: { icon: 'sunny-outline', labelKey: 'place.timeMorning' },
-  lunch: { icon: 'restaurant-outline', labelKey: 'place.timeLunch' },
-  afternoon: { icon: 'cafe-outline', labelKey: 'place.timeAfternoon' },
-  dinner: { icon: 'moon-outline', labelKey: 'place.timeDinner' },
-  evening: { icon: 'musical-notes-outline', labelKey: 'place.timeEvening' },
+const TIME_BLOCK_KEYS = {
+  morning: { icon: 'sunny-outline' as const, labelKey: 'place.timeMorning' as const },
+  lunch: { icon: 'restaurant-outline' as const, labelKey: 'place.timeLunch' as const },
+  afternoon: { icon: 'cafe-outline' as const, labelKey: 'place.timeAfternoon' as const },
+  dinner: { icon: 'moon-outline' as const, labelKey: 'place.timeDinner' as const },
+  evening: { icon: 'musical-notes-outline' as const, labelKey: 'place.timeEvening' as const },
 };
 
 // ── Component ──
@@ -140,7 +140,7 @@ export default function PlaceDetailScreen() {
   const heroImageUrl = place.photos?.[0] ?? undefined;
   const heroFallbackCategory = (place.category ?? 'Culture') as Category;
   const heroSubtitle = [place.neighborhood, place.city].filter(Boolean).join(' \u00B7 ');
-  const bestTimeInfo = place.bestTime ? TIME_BLOCK_KEYS[place.bestTime] : null;
+  const bestTimeInfo = place.bestTime ? TIME_BLOCK_KEYS[place.bestTime as keyof typeof TIME_BLOCK_KEYS] : null;
   const hasCoords = place.latitude && place.longitude;
 
   // ── Render ──
@@ -256,7 +256,7 @@ export default function PlaceDetailScreen() {
               <View style={s.detailContent}>
                 <Text style={s.detailLabel}>{t('place.priceRange')}</Text>
                 <Text style={s.detailValue}>
-                  {place.priceRange} {PRICE_KEYS[place.priceRange] ? `\u2014 ${t(PRICE_KEYS[place.priceRange])}` : ''}
+                  {place.priceRange} {(place.priceRange as keyof typeof PRICE_KEYS) in PRICE_KEYS ? `\u2014 ${t(PRICE_KEYS[place.priceRange as keyof typeof PRICE_KEYS])}` : ''}
                 </Text>
               </View>
             </View>
