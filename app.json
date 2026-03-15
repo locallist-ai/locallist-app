@@ -117,7 +117,14 @@
       "expo-web-browser",
       "expo-font",
       "expo-localization",
-      "@maplibre/maplibre-react-native"
+      "@maplibre/maplibre-react-native",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "locallist",
+          "project": "locallist-app"
+        }
+      ]
     ],
     "extra": {
       "eas": {

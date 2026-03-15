@@ -1,4 +1,5 @@
 import '../lib/i18n';
+import { initSentry, Sentry } from '../lib/sentry';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Animated as RNAnimated, Platform, TouchableOpacity } from 'react-native';
 import { Stack } from 'expo-router';
@@ -11,6 +12,9 @@ import { AuthProvider, useAuth } from '../lib/auth';
 import { preloadPlans } from '../lib/preload';
 import { logger } from '../lib/logger';
 import LoginScreen from './login';
+
+// Initialize Sentry as early as possible
+initSentry();
 
 SplashScreen.preventAutoHideAsync();
 
@@ -105,7 +109,7 @@ const splashStyles = StyleSheet.create({
 // ─── Root Layout ─────────────────────────────────────────
 // Flow: Splash → Login (if not authenticated) → App
 
-export default function RootLayout() {
+function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
 
   const [fontsLoaded] = useFonts({
@@ -139,6 +143,9 @@ export default function RootLayout() {
     </AuthProvider>
   );
 }
+
+// Wrap root component with Sentry for automatic performance & error tracking
+export default Sentry.wrap(RootLayout);
 
 // Shows login if not authenticated, app stack if authenticated
 function AuthGate() {
@@ -188,6 +195,13 @@ function AppStack() {
         }}
       />
       <Stack.Screen
+        name="place/[id]"
+        options={{
+          title: 'Place',
+          headerBackTitle: 'Back',
+        }}
+      />
+      <Stack.Screen
         name="login"
         options={{
           title: 'Sign In',
@@ -204,14 +218,15 @@ function AppStack() {
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
   useEffect(() => {
     logger.error('Unhandled error caught by ErrorBoundary', error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (
     <View style={errorStyles.container}>
       <Text style={errorStyles.emoji}>😵</Text>
       <Text style={errorStyles.title}>Something went wrong</Text>
-      <Text style={errorStyles.message}>{error.message}</Text>
-      <TouchableOpacity style={errorStyles.button} onPress={retry}>
+      <Text style={errorStyles.message}>An unexpected error occurred. Please try again.</Text>
+      <TouchableOpacity style={errorStyles.button} onPress={retry} accessibilityRole="button" accessibilityLabel="Try Again">
         <Text style={errorStyles.buttonText}>Try Again</Text>
       </TouchableOpacity>
     </View>
