@@ -14,9 +14,13 @@ interface AuthContextType {
   isAuthenticated: boolean;
   /** Derived from `user.tier === 'pro'` — gates premium features (RevenueCat subscription). */
   isPro: boolean;
+  /** True when logged-in user is a founder (@locallist.ai). Enables dev tools. */
+  isAdmin: boolean;
   isLoading: boolean;
   login: (userData: User, accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Override tier locally for testing. Pass null to reset to real tier. */
+  setTierOverride: (tier: 'free' | 'pro' | null) => void;
 }
 
 /**
@@ -24,13 +28,17 @@ interface AuthContextType {
  * tokens from SecureStore and fetching /account. `isLoading` stays true until
  * this check completes, allowing screens to show a splash/skeleton.
  */
+const ADMIN_DOMAIN = '@locallist.ai';
+
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isAuthenticated: false,
   isPro: false,
+  isAdmin: false,
   isLoading: true,
   login: async () => { },
   logout: async () => { },
+  setTierOverride: () => { },
 });
 
 export function useAuth() {
@@ -40,6 +48,10 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [tierOverride, setTierOverride] = useState<'free' | 'pro' | null>(null);
+
+  const isAdmin = !!user?.email?.endsWith(ADMIN_DOMAIN);
+  const effectiveTier = tierOverride ?? user?.tier ?? 'free';
 
   const login = useCallback(async (userData: User, accessToken: string, refreshToken: string) => {
     await setTokens(accessToken, refreshToken);
@@ -49,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     await clearTokens();
     setUser(null);
+    setTierOverride(null);
   }, []);
 
   // Auto-login: try to load user from stored token on mount
@@ -78,10 +91,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value: {
         user,
         isAuthenticated: !!user,
-        isPro: user?.tier === 'pro',
+        isPro: effectiveTier === 'pro',
+        isAdmin,
         isLoading,
         login,
         logout,
+        setTierOverride,
       },
     },
     children,

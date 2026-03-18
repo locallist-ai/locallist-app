@@ -136,7 +136,7 @@ export const HomeV2: React.FC = () => {
           )}
 
           {currentStepConfig && (
-            <Animated.View key={`step-${wizard.step}`} entering={entering} exiting={exiting}>
+            <Animated.View key={`step-${wizard.step}`} entering={entering} exiting={exiting} style={styles.stepFill}>
               <WizardStep
                 config={currentStepConfig}
                 stepIndex={wizard.step}

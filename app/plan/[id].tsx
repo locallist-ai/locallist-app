@@ -3,9 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView as RNScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  ImageSourcePropType,
 } from 'react-native';
 import Animated, {
   useAnimatedScrollHandler,
@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -30,15 +31,16 @@ import type { Plan, PlanStop, PlanDetailResponse, BuilderResponse } from '../../
 
 type DayGroup = { dayNumber: number; stops: (PlanStop & { id?: string })[] };
 
-const HERO_MAX = 250;
+const HERO_MAX = 300;
 const HERO_MIN = 120;
 
-const TIME_BLOCK_ICONS: Record<string, { icon: string; label: string }> = {
-  morning: { icon: 'sunny-outline', label: 'Morning' },
-  lunch: { icon: 'restaurant-outline', label: 'Lunch' },
-  afternoon: { icon: 'cafe-outline', label: 'Afternoon' },
-  dinner: { icon: 'moon-outline', label: 'Dinner' },
-  evening: { icon: 'musical-notes-outline', label: 'Evening' },
+// Same cover images used in the plans list for visual continuity
+const PLAN_COVERS: Record<string, ImageSourcePropType> = {
+  'Romantic Weekend in Miami': require('../../assets/images/plans/romantic-weekend.webp'),
+  'Foodie Weekend: Best Bites of Miami': require('../../assets/images/plans/foodie-weekend.webp'),
+  'Outdoor Adventure Day': require('../../assets/images/plans/outdoor-adventure.webp'),
+  'Family Fun in Miami': require('../../assets/images/plans/family-fun.webp'),
+  'Culture & Art Crawl': require('../../assets/images/plans/culture-art-crawl.webp'),
 };
 
 type Category = 'Food' | 'Outdoors' | 'Coffee' | 'Nightlife' | 'Culture' | 'Wellness';
@@ -50,6 +52,14 @@ const CATEGORY_GRADIENTS: Record<Category, [string, string]> = {
   Nightlife: ['#1e1b4b', '#312e81'],
   Culture: ['#0f172a', '#1e293b'],
   Wellness: ['#7c3aed', '#6d28d9'],
+};
+
+const TIME_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  morning: 'sunny-outline',
+  lunch: 'restaurant-outline',
+  afternoon: 'cafe-outline',
+  dinner: 'moon-outline',
+  evening: 'musical-notes-outline',
 };
 
 function getCategoryGradient(category?: string): [string, string] {
@@ -76,6 +86,7 @@ function groupStopsByDay(stops: PlanStop[]): DayGroup[] {
 
 export default function PlanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { t } = useTranslation();
   const { isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
 
@@ -85,54 +96,20 @@ export default function PlanDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Parallax scroll tracking
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
-    },
+    onScroll: (event) => { scrollY.value = event.contentOffset.y; },
   });
 
-  // Hero animated height: 250 -> 120 as user scrolls
-  const heroAnimatedStyle = useAnimatedStyle(() => {
-    const height = interpolate(
-      scrollY.value,
-      [0, HERO_MAX - HERO_MIN],
-      [HERO_MAX, HERO_MIN],
-      Extrapolate.CLAMP,
-    );
-    return { height };
-  });
+  const heroAnimatedStyle = useAnimatedStyle(() => ({
+    height: interpolate(scrollY.value, [0, HERO_MAX - HERO_MIN], [HERO_MAX, HERO_MIN], Extrapolate.CLAMP),
+  }));
 
-  // Bottom bar entrance spring animation
   const bottomBarVisible = useSharedValue(0);
-  const bottomBarAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          translateY: interpolate(
-            bottomBarVisible.value,
-            [0, 1],
-            [100, 0],
-            Extrapolate.CLAMP,
-          ),
-        },
-      ],
-      opacity: bottomBarVisible.value,
-    };
-  });
-
-  // Refs for scrolling to stop cards from gallery thumbnails
-  const scrollViewRef = useRef<Animated.ScrollView>(null);
-  const stopCardPositions = useRef<Record<string, number>>({});
-
-  const scrollToStop = useCallback((placeId: string, idx: number) => {
-    const key = `${placeId}-${idx}`;
-    const y = stopCardPositions.current[key];
-    if (y != null && scrollViewRef.current) {
-      (scrollViewRef.current as unknown as { scrollTo(opts: { y: number; animated: boolean }): void }).scrollTo({ y, animated: true });
-    }
-  }, []);
+  const bottomBarStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(bottomBarVisible.value, [0, 1], [100, 0], Extrapolate.CLAMP) }],
+    opacity: bottomBarVisible.value,
+  }));
 
   useEffect(() => {
     if (id === 'preview') {
@@ -148,33 +125,33 @@ export default function PlanDetailScreen() {
       return;
     }
 
+    let cancelled = false;
     (async () => {
-      const res = await api<PlanDetailResponse>(`/plans/${id}`);
-      if (res.data) {
-        setPlan(res.data);
-        setDays(
-          res.data.days.map((d) => ({
+      try {
+        const res = await api<PlanDetailResponse>(`/plans/${id}`);
+        if (cancelled) return;
+        if (res.data) {
+          setPlan(res.data);
+          setDays(res.data.days.map((d) => ({
             dayNumber: d.dayNumber,
             stops: d.stops.sort((a, b) => a.orderIndex - b.orderIndex),
-          })),
-        );
-      } else {
-        setError(res.error ?? 'Failed to load plan');
+          })));
+        } else {
+          setError(res.error ?? 'Failed to load plan');
+        }
+      } catch {
+        if (!cancelled) setError('Network error');
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     })();
+    return () => { cancelled = true; };
   }, [id]);
 
-  // Trigger bottom bar entrance after data loads
   useEffect(() => {
     if (!loading && plan) {
-      bottomBarVisible.value = withSpring(1, {
-        damping: 18,
-        stiffness: 120,
-        mass: 0.8,
-      });
+      bottomBarVisible.value = withSpring(1, { damping: 18, stiffness: 120 });
     }
-  }, [loading, plan, bottomBarVisible]);
+  }, [loading, plan]);
 
   if (loading) {
     return (
@@ -189,32 +166,25 @@ export default function PlanDetailScreen() {
       <View style={s.center}>
         <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
         <Text style={s.errorText}>{error ?? 'Plan not found'}</Text>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={s.backBtn} onPress={() => router.back()} accessibilityRole="button">
           <Text style={s.backBtnText}>Go back</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  // Determine hero image: plan.image first, then first stop's first photo
-  const heroImageUrl =
-    plan.image ?? days[0]?.stops[0]?.place?.photos?.[0] ?? undefined;
-  const heroFallbackCategory = (plan.category ?? plan.type ?? 'Culture') as
-    | 'Food'
-    | 'Outdoors'
-    | 'Coffee'
-    | 'Nightlife'
-    | 'Culture'
-    | 'Wellness';
-
-  // Build subtitle for hero
-  const heroSubtitle = `${plan.city} \u00B7 ${plan.durationDays} ${plan.durationDays === 1 ? 'day' : 'days'}${plan.type ? ` \u00B7 ${plan.type}` : ''}`;
+  const localCover = PLAN_COVERS[plan.name];
+  const heroImageUrl = plan.image ?? days[0]?.stops[0]?.place?.photos?.[0] ?? undefined;
+  const heroFallbackCategory = (plan.category ?? plan.type ?? 'Culture') as Category;
+  const heroSubtitle = `${plan.city} \u00B7 ${plan.durationDays} ${plan.durationDays === 1 ? 'day' : 'days'}`;
+  const totalStops = days.reduce((acc, d) => acc + d.stops.length, 0);
 
   return (
     <View style={s.root}>
       {/* Hero parallax */}
       <Animated.View style={[s.heroContainer, heroAnimatedStyle]}>
         <PhotoHero
+          localImage={localCover}
           imageUrl={heroImageUrl}
           fallbackCategory={heroFallbackCategory}
           title={plan.name}
@@ -225,28 +195,34 @@ export default function PlanDetailScreen() {
       </Animated.View>
 
       <Animated.ScrollView
-        ref={scrollViewRef}
         contentContainerStyle={[s.scroll, { paddingTop: HERO_MAX + spacing.md }]}
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
-        {/* Badges below hero */}
-        <View style={s.badges}>
-          <View style={s.badge}>
-            <Ionicons name="location-outline" size={14} color={colors.deepOcean} />
-            <Text style={s.badgeText}>{plan.city}</Text>
+        {/* Quick stats */}
+        <View style={s.statsRow}>
+          <View style={s.statItem}>
+            <Ionicons name="location-outline" size={16} color={colors.sunsetOrange} />
+            <Text style={s.statText}>{plan.city}</Text>
           </View>
-          <View style={s.badge}>
-            <Ionicons name="calendar-outline" size={14} color={colors.deepOcean} />
-            <Text style={s.badgeText}>
-              {plan.durationDays} {plan.durationDays === 1 ? 'day' : 'days'}
-            </Text>
+          <View style={s.statDot} />
+          <View style={s.statItem}>
+            <Ionicons name="calendar-outline" size={16} color={colors.sunsetOrange} />
+            <Text style={s.statText}>{plan.durationDays} {plan.durationDays === 1 ? 'day' : 'days'}</Text>
+          </View>
+          <View style={s.statDot} />
+          <View style={s.statItem}>
+            <Ionicons name="flag-outline" size={16} color={colors.sunsetOrange} />
+            <Text style={s.statText}>{totalStops} stops</Text>
           </View>
           {plan.type && (
-            <View style={[s.badge, { backgroundColor: colors.sunsetOrange + '15' }]}>
-              <Text style={[s.badgeText, { color: colors.sunsetOrange }]}>{plan.type}</Text>
-            </View>
+            <>
+              <View style={s.statDot} />
+              <View style={s.typeBadge}>
+                <Text style={s.typeBadgeText}>{plan.type}</Text>
+              </View>
+            </>
           )}
         </View>
 
@@ -255,58 +231,71 @@ export default function PlanDetailScreen() {
         {/* Builder message */}
         {message && (
           <View style={s.messageCard}>
+            <View style={s.messageHeader}>
+              <Ionicons name="sparkles" size={16} color={colors.sunsetOrange} />
+              <Text style={s.messageLabel}>AI Curator</Text>
+            </View>
             <Text style={s.messageText}>{message}</Text>
           </View>
         )}
 
         {/* Day sections */}
-        {days.map((day) => (
+        {days.map((day, dayIdx) => (
           <View key={day.dayNumber} style={s.daySection}>
-            <Text style={s.dayTitle}>Day {day.dayNumber}</Text>
+            {/* Day header */}
+            <Animated.View
+              entering={FadeInUp.delay(dayIdx * 100).duration(500)}
+              style={s.dayHeader}
+            >
+              <LinearGradient
+                colors={[colors.deepOcean, '#1e293b']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={s.dayBadge}
+              >
+                <Text style={s.dayBadgeText}>Day {day.dayNumber}</Text>
+              </LinearGradient>
+              <View style={s.dayLine} />
+            </Animated.View>
 
-            {/* Daily photo gallery */}
-            <DayPhotoGallery day={day} onThumbnailPress={scrollToStop} />
-
-            {day.stops.map((stop, idx) => (
-              <React.Fragment key={stop.placeId + '-' + idx}>
-                <View
-                  onLayout={(e) => {
-                    const key = `${stop.placeId}-${idx}`;
-                    stopCardPositions.current[key] = e.nativeEvent.layout.y + HERO_MAX + spacing.md;
-                  }}
-                >
-                  <StopCard stop={stop} />
-                </View>
-                {idx < day.stops.length - 1 && stop.travelFromPrevious == null && day.stops[idx + 1]?.travelFromPrevious && (
-                  <TravelPill travel={day.stops[idx + 1].travelFromPrevious!} />
-                )}
-                {idx < day.stops.length - 1 && stop.travelFromPrevious != null && idx > 0 && null}
-              </React.Fragment>
-            ))}
+            {/* Stops */}
+            {day.stops.map((stop, idx) => {
+              const globalIdx = dayIdx * 10 + idx;
+              return (
+                <React.Fragment key={stop.placeId + '-' + idx}>
+                  <Animated.View entering={FadeInUp.delay(100 + globalIdx * 80).duration(500).springify().damping(16)}>
+                    <StopCard stop={stop} />
+                  </Animated.View>
+                  {idx < day.stops.length - 1 && (
+                    <TravelConnector
+                      travel={day.stops[idx + 1]?.travelFromPrevious ?? null}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
           </View>
         ))}
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 120 }} />
       </Animated.ScrollView>
 
-      {/* Bottom sticky with gradient button + spring entrance */}
-      <Animated.View style={[s.bottomBar, bottomBarAnimatedStyle]}>
+      {/* Bottom CTA */}
+      <Animated.View style={[s.bottomBar, bottomBarStyle, { paddingBottom: insets.bottom + spacing.md }]}>
         <TouchableOpacity
           activeOpacity={0.8}
+          accessibilityLabel={isAuthenticated ? 'Follow this plan' : 'Sign in to follow'}
+          accessibilityRole="button"
           onPress={() => {
-            if (!isAuthenticated) {
-              router.push('/login');
-              return;
-            }
-            const planId = id === 'preview' ? plan.id : id;
-            router.push(`/follow/${planId}`);
+            if (!isAuthenticated) { router.push('/login'); return; }
+            router.push(`/follow/${id === 'preview' ? plan.id : id}`);
           }}
         >
           <LinearGradient
             colors={[colors.electricBlue, '#2563eb']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={s.followBtnGradient}
+            style={s.followBtn}
           >
             <Ionicons name="navigate-outline" size={20} color="#FFFFFF" />
             <Text style={s.followBtnText}>
@@ -319,340 +308,223 @@ export default function PlanDetailScreen() {
   );
 }
 
-/* ---------- Daily Photo Gallery ---------- */
-
-function DayPhotoGallery({
-  day,
-  onThumbnailPress,
-}: {
-  day: DayGroup;
-  onThumbnailPress: (placeId: string, idx: number) => void;
-}) {
-  // Collect thumbnails from stops that have photos
-  const thumbnails = day.stops
-    .map((stop, idx) => ({
-      placeId: stop.placeId,
-      idx,
-      photoUrl: stop.place?.photos?.[0] ?? null,
-      category: stop.place?.category ?? 'Culture',
-      name: stop.place?.name ?? 'Stop',
-    }))
-    .filter((t) => t.photoUrl || t.category);
-
-  if (thumbnails.length === 0) return null;
-
-  return (
-    <RNScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={s.dayGalleryContent}
-      style={s.dayGallery}
-    >
-      {thumbnails.map((thumb) => (
-        <TouchableOpacity
-          key={`${thumb.placeId}-${thumb.idx}`}
-          activeOpacity={0.7}
-          onPress={() => onThumbnailPress(thumb.placeId, thumb.idx)}
-          style={s.dayGalleryItem}
-        >
-          {thumb.photoUrl ? (
-            <Image
-              source={{ uri: thumb.photoUrl }}
-              style={s.dayGalleryImage}
-              contentFit="cover"
-            />
-          ) : (
-            <LinearGradient
-              colors={getCategoryGradient(thumb.category)}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={s.dayGalleryImage}
-            />
-          )}
-        </TouchableOpacity>
-      ))}
-    </RNScrollView>
-  );
-}
-
-/* ---------- Stop Card with Thumbnail ---------- */
+/* ── Stop Card ── */
 
 function StopCard({ stop }: { stop: PlanStop }) {
-  const tb = stop.timeBlock ? TIME_BLOCK_ICONS[stop.timeBlock] : null;
   const place = stop.place;
   const photoUrl = place?.photos?.[0] ?? null;
   const categoryForGradient = place?.category ?? 'Culture';
+  const timeIcon = stop.timeBlock ? TIME_ICONS[stop.timeBlock] : null;
 
   return (
-    <View style={s.stopCard}>
-      <View style={s.stopCardRow}>
-        {/* Photo thumbnail or category gradient fallback */}
-        <View style={s.stopThumbContainer}>
-          {photoUrl ? (
-            <Image
-              source={{ uri: photoUrl }}
-              style={s.stopThumb}
-              contentFit="cover"
-            />
-          ) : (
-            <LinearGradient
-              colors={getCategoryGradient(categoryForGradient)}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={s.stopThumb}
-            />
-          )}
-        </View>
-
-        {/* Text content */}
-        <View style={s.stopTextContent}>
-          <View style={s.stopHeader}>
-            {tb && (
-              <Ionicons
-                name={tb.icon as keyof typeof Ionicons.glyphMap}
-                size={18}
-                color={colors.sunsetOrange}
-                style={{ marginRight: 6 }}
-              />
-            )}
+    <TouchableOpacity
+      style={s.stopCard}
+      activeOpacity={0.85}
+      onPress={() => {
+        if (place) router.push(`/place/${stop.placeId}`);
+      }}
+      accessibilityLabel={place?.name ?? 'Stop'}
+      accessibilityRole="button"
+    >
+      {/* Photo */}
+      <View style={s.stopImageContainer}>
+        {photoUrl ? (
+          <Image source={{ uri: photoUrl }} style={s.stopImage} contentFit="cover" />
+        ) : (
+          <LinearGradient
+            colors={getCategoryGradient(categoryForGradient)}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={s.stopImage}
+          />
+        )}
+        {/* Time badge overlay */}
+        {(stop.suggestedArrival || timeIcon) && (
+          <View style={s.timeBadge}>
+            {timeIcon && <Ionicons name={timeIcon} size={14} color="#FFFFFF" />}
             {stop.suggestedArrival && (
-              <Text style={s.arrivalTime}>{stop.suggestedArrival}</Text>
+              <Text style={s.timeBadgeText}>{stop.suggestedArrival}</Text>
             )}
           </View>
-          <Text style={s.placeName}>{place?.name ?? 'Unknown place'}</Text>
-          <View style={s.stopMeta}>
-            {place?.category && (
-              <View style={s.categoryChip}>
-                <Text style={s.categoryText}>{place.category}</Text>
-              </View>
-            )}
-            {place?.neighborhood && (
-              <Text style={s.neighborhood}>{place.neighborhood}</Text>
-            )}
+        )}
+        {/* Category chip overlay */}
+        {place?.category && (
+          <View style={s.categoryOverlay}>
+            <Text style={s.categoryOverlayText}>{place.category}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Content */}
+      <View style={s.stopContent}>
+        <Text style={s.stopName} numberOfLines={1}>{place?.name ?? 'Unknown place'}</Text>
+
+        {place?.neighborhood && (
+          <View style={s.stopLocationRow}>
+            <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
+            <Text style={s.stopNeighborhood}>{place.neighborhood}</Text>
+          </View>
+        )}
+
+        {place?.whyThisPlace && (
+          <Text style={s.stopWhy} numberOfLines={2}>{place.whyThisPlace}</Text>
+        )}
+
+        <View style={s.stopFooter}>
+          {stop.suggestedDurationMin != null && (
+            <View style={s.stopDurationChip}>
+              <Ionicons name="time-outline" size={12} color={colors.electricBlue} />
+              <Text style={s.stopDurationText}>~{stop.suggestedDurationMin} min</Text>
+            </View>
+          )}
+          <View style={s.stopArrow}>
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
           </View>
         </View>
       </View>
-
-      {/* Full-width content below the row */}
-      {place?.whyThisPlace && (
-        <Text style={s.whyText}>{place.whyThisPlace}</Text>
-      )}
-      {stop.suggestedDurationMin != null && (
-        <Text style={s.duration}>
-          ~{stop.suggestedDurationMin} min
-        </Text>
-      )}
-    </View>
+    </TouchableOpacity>
   );
 }
 
-/* ---------- Travel Pill (unchanged) ---------- */
+/* ── Travel Connector ── */
 
-function TravelPill({ travel }: { travel: { distance_km: number; duration_min: number; mode: string } }) {
-  const modeIcon = travel.mode === 'walk' ? 'walk-outline' : 'car-outline';
+function TravelConnector({ travel }: { travel: { distance_km: number; duration_min: number; mode: string } | null }) {
+  const icon = travel?.mode === 'walk' ? 'walk-outline' : 'car-outline';
+
   return (
-    <View style={s.travelPill}>
-      <Ionicons name={modeIcon as keyof typeof Ionicons.glyphMap} size={14} color={colors.textSecondary} />
-      <Text style={s.travelText}>
-        {Math.round(travel.duration_min)} min {travel.mode}
-      </Text>
+    <View style={s.connectorRow}>
+      <View style={s.connectorLine} />
+      {travel && (
+        <View style={s.connectorPill}>
+          <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={13} color={colors.textSecondary} />
+          <Text style={s.connectorText}>{Math.round(travel.duration_min)} min</Text>
+        </View>
+      )}
+      <View style={s.connectorLine} />
     </View>
   );
 }
 
-/* ---------- Styles ---------- */
+/* ── Styles ── */
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bgMain },
   center: {
-    flex: 1,
-    backgroundColor: colors.bgMain,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
+    flex: 1, backgroundColor: colors.bgMain,
+    alignItems: 'center', justifyContent: 'center', padding: spacing.lg,
   },
-  scroll: { padding: spacing.lg },
-  errorText: {
-    fontFamily: fonts.body,
-    fontSize: 16,
-    color: colors.error,
-    marginTop: spacing.md,
-    textAlign: 'center',
-  },
-  backBtn: {
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.electricBlue,
-  },
+  scroll: { paddingHorizontal: spacing.lg },
+  errorText: { fontFamily: fonts.body, fontSize: 16, color: colors.error, marginTop: spacing.md, textAlign: 'center' },
+  backBtn: { marginTop: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: borderRadius.md, backgroundColor: colors.electricBlue },
   backBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: '#FFFFFF' },
 
-  // Hero parallax
   heroContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    overflow: 'hidden',
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, overflow: 'hidden',
   },
 
-  // Badges (glass-style, aligned with plans page chips)
-  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.82)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.50)',
+  // Stats row
+  statsRow: {
+    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap',
+    backgroundColor: '#FFFFFF', borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md, paddingVertical: 14,
+    marginBottom: spacing.md, gap: 8,
   },
-  badgeText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.deepOcean },
+  statItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  statText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.deepOcean },
+  statDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.borderColor },
+  typeBadge: {
+    backgroundColor: colors.sunsetOrange + '15',
+    paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full,
+  },
+  typeBadgeText: { fontFamily: fonts.bodySemiBold, fontSize: 11, color: colors.sunsetOrange },
+
   description: {
-    fontFamily: fonts.body,
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
+    fontFamily: fonts.body, fontSize: 15, lineHeight: 22,
+    color: colors.textSecondary, marginBottom: spacing.md,
   },
 
   // Builder message
   messageCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.sunsetOrange + '20',
+    backgroundColor: '#FFFFFF', borderRadius: borderRadius.lg,
+    padding: spacing.md, marginBottom: spacing.lg,
+    borderLeftWidth: 3, borderLeftColor: colors.sunsetOrange,
   },
-  messageText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.deepOcean },
+  messageHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  messageLabel: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.sunsetOrange },
+  messageText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 21, color: colors.textMain },
 
   // Day section
   daySection: { marginBottom: spacing.lg },
-  dayTitle: {
-    fontFamily: fonts.headingSemiBold,
-    fontSize: 22,
-    color: colors.deepOcean,
-    marginBottom: spacing.sm,
+  dayHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md, gap: spacing.sm },
+  dayBadge: {
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: borderRadius.full,
   },
+  dayBadgeText: { fontFamily: fonts.headingSemiBold, fontSize: 15, color: '#FFFFFF' },
+  dayLine: { flex: 1, height: 1, backgroundColor: colors.borderColor },
 
-  // Daily photo gallery
-  dayGallery: {
-    marginBottom: spacing.md,
-  },
-  dayGalleryContent: {
-    gap: spacing.sm,
-    paddingRight: spacing.sm,
-  },
-  dayGalleryItem: {
-    width: 72,
-    height: 72,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-  },
-  dayGalleryImage: {
-    width: 72,
-    height: 72,
-    borderRadius: borderRadius.lg,
-  },
-
-  // Stop card (clean, bright — aligned with plans page cards)
+  // Stop card
   stopCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    backgroundColor: '#FFFFFF', borderRadius: borderRadius.lg,
+    overflow: 'hidden', marginBottom: 2,
   },
-  stopCardRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  stopImageContainer: {
+    width: '100%', height: 160, position: 'relative',
   },
-  stopThumbContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    marginRight: spacing.md,
-    flexShrink: 0,
-  },
-  stopThumb: {
-    width: 64,
-    height: 64,
-    borderRadius: borderRadius.md,
-  },
-  stopTextContent: {
-    flex: 1,
-    minHeight: 64,
-    justifyContent: 'center',
-  },
-  stopHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  arrivalTime: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.sunsetOrange },
-  placeName: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 17,
-    color: colors.deepOcean,
-    marginBottom: 4,
-  },
-  stopMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 0 },
-  categoryChip: {
-    backgroundColor: colors.electricBlue + '12',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+  stopImage: { width: '100%', height: '100%' },
+  timeBadge: {
+    position: 'absolute', top: spacing.sm, left: spacing.sm,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)', paddingHorizontal: 10, paddingVertical: 5,
     borderRadius: borderRadius.full,
   },
-  categoryText: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.electricBlue },
-  neighborhood: { fontFamily: fonts.body, fontSize: 12, color: colors.textSecondary },
-  whyText: {
-    fontFamily: fonts.body,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textMain,
-    fontStyle: 'italic',
-    marginTop: spacing.sm,
+  timeBadgeText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: '#FFFFFF' },
+  categoryOverlay: {
+    position: 'absolute', bottom: spacing.sm, left: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: borderRadius.full,
   },
-  duration: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
+  categoryOverlayText: { fontFamily: fonts.bodySemiBold, fontSize: 11, color: colors.deepOcean },
 
-  // Travel pill (glass-style)
-  travelPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.82)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: borderRadius.full,
-    marginVertical: 2,
+  stopContent: { padding: spacing.md },
+  stopName: { fontFamily: fonts.headingSemiBold, fontSize: 18, color: colors.deepOcean, marginBottom: 4 },
+  stopLocationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
+  stopNeighborhood: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary },
+  stopWhy: {
+    fontFamily: fonts.body, fontSize: 14, lineHeight: 20,
+    color: colors.textMain, fontStyle: 'italic', marginBottom: 8,
   },
-  travelText: { fontFamily: fonts.body, fontSize: 12, color: colors.textSecondary },
+  stopFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stopDurationChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: colors.electricBlue + '10',
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: borderRadius.full,
+  },
+  stopDurationText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.electricBlue },
+  stopArrow: { opacity: 0.4 },
 
-  // Bottom bar (clean, no heavy border)
+  // Travel connector
+  connectorRow: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 2, paddingHorizontal: spacing.lg,
+  },
+  connectorLine: { flex: 1, height: 1, backgroundColor: colors.borderColor },
+  connectorPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 5,
+    backgroundColor: '#FFFFFF', borderRadius: borderRadius.full,
+    borderWidth: 1, borderColor: colors.borderColor,
+    marginHorizontal: 8,
+  },
+  connectorText: { fontFamily: fonts.body, fontSize: 11, color: colors.textSecondary },
+
+  // Bottom bar
   bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    paddingBottom: spacing.xl,
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
     backgroundColor: colors.bgMain,
   },
-  followBtnGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: borderRadius.lg,
+  followBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 16, borderRadius: borderRadius.lg,
   },
   followBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' },
 });

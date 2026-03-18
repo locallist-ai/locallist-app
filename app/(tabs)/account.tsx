@@ -129,7 +129,7 @@ function PlusUpsellCard({ t }: { t: ReturnType<typeof useTranslation>['t'] }) {
 
 export default function AccountScreen() {
   const { t, i18n } = useTranslation();
-  const { user, isAuthenticated, isPro, logout } = useAuth();
+  const { user, isAuthenticated, isPro, isAdmin, logout, setTierOverride } = useAuth();
   const [langPickerVisible, setLangPickerVisible] = useState(false);
   const [pendingLang, setPendingLang] = useState<string | null>(null);
 
@@ -292,6 +292,47 @@ export default function AccountScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
+
+        {/* Dev Tools — only in development + @locallist.ai admins */}
+        {__DEV__ && isAdmin && (
+          <Animated.View entering={FadeInDown.duration(400).delay(300)}>
+            <View style={s.devHeader}>
+              <Ionicons name="construct-outline" size={14} color={colors.sunsetOrange} />
+              <Text style={s.devHeaderText}>Dev Tools</Text>
+            </View>
+            <View style={s.section}>
+              <TouchableOpacity
+                style={s.row}
+                activeOpacity={0.7}
+                onPress={() => setTierOverride(isPro ? 'free' : 'pro')}
+              >
+                <Ionicons
+                  name={isPro ? 'sparkles' : 'sparkles-outline'}
+                  size={22}
+                  color={isPro ? colors.sunsetOrange : colors.textMain}
+                />
+                <Text style={s.rowText}>
+                  {isPro ? 'Switch to Free' : 'Switch to Pro'}
+                </Text>
+                <View style={[s.tierBadge, isPro && s.tierBadgePro]}>
+                  <Text style={[s.tierText, isPro && s.tierTextPro]}>
+                    {isPro ? 'PRO' : 'FREE'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={s.row}
+                activeOpacity={0.7}
+                onPress={() => setTierOverride(null)}
+              >
+                <Ionicons name="refresh-outline" size={22} color={colors.textMain} />
+                <Text style={s.rowText}>Reset to real tier</Text>
+                <Text style={s.rowValue}>{user?.tier ?? 'free'}</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        )}
 
         {/* Footer */}
         <Text style={s.version}>LocalList v1.0.0</Text>
@@ -580,6 +621,22 @@ const s = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     marginRight: 4,
+  },
+
+  // Dev Tools
+  devHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  devHeaderText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: colors.sunsetOrange,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 
   // Footer
