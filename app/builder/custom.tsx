@@ -52,7 +52,7 @@ export default function CustomBuilderScreen() {
     setCreating(false);
 
     if (res.data) {
-      router.replace(`/plan/edit/${res.data.id}`);
+      router.push(`/plan/edit/${res.data.id}`);
     } else {
       setError(res.error ?? 'Failed to create plan');
     }

@@ -146,7 +146,7 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
       <View style={s.container}>
         {/* Header */}
         <View style={s.header}>
-          <Text style={s.title}>Add a Place</Text>
+          <View style={{ flex: 1 }} />
           <TouchableOpacity onPress={onClose} accessibilityRole="button">
             <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -228,11 +228,6 @@ const s = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
-  },
-  title: {
-    fontFamily: fonts.headingSemiBold,
-    fontSize: 22,
-    color: colors.deepOcean,
   },
   searchBar: {
     flexDirection: 'row',
