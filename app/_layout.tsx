@@ -190,7 +190,8 @@ function AppStack() {
       <Stack.Screen
         name="plan/edit/[id]"
         options={{
-          headerShown: false,
+          title: '',
+          headerBackTitle: 'Back',
         }}
       />
       <Stack.Screen

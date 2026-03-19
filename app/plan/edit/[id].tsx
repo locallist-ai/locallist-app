@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -22,6 +22,7 @@ import { PlaceSearchModal } from '../../../components/plan-editor/PlaceSearchMod
 export default function PlanEditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const { plan, days, isDirty, isSaving, loading, error, dispatch, save } = usePlanEditor(id!);
 
   // Move to day state
@@ -37,21 +38,6 @@ export default function PlanEditScreen() {
     dayNumber: number;
   }>({ visible: false, dayNumber: 1 });
 
-  const handleBack = useCallback(() => {
-    if (isDirty) {
-      Alert.alert(
-        'Unsaved Changes',
-        'You have unsaved changes. Are you sure you want to leave?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => router.back() },
-        ],
-      );
-    } else {
-      router.back();
-    }
-  }, [isDirty]);
-
   const handleSave = useCallback(async () => {
     const success = await save();
     if (success) {
@@ -59,10 +45,47 @@ export default function PlanEditScreen() {
     }
   }, [save]);
 
+  // Configure native header with Save button
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={handleSave}
+          disabled={!isDirty || isSaving}
+          style={[s.saveBtn, (!isDirty || isSaving) && s.saveBtnDisabled]}
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Text style={s.saveBtnText}>Save</Text>
+          )}
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, isDirty, isSaving, handleSave]);
+
+  // Unsaved changes guard on back
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (!isDirty) return;
+
+      e.preventDefault();
+      Alert.alert(
+        'Unsaved Changes',
+        'You have unsaved changes. Are you sure you want to leave?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
+        ],
+      );
+    });
+    return unsubscribe;
+  }, [navigation, isDirty]);
+
   if (loading) {
     return (
       <View style={s.center}>
-        <ActivityIndicator size="large" color={colors.electricBlue} />
+        <ActivityIndicator size="large" color={colors.sunsetOrange} />
       </View>
     );
   }
@@ -84,37 +107,12 @@ export default function PlanEditScreen() {
 
   return (
     <GestureHandlerRootView style={s.root}>
-      {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + spacing.sm }]}>
-        <TouchableOpacity
-          onPress={handleBack}
-          style={s.headerBackBtn}
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.deepOcean} />
-        </TouchableOpacity>
-
-        <View style={s.headerCenter}>
-          <Text style={s.headerSubtitle}>
-            {plan.city} · {totalDays} {totalDays === 1 ? 'day' : 'days'} · {totalStops} {totalStops === 1 ? 'stop' : 'stops'}
-            {isDirty ? ' · Edited' : ''}
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          onPress={handleSave}
-          disabled={!isDirty || isSaving}
-          style={[s.saveBtn, (!isDirty || isSaving) && s.saveBtnDisabled]}
-          accessibilityLabel="Save changes"
-          accessibilityRole="button"
-        >
-          {isSaving ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={s.saveBtnText}>Save</Text>
-          )}
-        </TouchableOpacity>
+      {/* Meta bar */}
+      <View style={s.metaBar}>
+        <Ionicons name="location" size={14} color={colors.sunsetOrange} />
+        <Text style={s.metaText}>
+          {plan.city} · {totalDays} {totalDays === 1 ? 'day' : 'days'} · {totalStops} {totalStops === 1 ? 'stop' : 'stops'}
+        </Text>
       </View>
 
       {/* Content */}
@@ -232,38 +230,15 @@ const s = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.bgMain,
-    gap: spacing.sm,
-  },
-  headerBackBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.bgCard,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCenter: {
-    flex: 1,
-  },
-  headerSubtitle: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
+  // Save button (in native header)
   saveBtn: {
     backgroundColor: colors.sunsetOrange,
     paddingHorizontal: 18,
-    paddingVertical: 9,
+    paddingVertical: 7,
     borderRadius: borderRadius.full,
-    minWidth: 64,
+    minWidth: 60,
     alignItems: 'center',
+    marginRight: spacing.sm,
   },
   saveBtnDisabled: {
     opacity: 0.35,
@@ -272,6 +247,22 @@ const s = StyleSheet.create({
     fontFamily: fonts.bodySemiBold,
     fontSize: 14,
     color: '#FFFFFF',
+  },
+
+  // Meta bar
+  metaBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderColor,
+  },
+  metaText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.textSecondary,
   },
 
   // Scroll
