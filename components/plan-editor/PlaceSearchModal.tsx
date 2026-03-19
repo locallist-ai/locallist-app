@@ -6,6 +6,7 @@ import {
   Modal,
   TextInput,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   TouchableWithoutFeedback,
@@ -163,14 +164,15 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
         </View>
 
         {/* Category chips */}
-        <FlatList
-          data={CATEGORIES}
+        <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item}
           contentContainerStyle={s.chipRow}
-          renderItem={({ item: cat }) => (
+          style={s.chipScroll}
+        >
+          {CATEGORIES.map((cat) => (
             <TouchableOpacity
+              key={cat}
               style={[s.chip, category === cat && s.chipActive]}
               onPress={() => handleCategoryPress(cat)}
               activeOpacity={0.7}
@@ -179,8 +181,8 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
                 {cat}
               </Text>
             </TouchableOpacity>
-          )}
-        />
+          ))}
+        </ScrollView>
 
         {/* Results */}
         {loading ? (
@@ -242,10 +244,13 @@ const s = StyleSheet.create({
     color: colors.textMain,
     padding: 0,
   },
+  chipScroll: {
+    flexGrow: 0,
+    marginBottom: spacing.md,
+  },
   chipRow: {
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
-    paddingBottom: spacing.md,
   },
   chip: {
     paddingHorizontal: 14,
