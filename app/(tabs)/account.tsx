@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ScrollView,
   Modal,
   Pressable,
@@ -31,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/api';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 
 const LANGUAGES = [
   { code: 'en', flag: '\u{1F1FA}\u{1F1F8}', labelKey: 'account.languageEnglish' as const },
@@ -132,6 +132,9 @@ export default function AccountScreen() {
   const { user, isAuthenticated, isPro, isAdmin, logout, setTierOverride } = useAuth();
   const [langPickerVisible, setLangPickerVisible] = useState(false);
   const [pendingLang, setPendingLang] = useState<string | null>(null);
+  const [logoutVisible, setLogoutVisible] = useState(false);
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const currentLang = i18n.language.startsWith('es') ? 'es' : 'en';
   const currentLangLabel = currentLang === 'es' ? t('account.languageSpanish') : t('account.languageEnglish');
@@ -162,37 +165,18 @@ export default function AccountScreen() {
 
   const initial = (user.name ?? user.email)?.[0]?.toUpperCase() ?? '?';
 
-  const handleLogout = () => {
-    Alert.alert(t('account.logOut'), t('account.logOutConfirm'), [
-      { text: t('account.cancel'), style: 'cancel' },
-      {
-        text: t('account.logOut'),
-        style: 'destructive',
-        onPress: logout,
-      },
-    ]);
-  };
+  const handleLogout = () => setLogoutVisible(true);
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      t('account.deleteAccount'),
-      t('account.deleteConfirm'),
-      [
-        { text: t('account.cancel'), style: 'cancel' },
-        {
-          text: t('account.delete'),
-          style: 'destructive',
-          onPress: async () => {
-            const res = await api('/account', { method: 'DELETE' });
-            if (res.error) {
-              Alert.alert(t('account.error'), res.error);
-            } else {
-              await logout();
-            }
-          },
-        },
-      ],
-    );
+  const handleDeleteAccount = () => setDeleteVisible(true);
+
+  const confirmDelete = async () => {
+    setDeleteVisible(false);
+    const res = await api('/account', { method: 'DELETE' });
+    if (res.error) {
+      setErrorMsg(res.error);
+    } else {
+      await logout();
+    }
   };
 
   const handleOpenLangPicker = () => {
@@ -423,6 +407,46 @@ export default function AccountScreen() {
           </Animated.View>
         </Pressable>
       </Modal>
+
+      {/* Logout confirm */}
+      <ConfirmModal
+        visible={logoutVisible}
+        icon="log-out-outline"
+        iconColor={colors.sunsetOrange}
+        title={t('account.logOut')}
+        body={t('account.logOutConfirm')}
+        cancelLabel={t('account.cancel')}
+        confirmLabel={t('account.logOut')}
+        confirmDestructive
+        onCancel={() => setLogoutVisible(false)}
+        onConfirm={() => { setLogoutVisible(false); logout(); }}
+      />
+
+      {/* Delete account confirm */}
+      <ConfirmModal
+        visible={deleteVisible}
+        icon="trash-outline"
+        iconColor={colors.error}
+        title={t('account.deleteAccount')}
+        body={t('account.deleteConfirm')}
+        cancelLabel={t('account.cancel')}
+        confirmLabel={t('account.delete')}
+        confirmDestructive
+        onCancel={() => setDeleteVisible(false)}
+        onConfirm={confirmDelete}
+      />
+
+      {/* Error modal */}
+      <ConfirmModal
+        visible={!!errorMsg}
+        icon="alert-circle-outline"
+        iconColor={colors.error}
+        title={t('account.error')}
+        body={errorMsg ?? ''}
+        confirmLabel="OK"
+        onCancel={() => setErrorMsg(null)}
+        onConfirm={() => setErrorMsg(null)}
+      />
     </View>
   );
 }
