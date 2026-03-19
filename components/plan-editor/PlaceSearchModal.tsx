@@ -49,7 +49,7 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
       params.set('city', city);
       params.set('limit', '30');
       if (searchQuery.trim()) params.set('search', searchQuery.trim());
-      if (searchCategory) params.set('category', searchCategory);
+      if (searchCategory) params.set('category', searchCategory.toLowerCase());
 
       setLoading(true);
       const res = await api<{ places: Place[]; total: number }>(

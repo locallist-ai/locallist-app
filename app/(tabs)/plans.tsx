@@ -8,12 +8,13 @@ import {
   RefreshControl,
   ScrollView,
 } from 'react-native';
-import { router, useNavigation } from 'expo-router';
+import { router, useNavigation, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { getCached, setCache, isFresh } from '../../lib/api-cache';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
 import { SkeletonCard } from '../../components/ui/SkeletonCard';
@@ -48,8 +49,21 @@ type PlansMode = 'chooser' | 'curated';
 
 export default function PlansScreen() {
   const { t } = useTranslation();
+  const { isAuthenticated } = useAuth();
   const navigation = useNavigation();
   const [mode, setMode] = useState<PlansMode>('chooser');
+  const [myPlans, setMyPlans] = useState<Plan[]>([]);
+
+  // Fetch user's plans when tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAuthenticated) return;
+      (async () => {
+        const res = await api<{ plans: Plan[] }>('/plans/mine');
+        if (res.data) setMyPlans(res.data.plans ?? []);
+      })();
+    }, [isAuthenticated])
+  );
 
   // Show/hide native header with back button based on mode
   useEffect(() => {
@@ -139,7 +153,7 @@ export default function PlansScreen() {
   if (mode === 'chooser') {
     return (
       <View style={s.root}>
-        <View style={s.chooserContainer}>
+        <ScrollView contentContainerStyle={s.chooserContainer} showsVerticalScrollIndicator={false}>
           {/* Explore curated plans */}
           <TouchableOpacity
             style={s.chooserCard}
@@ -195,7 +209,33 @@ export default function PlansScreen() {
             </View>
             <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
-        </View>
+
+          {/* My Plans */}
+          {myPlans.length > 0 && (
+            <View style={s.myPlansSection}>
+              <Text style={s.myPlansHeader}>My Plans</Text>
+              {myPlans.map((p) => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={s.myPlanRow}
+                  activeOpacity={0.7}
+                  onPress={() => router.push(`/plan/${p.id}`)}
+                >
+                  <View style={s.myPlanIcon}>
+                    <Ionicons name="map" size={18} color={colors.sunsetOrange} />
+                  </View>
+                  <View style={s.myPlanInfo}>
+                    <Text style={s.myPlanName} numberOfLines={1}>{p.name}</Text>
+                    <Text style={s.myPlanMeta}>
+                      {p.city} · {p.durationDays} {p.durationDays === 1 ? 'day' : 'days'}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </ScrollView>
       </View>
     );
   }
@@ -331,6 +371,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
+    paddingVertical: spacing.lg,
   },
   chooserCard: {
     flexDirection: 'row',
@@ -378,6 +419,48 @@ const s = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
     lineHeight: 18,
+  },
+  myPlansSection: {
+    marginTop: spacing.sm,
+  },
+  myPlansHeader: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  myPlanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bgCard,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  myPlanIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.sunsetOrange + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  myPlanInfo: {
+    flex: 1,
+  },
+  myPlanName: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: colors.deepOcean,
+  },
+  myPlanMeta: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textSecondary,
   },
 
   center: {
