@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
@@ -18,6 +17,7 @@ import { usePlanEditor } from '../../../lib/use-plan-editor';
 import { DaySection } from '../../../components/plan-editor/DaySection';
 import { MoveToDay } from '../../../components/plan-editor/MoveToDay';
 import { PlaceSearchModal } from '../../../components/plan-editor/PlaceSearchModal';
+import { ConfirmModal } from '../../../components/ui/ConfirmModal';
 
 export default function PlanEditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,6 +37,10 @@ export default function PlanEditScreen() {
     visible: boolean;
     dayNumber: number;
   }>({ visible: false, dayNumber: 1 });
+
+  // Unsaved changes confirm modal
+  const [discardVisible, setDiscardVisible] = useState(false);
+  const pendingAction = useRef<any>(null);
 
   const handleSave = useCallback(async () => {
     const success = await save();
@@ -70,14 +74,8 @@ export default function PlanEditScreen() {
       if (!isDirty) return;
 
       e.preventDefault();
-      Alert.alert(
-        'Unsaved Changes',
-        'You have unsaved changes. Are you sure you want to leave?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
-        ],
-      );
+      pendingAction.current = e.data.action;
+      setDiscardVisible(true);
     });
     return unsubscribe;
   }, [navigation, isDirty]);
@@ -193,6 +191,26 @@ export default function PlanEditScreen() {
           setAddState({ ...addState, visible: false });
         }}
         onClose={() => setAddState({ ...addState, visible: false })}
+      />
+
+      {/* Discard changes confirm */}
+      <ConfirmModal
+        visible={discardVisible}
+        icon="warning-outline"
+        iconColor={colors.sunsetOrange}
+        title="Unsaved Changes"
+        body="You have unsaved changes. Are you sure you want to leave without saving?"
+        cancelLabel="Keep Editing"
+        confirmLabel="Discard"
+        confirmDestructive
+        onCancel={() => setDiscardVisible(false)}
+        onConfirm={() => {
+          setDiscardVisible(false);
+          if (pendingAction.current) {
+            navigation.dispatch(pendingAction.current);
+            pendingAction.current = null;
+          }
+        }}
       />
     </GestureHandlerRootView>
   );
