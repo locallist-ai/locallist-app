@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { colors, fonts, spacing, borderRadius } from '../../../lib/theme';
 import { usePlanEditor } from '../../../lib/use-plan-editor';
@@ -80,6 +80,7 @@ export default function PlanEditScreen() {
   }
 
   const totalDays = plan.durationDays ?? Math.max(...days.map((d) => d.dayNumber), 1);
+  const totalStops = days.reduce((acc, d) => acc + d.stops.length, 0);
 
   return (
     <GestureHandlerRootView style={s.root}>
@@ -87,19 +88,16 @@ export default function PlanEditScreen() {
       <View style={[s.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity
           onPress={handleBack}
-          style={s.headerBtn}
+          style={s.headerBackBtn}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <Ionicons name="chevron-back" size={24} color={colors.deepOcean} />
+          <Ionicons name="chevron-back" size={22} color={colors.deepOcean} />
         </TouchableOpacity>
 
         <View style={s.headerCenter}>
-          <Text style={s.headerTitle} numberOfLines={1}>
-            {plan.name}
-          </Text>
           <Text style={s.headerSubtitle}>
-            {days.reduce((acc, d) => acc + d.stops.length, 0)} stops
+            {plan.city} · {totalDays} {totalDays === 1 ? 'day' : 'days'} · {totalStops} {totalStops === 1 ? 'stop' : 'stops'}
             {isDirty ? ' · Edited' : ''}
           </Text>
         </View>
@@ -122,35 +120,52 @@ export default function PlanEditScreen() {
       {/* Content */}
       <ScrollView
         style={s.scroll}
-        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + spacing.lg }]}
+        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + spacing.xl }]}
         showsVerticalScrollIndicator={false}
       >
-        {days.map((day) => (
-          <DaySection
+        {/* Empty state hint */}
+        {totalStops === 0 && (
+          <Animated.View entering={FadeInDown.duration(500).springify().damping(16)} style={s.emptyHint}>
+            <View style={s.emptyIcon}>
+              <Ionicons name="compass-outline" size={32} color={colors.electricBlue} />
+            </View>
+            <Text style={s.emptyTitle}>Your plan is empty</Text>
+            <Text style={s.emptyBody}>
+              Tap "+ Add a stop" on any day to start building your itinerary.
+            </Text>
+          </Animated.View>
+        )}
+
+        {days.map((day, dayIdx) => (
+          <Animated.View
             key={day.dayNumber}
-            dayNumber={day.dayNumber}
-            stops={day.stops}
-            onReorder={(from, to) =>
-              dispatch({ type: 'REORDER', dayNumber: day.dayNumber, from, to })
-            }
-            onDeleteStop={(stopIndex) =>
-              dispatch({ type: 'DELETE_STOP', dayNumber: day.dayNumber, stopIndex })
-            }
-            onMoveStop={(stopIndex) =>
-              setMoveState({ visible: true, fromDay: day.dayNumber, stopIndex })
-            }
-            onAddPress={() =>
-              setAddState({ visible: true, dayNumber: day.dayNumber })
-            }
-          />
+            entering={FadeInDown.delay(dayIdx * 80).duration(400).springify().damping(16)}
+          >
+            <DaySection
+              dayNumber={day.dayNumber}
+              stops={day.stops}
+              onReorder={(from, to) =>
+                dispatch({ type: 'REORDER', dayNumber: day.dayNumber, from, to })
+              }
+              onDeleteStop={(stopIndex) =>
+                dispatch({ type: 'DELETE_STOP', dayNumber: day.dayNumber, stopIndex })
+              }
+              onMoveStop={(stopIndex) =>
+                setMoveState({ visible: true, fromDay: day.dayNumber, stopIndex })
+              }
+              onAddPress={() =>
+                setAddState({ visible: true, dayNumber: day.dayNumber })
+              }
+            />
+          </Animated.View>
         ))}
 
         {/* Dirty indicator */}
         {isDirty && (
-          <View style={s.dirtyBar}>
-            <Ionicons name="information-circle-outline" size={16} color={colors.sunsetOrange} />
-            <Text style={s.dirtyText}>You have unsaved changes</Text>
-          </View>
+          <Animated.View entering={FadeInDown.duration(300)} style={s.dirtyBar}>
+            <Ionicons name="alert-circle" size={14} color={colors.sunsetOrange} />
+            <Text style={s.dirtyText}>Unsaved changes</Text>
+          </Animated.View>
         )}
       </ScrollView>
 
@@ -222,38 +237,36 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.md,
     backgroundColor: colors.bgMain,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderColor,
     gap: spacing.sm,
   },
-  headerBtn: {
-    padding: 4,
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.bgCard,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerCenter: {
     flex: 1,
   },
-  headerTitle: {
-    fontFamily: fonts.headingSemiBold,
-    fontSize: 17,
-    color: colors.deepOcean,
-  },
   headerSubtitle: {
-    fontFamily: fonts.body,
-    fontSize: 12,
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
     color: colors.textSecondary,
   },
   saveBtn: {
     backgroundColor: colors.electricBlue,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: borderRadius.md,
-    minWidth: 60,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: borderRadius.full,
+    minWidth: 64,
     alignItems: 'center',
   },
   saveBtnDisabled: {
-    opacity: 0.4,
+    opacity: 0.35,
   },
   saveBtnText: {
     fontFamily: fonts.bodySemiBold,
@@ -270,17 +283,48 @@ const s = StyleSheet.create({
     paddingTop: spacing.md,
   },
 
+  // Empty state
+  emptyHint: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.electricBlue + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    fontFamily: fonts.headingSemiBold,
+    fontSize: 20,
+    color: colors.deepOcean,
+    marginBottom: spacing.xs,
+  },
+  emptyBody: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 260,
+  },
+
   // Dirty indicator
   dirtyBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     justifyContent: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
   },
   dirtyText: {
-    fontFamily: fonts.body,
-    fontSize: 13,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
     color: colors.sunsetOrange,
   },
 });

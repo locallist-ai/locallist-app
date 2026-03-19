@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
@@ -77,74 +78,82 @@ export default function CustomBuilderScreen() {
             onPress={() => router.back()}
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={24} color={colors.textMain} />
+            <Ionicons name="chevron-back" size={24} color={colors.textMain} />
           </TouchableOpacity>
         </View>
 
         {/* Title */}
-        <View style={s.titleSection}>
+        <Animated.View entering={FadeInDown.duration(500).springify().damping(16)} style={s.titleSection}>
+          <View style={s.titleIcon}>
+            <Ionicons name="map-outline" size={28} color={colors.electricBlue} />
+          </View>
           <Text style={s.title}>Build Your Plan</Text>
           <Text style={s.subtitle}>
-            Name it, pick a city, and start adding places.
+            Name it, pick a city, and start adding your favorite places.
           </Text>
-        </View>
+        </Animated.View>
 
-        {/* Form */}
-        <View style={s.form}>
-          {/* Plan name */}
-          <View style={s.field}>
-            <Text style={s.label}>Plan name</Text>
-            <TextInput
-              style={s.input}
-              placeholder="e.g. Weekend in Barcelona"
-              placeholderTextColor={colors.textSecondary}
-              value={name}
-              onChangeText={setName}
-              maxLength={100}
-              autoFocus
-            />
-          </View>
+        {/* Form card */}
+        <Animated.View entering={FadeInDown.duration(500).delay(100).springify().damping(16)}>
+          <View style={s.formCard}>
+            {/* Plan name */}
+            <View style={s.field}>
+              <Text style={s.label}>Plan name</Text>
+              <TextInput
+                style={s.input}
+                placeholder="e.g. Weekend in Barcelona"
+                placeholderTextColor={colors.textSecondary + '80'}
+                value={name}
+                onChangeText={setName}
+                maxLength={100}
+                autoFocus
+              />
+            </View>
 
-          {/* City */}
-          <View style={s.field}>
-            <Text style={s.label}>City</Text>
-            <TextInput
-              style={s.input}
-              placeholder="e.g. Miami"
-              placeholderTextColor={colors.textSecondary}
-              value={city}
-              onChangeText={setCity}
-              maxLength={50}
-            />
-          </View>
+            {/* City */}
+            <View style={s.field}>
+              <Text style={s.label}>City</Text>
+              <View style={s.inputWithIcon}>
+                <Ionicons name="location-outline" size={18} color={colors.sunsetOrange} style={s.inputIcon} />
+                <TextInput
+                  style={s.inputInner}
+                  placeholder="e.g. Miami"
+                  placeholderTextColor={colors.textSecondary + '80'}
+                  value={city}
+                  onChangeText={setCity}
+                  maxLength={50}
+                />
+              </View>
+            </View>
 
-          {/* Duration */}
-          <View style={s.field}>
-            <Text style={s.label}>Duration</Text>
-            <View style={s.durationRow}>
-              {DURATION_OPTIONS.map((d) => (
-                <TouchableOpacity
-                  key={d}
-                  style={[s.durationChip, days === d && s.durationChipActive]}
-                  onPress={() => {
-                    setDays(d);
-                    Haptics.selectionAsync();
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      s.durationText,
-                      days === d && s.durationTextActive,
-                    ]}
+            {/* Duration */}
+            <View style={s.field}>
+              <Text style={s.label}>Duration</Text>
+              <View style={s.durationRow}>
+                {DURATION_OPTIONS.map((d) => (
+                  <TouchableOpacity
+                    key={d}
+                    style={[s.durationChip, days === d && s.durationChipActive]}
+                    onPress={() => {
+                      setDays(d);
+                      Haptics.selectionAsync();
+                    }}
+                    activeOpacity={0.7}
                   >
-                    {d} {d === 1 ? 'day' : 'days'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        s.durationText,
+                        days === d && s.durationTextActive,
+                      ]}
+                    >
+                      {d} {d === 1 ? 'day' : 'days'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Error */}
         {error && (
@@ -152,28 +161,30 @@ export default function CustomBuilderScreen() {
         )}
 
         {/* Create button */}
-        <TouchableOpacity
-          onPress={handleCreate}
-          disabled={!canCreate || creating}
-          activeOpacity={0.8}
-          style={{ opacity: canCreate && !creating ? 1 : 0.5 }}
-        >
-          <LinearGradient
-            colors={[colors.electricBlue, '#2563eb']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={s.createBtn}
+        <Animated.View entering={FadeInDown.duration(500).delay(200).springify().damping(16)}>
+          <TouchableOpacity
+            onPress={handleCreate}
+            disabled={!canCreate || creating}
+            activeOpacity={0.8}
+            style={{ opacity: canCreate && !creating ? 1 : 0.5 }}
           >
-            {creating ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
-                <Text style={s.createBtnText}>Create & Start Editing</Text>
-              </>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={[colors.electricBlue, '#2563eb']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.createBtn}
+            >
+              {creating ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+                  <Text style={s.createBtnText}>Create & Start Editing</Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -189,7 +200,7 @@ const s = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   closeBtn: {
     width: 44,
@@ -200,42 +211,75 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   titleSection: {
+    alignItems: 'center',
     marginBottom: spacing.xl,
+  },
+  titleIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.electricBlue + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
   title: {
     fontFamily: fonts.headingBold,
-    fontSize: 32,
+    fontSize: 28,
     color: colors.deepOcean,
     marginBottom: spacing.xs,
+    textAlign: 'center',
   },
   subtitle: {
     fontFamily: fonts.body,
-    fontSize: 16,
+    fontSize: 15,
     color: colors.textSecondary,
-    lineHeight: 24,
+    lineHeight: 22,
+    textAlign: 'center',
+    maxWidth: 280,
   },
-  form: {
+  formCard: {
+    backgroundColor: colors.bgCard,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     gap: spacing.lg,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   field: {
     gap: spacing.sm,
   },
   label: {
     fontFamily: fonts.bodySemiBold,
-    fontSize: 14,
-    color: colors.deepOcean,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   input: {
-    backgroundColor: colors.bgCard,
+    backgroundColor: colors.bgMain,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: 14,
     fontFamily: fonts.body,
     fontSize: 16,
     color: colors.textMain,
-    borderWidth: 1,
-    borderColor: colors.borderColor,
+  },
+  inputWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bgMain,
+    borderRadius: borderRadius.md,
+  },
+  inputIcon: {
+    marginLeft: spacing.md,
+  },
+  inputInner: {
+    flex: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 14,
+    fontFamily: fonts.body,
+    fontSize: 16,
+    color: colors.textMain,
   },
   durationRow: {
     flexDirection: 'row',
@@ -246,13 +290,10 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.bgCard,
-    borderWidth: 1,
-    borderColor: colors.borderColor,
+    backgroundColor: colors.bgMain,
   },
   durationChipActive: {
     backgroundColor: colors.electricBlue,
-    borderColor: colors.electricBlue,
   },
   durationText: {
     fontFamily: fonts.bodySemiBold,
@@ -274,12 +315,12 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 16,
+    paddingVertical: 18,
     borderRadius: borderRadius.lg,
   },
   createBtnText: {
     fontFamily: fonts.bodySemiBold,
-    fontSize: 16,
+    fontSize: 17,
     color: '#FFFFFF',
   },
 });
