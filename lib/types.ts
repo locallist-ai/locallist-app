@@ -76,8 +76,28 @@ export type AuthResponse = {
 };
 
 export type PlanDetailResponse = Plan & {
+  createdById?: string;
   days: {
     dayNumber: number;
     stops: (PlanStop & { id: string })[];
   }[];
+};
+
+export type StopInput = {
+  placeId: string;
+  dayNumber: number;
+  orderIndex: number;
+  timeBlock: string | null;
+  suggestedDurationMin: number | null;
+};
+
+export type UpdateStopsRequest = {
+  stops: StopInput[];
+};
+
+export type CreatePlanRequest = {
+  name: string;
+  city: string;
+  type?: string;
+  durationDays: number;
 };
