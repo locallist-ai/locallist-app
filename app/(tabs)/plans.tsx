@@ -45,7 +45,7 @@ function sortPlans(list: Plan[]): Plan[] {
   });
 }
 
-type PlansMode = 'chooser' | 'curated';
+type PlansMode = 'chooser' | 'curated' | 'mine';
 
 export default function PlansScreen() {
   const { t } = useTranslation();
@@ -67,10 +67,10 @@ export default function PlansScreen() {
 
   // Show/hide native header with back button based on mode
   useEffect(() => {
-    if (mode === 'curated') {
+    if (mode === 'curated' || mode === 'mine') {
       navigation.setOptions({
         headerShown: true,
-        title: '',
+        title: mode === 'mine' ? 'My Plans' : '',
         headerLeft: () => (
           <TouchableOpacity
             onPress={() => setMode('chooser')}
@@ -211,31 +211,70 @@ export default function PlansScreen() {
           </TouchableOpacity>
 
           {/* My Plans */}
-          {myPlans.length > 0 && (
-            <View style={s.myPlansSection}>
-              <Text style={s.myPlansHeader}>My Plans</Text>
-              {myPlans.map((p) => (
+          {isAuthenticated && (
+            <TouchableOpacity
+              style={s.chooserCard}
+              activeOpacity={0.8}
+              onPress={() => setMode('mine')}
+            >
+              <View style={[s.chooserIconWrap, { backgroundColor: colors.sunsetOrange + '12' }]}>
+                <Ionicons name="bookmark-outline" size={32} color={colors.sunsetOrange} />
+              </View>
+              <View style={s.chooserTextWrap}>
+                <Text style={s.chooserTitle}>My Plans</Text>
+                <Text style={s.chooserSub}>
+                  {myPlans.length > 0
+                    ? `${myPlans.length} ${myPlans.length === 1 ? 'plan' : 'plans'} saved`
+                    : 'Your created plans'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (mode === 'mine') {
+    return (
+      <View style={s.root}>
+        {myPlans.length === 0 ? (
+          <View style={s.center}>
+            <Ionicons name="bookmark-outline" size={56} color={colors.textSecondary + '60'} />
+            <Text style={s.emptyTitle}>No plans yet</Text>
+            <Text style={s.emptyBody}>
+              Create your first plan with "Build Your Own"
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={myPlans}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={s.list}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item, index }) => (
+              <Animated.View entering={FadeInDown.delay(index * 80)}>
                 <TouchableOpacity
-                  key={p.id}
                   style={s.myPlanRow}
                   activeOpacity={0.7}
-                  onPress={() => router.push(`/plan/${p.id}`)}
+                  onPress={() => router.push(`/plan/${item.id}`)}
                 >
                   <View style={s.myPlanIcon}>
-                    <Ionicons name="map" size={18} color={colors.sunsetOrange} />
+                    <Ionicons name="map" size={20} color={colors.sunsetOrange} />
                   </View>
                   <View style={s.myPlanInfo}>
-                    <Text style={s.myPlanName} numberOfLines={1}>{p.name}</Text>
+                    <Text style={s.myPlanName} numberOfLines={1}>{item.name}</Text>
                     <Text style={s.myPlanMeta}>
-                      {p.city} · {p.durationDays} {p.durationDays === 1 ? 'day' : 'days'}
+                      {item.city} · {item.durationDays} {item.durationDays === 1 ? 'day' : 'days'}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </ScrollView>
+              </Animated.View>
+            )}
+          />
+        )}
       </View>
     );
   }
@@ -419,18 +458,6 @@ const s = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
     lineHeight: 18,
-  },
-  myPlansSection: {
-    marginTop: spacing.sm,
-  },
-  myPlansHeader: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 13,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs,
   },
   myPlanRow: {
     flexDirection: 'row',
