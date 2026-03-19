@@ -90,14 +90,14 @@ const s = StyleSheet.create({
   dayBtn: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: colors.electricBlue + '10',
+    backgroundColor: colors.sunsetOrange + '10',
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.electricBlue + '30',
+    borderColor: colors.sunsetOrange + '30',
   },
   dayBtnText: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 15,
-    color: colors.electricBlue,
+    color: colors.sunsetOrange,
   },
 });

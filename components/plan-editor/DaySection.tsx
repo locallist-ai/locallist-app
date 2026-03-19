@@ -84,7 +84,7 @@ export function DaySection({
         accessibilityLabel={`Add a stop to day ${dayNumber}`}
         accessibilityRole="button"
       >
-        <Ionicons name="add-circle-outline" size={18} color={colors.electricBlue} />
+        <Ionicons name="add-circle-outline" size={18} color={colors.sunsetOrange} />
         <Text style={s.addText}>Add a stop</Text>
       </TouchableOpacity>
     </View>
@@ -131,15 +131,15 @@ const s = StyleSheet.create({
     gap: 6,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: colors.electricBlue + '40',
+    borderColor: colors.sunsetOrange + '40',
     borderStyle: 'dashed',
     borderRadius: borderRadius.md,
-    backgroundColor: colors.electricBlue + '08',
+    backgroundColor: colors.sunsetOrange + '08',
     marginTop: spacing.xs,
   },
   addText: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 13,
-    color: colors.electricBlue,
+    color: colors.sunsetOrange,
   },
 });

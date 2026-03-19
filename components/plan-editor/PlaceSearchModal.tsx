@@ -122,7 +122,7 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
             )}
           </View>
         </View>
-        <Ionicons name="add-circle" size={24} color={colors.electricBlue} />
+        <Ionicons name="add-circle" size={24} color={colors.sunsetOrange} />
       </TouchableOpacity>
     );
   };
@@ -261,8 +261,8 @@ const s = StyleSheet.create({
     borderColor: colors.borderColor,
   },
   chipActive: {
-    backgroundColor: colors.electricBlue,
-    borderColor: colors.electricBlue,
+    backgroundColor: colors.sunsetOrange,
+    borderColor: colors.sunsetOrange,
   },
   chipText: {
     fontFamily: fonts.bodySemiBold,

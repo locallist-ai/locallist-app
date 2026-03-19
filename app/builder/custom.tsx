@@ -85,7 +85,7 @@ export default function CustomBuilderScreen() {
         {/* Title */}
         <Animated.View entering={FadeInDown.duration(500).springify().damping(16)} style={s.titleSection}>
           <View style={s.titleIcon}>
-            <Ionicons name="map-outline" size={28} color={colors.electricBlue} />
+            <Ionicons name="map-outline" size={28} color={colors.sunsetOrange} />
           </View>
           <Text style={s.title}>Build Your Plan</Text>
           <Text style={s.subtitle}>
@@ -169,7 +169,7 @@ export default function CustomBuilderScreen() {
             style={{ opacity: canCreate && !creating ? 1 : 0.5 }}
           >
             <LinearGradient
-              colors={[colors.electricBlue, '#2563eb']}
+              colors={[colors.sunsetOrange, '#ea580c']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={s.createBtn}
@@ -218,7 +218,7 @@ const s = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.electricBlue + '12',
+    backgroundColor: colors.sunsetOrange + '12',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
@@ -293,7 +293,7 @@ const s = StyleSheet.create({
     backgroundColor: colors.bgMain,
   },
   durationChipActive: {
-    backgroundColor: colors.electricBlue,
+    backgroundColor: colors.sunsetOrange,
   },
   durationText: {
     fontFamily: fonts.bodySemiBold,

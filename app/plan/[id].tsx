@@ -241,7 +241,7 @@ export default function PlanDetailScreen() {
             accessibilityLabel="Edit this plan"
             accessibilityRole="button"
           >
-            <Ionicons name="create-outline" size={16} color={colors.electricBlue} />
+            <Ionicons name="create-outline" size={16} color={colors.sunsetOrange} />
             <Text style={s.editBtnText}>Edit Plan</Text>
           </TouchableOpacity>
         )}
@@ -464,11 +464,11 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, paddingVertical: 10, marginBottom: spacing.md,
     borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.electricBlue + '40',
-    backgroundColor: colors.electricBlue + '08',
+    borderColor: colors.sunsetOrange + '40',
+    backgroundColor: colors.sunsetOrange + '08',
   },
   editBtnText: {
-    fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.electricBlue,
+    fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.sunsetOrange,
   },
 
   // Builder message

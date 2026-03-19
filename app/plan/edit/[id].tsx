@@ -127,7 +127,7 @@ export default function PlanEditScreen() {
         {totalStops === 0 && (
           <Animated.View entering={FadeInDown.duration(500).springify().damping(16)} style={s.emptyHint}>
             <View style={s.emptyIcon}>
-              <Ionicons name="compass-outline" size={32} color={colors.electricBlue} />
+              <Ionicons name="compass-outline" size={32} color={colors.sunsetOrange} />
             </View>
             <Text style={s.emptyTitle}>Your plan is empty</Text>
             <Text style={s.emptyBody}>
@@ -224,7 +224,7 @@ const s = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.electricBlue,
+    backgroundColor: colors.sunsetOrange,
   },
   backBtnErrText: {
     fontFamily: fonts.bodySemiBold,
@@ -258,7 +258,7 @@ const s = StyleSheet.create({
     color: colors.textSecondary,
   },
   saveBtn: {
-    backgroundColor: colors.electricBlue,
+    backgroundColor: colors.sunsetOrange,
     paddingHorizontal: 18,
     paddingVertical: 9,
     borderRadius: borderRadius.full,
@@ -294,7 +294,7 @@ const s = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: colors.electricBlue + '10',
+    backgroundColor: colors.sunsetOrange + '10',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
