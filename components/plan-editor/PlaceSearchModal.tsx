@@ -6,7 +6,6 @@ import {
   Modal,
   TextInput,
   FlatList,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   TouchableWithoutFeedback,
@@ -19,6 +18,15 @@ import { api } from '../../lib/api';
 import type { Place } from '../../lib/types';
 
 const CATEGORIES = ['Food', 'Coffee', 'Culture', 'Outdoors', 'Nightlife', 'Wellness'] as const;
+
+const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  Food: 'restaurant-outline',
+  Coffee: 'cafe-outline',
+  Culture: 'color-palette-outline',
+  Outdoors: 'leaf-outline',
+  Nightlife: 'moon-outline',
+  Wellness: 'fitness-outline',
+};
 
 type Props = {
   visible: boolean;
@@ -163,13 +171,8 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
           )}
         </View>
 
-        {/* Category chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.chipRow}
-          style={s.chipScroll}
-        >
+        {/* Category chips — 2 rows grid */}
+        <View style={s.chipGrid}>
           {CATEGORIES.map((cat) => (
             <TouchableOpacity
               key={cat}
@@ -177,12 +180,17 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
               onPress={() => handleCategoryPress(cat)}
               activeOpacity={0.7}
             >
+              <Ionicons
+                name={CATEGORY_ICONS[cat]}
+                size={15}
+                color={category === cat ? '#FFFFFF' : colors.textSecondary}
+              />
               <Text style={[s.chipText, category === cat && s.chipTextActive]}>
                 {cat}
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
 
         {/* Results */}
         {loading ? (
@@ -244,17 +252,20 @@ const s = StyleSheet.create({
     color: colors.textMain,
     padding: 0,
   },
-  chipScroll: {
-    flexGrow: 0,
-    marginBottom: spacing.md,
-  },
-  chipRow: {
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
+    marginBottom: spacing.md,
   },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    width: '31%',
+    justifyContent: 'center',
+    paddingVertical: 9,
     borderRadius: borderRadius.full,
     backgroundColor: colors.bgCard,
     borderWidth: 1,
