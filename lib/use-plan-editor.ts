@@ -154,13 +154,21 @@ export function usePlanEditor(planId: string) {
       if (cancelled) return;
       if (res.data) {
         setPlan(res.data);
-        dispatch({
-          type: 'INIT',
-          days: res.data.days.map((d) => ({
-            dayNumber: d.dayNumber,
-            stops: d.stops.sort((a, b) => a.orderIndex - b.orderIndex),
-          })),
-        });
+
+        // Build days from API response, filling in empty days based on durationDays
+        const apiDays = res.data.days.map((d) => ({
+          dayNumber: d.dayNumber,
+          stops: d.stops.sort((a, b) => a.orderIndex - b.orderIndex),
+        }));
+
+        const totalDays = res.data.durationDays ?? 1;
+        const days: DayGroup[] = [];
+        for (let i = 1; i <= totalDays; i++) {
+          const existing = apiDays.find((d) => d.dayNumber === i);
+          days.push(existing ?? { dayNumber: i, stops: [] });
+        }
+
+        dispatch({ type: 'INIT', days });
       } else {
         setError(res.error ?? 'Failed to load plan');
       }
