@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,8 +16,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { api } from '../../lib/api';
-import type { PlanDetailResponse } from '../../lib/types';
 
 const DURATION_OPTIONS = [1, 2, 3, 4, 5] as const;
 
@@ -28,34 +25,20 @@ export default function CustomBuilderScreen() {
   const [name, setName] = useState('');
   const [city, setCity] = useState('Miami');
   const [days, setDays] = useState(2);
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const canCreate = name.trim().length > 0 && city.trim().length > 0;
 
-  const handleCreate = async () => {
-    if (!canCreate || creating) return;
-
-    setCreating(true);
-    setError(null);
+  const handleCreate = () => {
+    if (!canCreate) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    const res = await api<PlanDetailResponse>('/plans', {
-      method: 'POST',
-      body: {
-        name: name.trim(),
-        city: city.trim(),
-        durationDays: days,
+    router.push({
+      pathname: '/plan/edit/new',
+      params: {
+        planName: name.trim(),
+        planCity: city.trim(),
+        planDays: String(days),
       },
     });
-
-    setCreating(false);
-
-    if (res.data) {
-      router.push(`/plan/edit/${res.data.id}`);
-    } else {
-      setError(res.error ?? 'Failed to create plan');
-    }
   };
 
   return (
@@ -155,18 +138,13 @@ export default function CustomBuilderScreen() {
           </View>
         </Animated.View>
 
-        {/* Error */}
-        {error && (
-          <Text style={s.error}>{error}</Text>
-        )}
-
         {/* Create button */}
         <Animated.View entering={FadeInDown.duration(500).delay(200).springify().damping(16)}>
           <TouchableOpacity
             onPress={handleCreate}
-            disabled={!canCreate || creating}
+            disabled={!canCreate}
             activeOpacity={0.8}
-            style={{ opacity: canCreate && !creating ? 1 : 0.5 }}
+            style={{ opacity: canCreate ? 1 : 0.5 }}
           >
             <LinearGradient
               colors={[colors.sunsetOrange, '#ea580c']}
@@ -174,14 +152,8 @@ export default function CustomBuilderScreen() {
               end={{ x: 1, y: 0 }}
               style={s.createBtn}
             >
-              {creating ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Ionicons name="sparkles" size={20} color="#FFFFFF" />
-                  <Text style={s.createBtnText}>Create & Start Editing</Text>
-                </>
-              )}
+              <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+              <Text style={s.createBtnText}>Start Building</Text>
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>
@@ -302,13 +274,6 @@ const s = StyleSheet.create({
   },
   durationTextActive: {
     color: '#FFFFFF',
-  },
-  error: {
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: colors.error,
-    textAlign: 'center',
-    marginBottom: spacing.md,
   },
   createBtn: {
     flexDirection: 'row',

@@ -1,5 +1,4 @@
 import { useReducer, useCallback, useEffect, useState } from 'react';
-import { Alert } from 'react-native';
 import { api } from './api';
 import type { Place, PlanStop, PlanDetailResponse, StopInput } from './types';
 
@@ -61,7 +60,6 @@ function reducer(state: State, action: Action): State {
     }
 
     case 'MOVE_TO_DAY': {
-      // Extract the stop from its source day
       const sourceDay = state.days.find((d) => d.dayNumber === action.fromDay);
       if (!sourceDay || action.stopIndex >= sourceDay.stops.length) return state;
 
@@ -70,7 +68,6 @@ function reducer(state: State, action: Action): State {
         dayNumber: action.toDay,
       };
 
-      // Remove from source day
       let days = state.days.map((day) => {
         if (day.dayNumber !== action.fromDay) return day;
         const stops = [...day.stops];
@@ -78,7 +75,6 @@ function reducer(state: State, action: Action): State {
         return { ...day, stops };
       });
 
-      // Add to target day
       const targetExists = days.some((d) => d.dayNumber === action.toDay);
       if (targetExists) {
         days = days.map((day) => {
@@ -90,9 +86,7 @@ function reducer(state: State, action: Action): State {
         days.sort((a, b) => a.dayNumber - b.dayNumber);
       }
 
-      // Remove empty days
       days = days.filter((d) => d.stops.length > 0);
-
       return { ...state, days: recalcOrderIndices(days), isDirty: true };
     }
 
@@ -100,7 +94,7 @@ function reducer(state: State, action: Action): State {
       const newStop: PlanStop & { id?: string } = {
         placeId: action.place.id,
         dayNumber: action.dayNumber,
-        orderIndex: 0, // will be recalculated
+        orderIndex: 0,
         timeBlock: null,
         suggestedArrival: null,
         suggestedDurationMin: 45,
@@ -135,7 +129,15 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-export function usePlanEditor(planId: string) {
+type NewPlanConfig = {
+  name: string;
+  city: string;
+  durationDays: number;
+};
+
+export function usePlanEditor(planId: string, newPlanConfig?: NewPlanConfig) {
+  const isNew = planId === 'new';
+
   const [state, dispatch] = useReducer(reducer, {
     days: [],
     isDirty: false,
@@ -143,31 +145,49 @@ export function usePlanEditor(planId: string) {
   });
 
   const [plan, setPlan] = useState<PlanDetailResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [savedPlanId, setSavedPlanId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch plan data
+  // Initialize: fetch existing plan or create local empty plan
   useEffect(() => {
+    if (isNew && newPlanConfig) {
+      const totalDays = newPlanConfig.durationDays;
+      const days: DayGroup[] = Array.from({ length: totalDays }, (_, i) => ({
+        dayNumber: i + 1,
+        stops: [],
+      }));
+      setPlan({
+        id: 'new',
+        name: newPlanConfig.name,
+        city: newPlanConfig.city,
+        type: 'custom',
+        description: null,
+        durationDays: totalDays,
+        tripContext: null,
+        isPublic: false,
+        days: [],
+      });
+      dispatch({ type: 'INIT', days });
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       const res = await api<PlanDetailResponse>(`/plans/${planId}`);
       if (cancelled) return;
       if (res.data) {
         setPlan(res.data);
-
-        // Build days from API response, filling in empty days based on durationDays
         const apiDays = res.data.days.map((d) => ({
           dayNumber: d.dayNumber,
           stops: d.stops.sort((a, b) => a.orderIndex - b.orderIndex),
         }));
-
         const totalDays = res.data.durationDays ?? 1;
         const days: DayGroup[] = [];
         for (let i = 1; i <= totalDays; i++) {
           const existing = apiDays.find((d) => d.dayNumber === i);
           days.push(existing ?? { dayNumber: i, stops: [] });
         }
-
         dispatch({ type: 'INIT', days });
       } else {
         setError(res.error ?? 'Failed to load plan');
@@ -175,9 +195,9 @@ export function usePlanEditor(planId: string) {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [planId]);
+  }, [planId, isNew]);
 
-  const save = useCallback(async () => {
+  const save = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
     dispatch({ type: 'SET_SAVING', value: true });
 
     const stops: StopInput[] = state.days.flatMap((day) =>
@@ -190,20 +210,60 @@ export function usePlanEditor(planId: string) {
       }))
     );
 
-    const res = await api<PlanDetailResponse>(`/plans/${planId}/stops`, {
+    // New plan: create plan first, then save stops
+    if (isNew && !savedPlanId) {
+      if (!newPlanConfig) {
+        dispatch({ type: 'SET_SAVING', value: false });
+        return { success: false, error: 'Missing plan configuration' };
+      }
+
+      const createRes = await api<PlanDetailResponse>('/plans', {
+        method: 'POST',
+        body: {
+          name: newPlanConfig.name,
+          city: newPlanConfig.city,
+          durationDays: newPlanConfig.durationDays,
+        },
+      });
+
+      if (!createRes.data) {
+        dispatch({ type: 'SET_SAVING', value: false });
+        return { success: false, error: createRes.error ?? 'Failed to create plan' };
+      }
+
+      const newId = createRes.data.id;
+      setSavedPlanId(newId);
+
+      if (stops.length > 0) {
+        const stopsRes = await api<PlanDetailResponse>(`/plans/${newId}/stops`, {
+          method: 'PUT',
+          body: { stops },
+        });
+        if (!stopsRes.data) {
+          dispatch({ type: 'SET_SAVING', value: false });
+          return { success: false, error: stopsRes.error ?? 'Failed to save stops' };
+        }
+      }
+
+      dispatch({ type: 'MARK_SAVED' });
+      return { success: true };
+    }
+
+    // Existing plan: update stops
+    const targetId = savedPlanId ?? planId;
+    const res = await api<PlanDetailResponse>(`/plans/${targetId}/stops`, {
       method: 'PUT',
       body: { stops },
     });
 
     if (res.data) {
       dispatch({ type: 'MARK_SAVED' });
-      return true;
+      return { success: true };
     } else {
       dispatch({ type: 'SET_SAVING', value: false });
-      Alert.alert('Error', res.error ?? 'Failed to save changes');
-      return false;
+      return { success: false, error: res.error ?? 'Failed to save changes' };
     }
-  }, [planId, state.days]);
+  }, [planId, savedPlanId, isNew, newPlanConfig, state.days]);
 
   return {
     plan,

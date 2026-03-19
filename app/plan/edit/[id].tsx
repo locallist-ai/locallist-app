@@ -20,10 +20,20 @@ import { PlaceSearchModal } from '../../../components/plan-editor/PlaceSearchMod
 import { ConfirmModal } from '../../../components/ui/ConfirmModal';
 
 export default function PlanEditScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, planName, planCity, planDays } = useLocalSearchParams<{
+    id: string;
+    planName?: string;
+    planCity?: string;
+    planDays?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { plan, days, isDirty, isSaving, loading, error, dispatch, save } = usePlanEditor(id!);
+
+  const newPlanConfig = id === 'new' && planName && planCity
+    ? { name: planName, city: planCity, durationDays: Number(planDays) || 2 }
+    : undefined;
+
+  const { plan, days, isDirty, isSaving, loading, error, dispatch, save } = usePlanEditor(id!, newPlanConfig);
 
   // Move to day state
   const [moveState, setMoveState] = useState<{
@@ -40,12 +50,15 @@ export default function PlanEditScreen() {
 
   // Unsaved changes confirm modal
   const [discardVisible, setDiscardVisible] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const pendingAction = useRef<any>(null);
 
   const handleSave = useCallback(async () => {
-    const success = await save();
-    if (success) {
+    const result = await save();
+    if (result.success) {
       router.back();
+    } else {
+      setSaveError(result.error ?? 'Failed to save');
     }
   }, [save]);
 
@@ -191,6 +204,18 @@ export default function PlanEditScreen() {
           setAddState({ ...addState, visible: false });
         }}
         onClose={() => setAddState({ ...addState, visible: false })}
+      />
+
+      {/* Save error */}
+      <ConfirmModal
+        visible={!!saveError}
+        icon="alert-circle-outline"
+        iconColor={colors.error}
+        title="Save Failed"
+        body={saveError ?? ''}
+        confirmLabel="OK"
+        onCancel={() => setSaveError(null)}
+        onConfirm={() => setSaveError(null)}
       />
 
       {/* Discard changes confirm */}
