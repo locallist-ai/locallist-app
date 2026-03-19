@@ -135,7 +135,7 @@ export async function api<T>(
     return { data: json as T, error: null, errorBody: null, status: res.status };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Network error';
-    const isTimeout = err instanceof DOMException && err.name === 'AbortError';
+    const isTimeout = err instanceof Error && err.name === 'AbortError';
     logger.error('API request failed', err);
     return {
       data: null,
