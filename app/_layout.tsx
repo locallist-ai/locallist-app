@@ -188,6 +188,13 @@ function AppStack() {
         }}
       />
       <Stack.Screen
+        name="plan/edit/[id]"
+        options={{
+          title: '',
+          headerBackTitle: 'Back',
+        }}
+      />
+      <Stack.Screen
         name="follow/[id]"
         options={{
           title: 'Follow Mode',

@@ -87,10 +87,11 @@ function groupStopsByDay(stops: PlanStop[]): DayGroup[] {
 export default function PlanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [createdById, setCreatedById] = useState<string | null>(null);
   const [days, setDays] = useState<DayGroup[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,6 +133,7 @@ export default function PlanDetailScreen() {
         if (cancelled) return;
         if (res.data) {
           setPlan(res.data);
+          setCreatedById(res.data.createdById ?? null);
           setDays(res.data.days.map((d) => ({
             dayNumber: d.dayNumber,
             stops: d.stops.sort((a, b) => a.orderIndex - b.orderIndex),
@@ -172,6 +174,8 @@ export default function PlanDetailScreen() {
       </View>
     );
   }
+
+  const isOwner = !!(user && createdById && user.id === createdById);
 
   const localCover = PLAN_COVERS[plan.name];
   const heroImageUrl = plan.image ?? days[0]?.stops[0]?.place?.photos?.[0] ?? undefined;
@@ -227,6 +231,20 @@ export default function PlanDetailScreen() {
         </View>
 
         {plan.description && <Text style={s.description}>{plan.description}</Text>}
+
+        {/* Edit button (owner only) */}
+        {isOwner && id !== 'preview' && (
+          <TouchableOpacity
+            style={s.editBtn}
+            onPress={() => router.push(`/plan/edit/${id}`)}
+            activeOpacity={0.7}
+            accessibilityLabel="Edit this plan"
+            accessibilityRole="button"
+          >
+            <Ionicons name="create-outline" size={16} color={colors.sunsetOrange} />
+            <Text style={s.editBtnText}>Edit Plan</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Builder message */}
         {message && (
@@ -441,6 +459,16 @@ const s = StyleSheet.create({
   description: {
     fontFamily: fonts.body, fontSize: 15, lineHeight: 22,
     color: colors.textSecondary, marginBottom: spacing.md,
+  },
+  editBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 10, marginBottom: spacing.md,
+    borderRadius: borderRadius.md, borderWidth: 1,
+    borderColor: colors.sunsetOrange + '40',
+    backgroundColor: colors.sunsetOrange + '08',
+  },
+  editBtnText: {
+    fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.sunsetOrange,
   },
 
   // Builder message

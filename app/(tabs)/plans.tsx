@@ -8,12 +8,13 @@ import {
   RefreshControl,
   ScrollView,
 } from 'react-native';
-import { router, useNavigation } from 'expo-router';
+import { router, useNavigation, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { getCached, setCache, isFresh } from '../../lib/api-cache';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
 import { SkeletonCard } from '../../components/ui/SkeletonCard';
@@ -44,19 +45,32 @@ function sortPlans(list: Plan[]): Plan[] {
   });
 }
 
-type PlansMode = 'chooser' | 'curated';
+type PlansMode = 'chooser' | 'curated' | 'mine';
 
 export default function PlansScreen() {
   const { t } = useTranslation();
+  const { isAuthenticated } = useAuth();
   const navigation = useNavigation();
   const [mode, setMode] = useState<PlansMode>('chooser');
+  const [myPlans, setMyPlans] = useState<Plan[]>([]);
+
+  // Fetch user's plans when tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAuthenticated) return;
+      (async () => {
+        const res = await api<{ plans: Plan[] }>('/plans/mine');
+        if (res.data) setMyPlans(res.data.plans ?? []);
+      })();
+    }, [isAuthenticated])
+  );
 
   // Show/hide native header with back button based on mode
   useEffect(() => {
-    if (mode === 'curated') {
+    if (mode === 'curated' || mode === 'mine') {
       navigation.setOptions({
         headerShown: true,
-        title: '',
+        title: mode === 'mine' ? 'My Plans' : '',
         headerLeft: () => (
           <TouchableOpacity
             onPress={() => setMode('chooser')}
@@ -139,7 +153,7 @@ export default function PlansScreen() {
   if (mode === 'chooser') {
     return (
       <View style={s.root}>
-        <View style={s.chooserContainer}>
+        <ScrollView contentContainerStyle={s.chooserContainer} showsVerticalScrollIndicator={false}>
           {/* Explore curated plans */}
           <TouchableOpacity
             style={s.chooserCard}
@@ -195,7 +209,72 @@ export default function PlansScreen() {
             </View>
             <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
-        </View>
+
+          {/* My Plans */}
+          {isAuthenticated && (
+            <TouchableOpacity
+              style={s.chooserCard}
+              activeOpacity={0.8}
+              onPress={() => setMode('mine')}
+            >
+              <View style={[s.chooserIconWrap, { backgroundColor: colors.sunsetOrange + '12' }]}>
+                <Ionicons name="bookmark-outline" size={32} color={colors.sunsetOrange} />
+              </View>
+              <View style={s.chooserTextWrap}>
+                <Text style={s.chooserTitle}>My Plans</Text>
+                <Text style={s.chooserSub}>
+                  {myPlans.length > 0
+                    ? `${myPlans.length} ${myPlans.length === 1 ? 'plan' : 'plans'} saved`
+                    : 'Your created plans'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (mode === 'mine') {
+    return (
+      <View style={s.root}>
+        {myPlans.length === 0 ? (
+          <View style={s.center}>
+            <Ionicons name="bookmark-outline" size={56} color={colors.textSecondary + '60'} />
+            <Text style={s.emptyTitle}>No plans yet</Text>
+            <Text style={s.emptyBody}>
+              Create your first plan with "Build Your Own"
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={myPlans}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={s.list}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item, index }) => (
+              <Animated.View entering={FadeInDown.delay(index * 80)}>
+                <TouchableOpacity
+                  style={s.myPlanRow}
+                  activeOpacity={0.7}
+                  onPress={() => router.push(`/plan/${item.id}`)}
+                >
+                  <View style={s.myPlanIcon}>
+                    <Ionicons name="map" size={20} color={colors.sunsetOrange} />
+                  </View>
+                  <View style={s.myPlanInfo}>
+                    <Text style={s.myPlanName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={s.myPlanMeta}>
+                      {item.city} · {item.durationDays} {item.durationDays === 1 ? 'day' : 'days'}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+          />
+        )}
       </View>
     );
   }
@@ -331,6 +410,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
+    paddingVertical: spacing.lg,
   },
   chooserCard: {
     flexDirection: 'row',
@@ -378,6 +458,36 @@ const s = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
     lineHeight: 18,
+  },
+  myPlanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bgCard,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  myPlanIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.sunsetOrange + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  myPlanInfo: {
+    flex: 1,
+  },
+  myPlanName: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: colors.deepOcean,
+  },
+  myPlanMeta: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textSecondary,
   },
 
   center: {
