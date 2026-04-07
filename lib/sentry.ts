@@ -11,17 +11,12 @@ const SENTRY_DSN = Constants.expoConfig?.extra?.sentryDsn
   ?? '';
 
 export function initSentry(): void {
-  if (!SENTRY_DSN) {
-    if (IS_DEV) console.log('[Sentry] No DSN configured — skipping init');
-    return;
-  }
-
   Sentry.init({
-    dsn: SENTRY_DSN,
-    debug: IS_DEV,
+    dsn: SENTRY_DSN || undefined,
+    debug: IS_DEV && !!SENTRY_DSN,
     environment: IS_DEV ? 'development' : 'production',
     tracesSampleRate: IS_DEV ? 1.0 : 0.2,
-    enabled: !IS_DEV, // Only send events in production
+    enabled: !IS_DEV && !!SENTRY_DSN,
   });
 }
 

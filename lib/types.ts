@@ -67,12 +67,7 @@ export type AuthUser = {
   name: string | null;
   image: string | null;
   tier: 'free' | 'pro';
-};
-
-export type AuthResponse = {
-  accessToken: string;
-  refreshToken: string;
-  user: AuthUser;
+  role: string;
 };
 
 export type PlanDetailResponse = Plan & {

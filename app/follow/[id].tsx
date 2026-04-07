@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
+  Modal,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,8 +42,8 @@ const mapToStop = (planStop: PlanStop): Stop => ({
 });
 
 /** Map PlanStop to the MapStop shape expected by PlanMap */
-const mapToMapStop = (planStop: PlanStop): MapStop => ({
-  id: planStop.placeId,
+const mapToMapStop = (planStop: PlanStop, index: number): MapStop => ({
+  id: `${planStop.placeId}-${index}`,
   name: planStop.place?.name ?? 'Unknown',
   latitude: parseFloat(planStop.place?.latitude ?? '0'),
   longitude: parseFloat(planStop.place?.longitude ?? '0'),
@@ -61,6 +61,7 @@ export default function FollowModeScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [completed, setCompleted] = useState(false);
 
   // Animated progress bar width (0..1)
   const progressAnim = useSharedValue(0);
@@ -162,15 +163,12 @@ export default function FollowModeScreen() {
   };
 
   const handleComplete = async () => {
-    // Haptic feedback for completion
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     if (session) {
       await api(`/follow/${session.id}/complete`, { method: 'PATCH' });
     }
-    Alert.alert('Trip Complete!', 'You finished the plan. Enjoy your trip!', [
-      { text: 'Done', onPress: () => router.back() },
-    ]);
+    setCompleted(true);
   };
 
   const handlePause = () => {
@@ -251,6 +249,29 @@ export default function FollowModeScreen() {
           />
         )}
       </View>
+
+      {/* Completion modal */}
+      <Modal visible={completed} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <View style={s.modalIconWrap}>
+              <Ionicons name="checkmark-circle" size={64} color={colors.successEmerald} />
+            </View>
+            <Text style={s.modalTitle}>Trip Complete!</Text>
+            <Text style={s.modalSubtitle}>
+              You visited {allStops.length} {allStops.length === 1 ? 'place' : 'places'} in {planName || 'your plan'}.
+              {'\n'}Enjoy the rest of your trip!
+            </Text>
+            <TouchableOpacity
+              style={s.modalBtn}
+              activeOpacity={0.8}
+              onPress={() => { setCompleted(false); router.back(); }}
+            >
+              <Text style={s.modalBtnText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View >
   );
 }
@@ -366,5 +387,57 @@ const s = StyleSheet.create({
   },
   bottomSheet: {
     flex: 1,
+  },
+
+  // Completion modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  modalCard: {
+    backgroundColor: colors.bgMain,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 340,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  modalIconWrap: {
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    fontFamily: fonts.headingBold,
+    fontSize: 24,
+    color: colors.deepOcean,
+    marginBottom: spacing.sm,
+  },
+  modalSubtitle: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: spacing.lg,
+  },
+  modalBtn: {
+    backgroundColor: colors.sunsetOrange,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 16,
+    color: '#FFFFFF',
   },
 });

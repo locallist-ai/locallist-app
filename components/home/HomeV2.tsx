@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cityTitle: {
-    fontFamily: fonts.headingBold,
+    fontFamily: fonts.bodyBold,
     fontSize: 38,
     lineHeight: 46,
     color: '#FFFFFF',

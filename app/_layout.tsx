@@ -148,23 +148,40 @@ function RootLayout() {
 export default Sentry.wrap(RootLayout);
 
 // Shows login if not authenticated, app stack if authenticated
+// Crossfade transition between login ↔ app for a polished feel.
 function AuthGate() {
   const { isAuthenticated, isLoading } = useAuth();
+  const fadeAnim = useRef(new RNAnimated.Value(0)).current;
+  const [ready, setReady] = useState(false);
 
-  // Still checking stored tokens
+  useEffect(() => {
+    if (isLoading) return;
+    if (!ready) {
+      // First render after auth resolves — appear instantly
+      fadeAnim.setValue(1);
+      setReady(true);
+      return;
+    }
+    // Auth state changed (login/logout) — crossfade
+    fadeAnim.setValue(0);
+    RNAnimated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 350,
+      useNativeDriver: true,
+    }).start();
+  }, [isAuthenticated, isLoading]);
+
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bgMain, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Loading...</Text>
-      </View>
+      <View style={{ flex: 1, backgroundColor: colors.bgMain }} />
     );
   }
 
-  if (!isAuthenticated) {
-    return <LoginScreen />;
-  }
-
-  return <AppStack />;
+  return (
+    <RNAnimated.View style={{ flex: 1, opacity: fadeAnim }}>
+      {isAuthenticated ? <AppStack /> : <LoginScreen />}
+    </RNAnimated.View>
+  );
 }
 
 function AppStack() {
@@ -176,14 +193,17 @@ function AppStack() {
         headerTitleStyle: { fontWeight: '600' },
         contentStyle: { backgroundColor: colors.bgMain },
         headerShadowVisible: false,
+        animation: 'slide_from_right',
+        animationDuration: 250,
       }}
     >
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="builder" options={{ headerShown: false }} />
       <Stack.Screen
         name="plan/[id]"
         options={{
-          title: 'Plan',
+          title: '',
           headerBackTitle: 'Back',
         }}
       />
@@ -199,6 +219,7 @@ function AppStack() {
         options={{
           title: 'Follow Mode',
           headerShown: false,
+          animation: 'slide_from_bottom',
         }}
       />
       <Stack.Screen

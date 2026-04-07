@@ -27,7 +27,9 @@ import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { getPreviewPlan } from '../../lib/plan-store';
 import { PhotoHero } from '../../components/ui/PhotoHero';
+import { PlanOverviewMap } from '../../components/map/PlanOverviewMap';
 import type { Plan, PlanStop, PlanDetailResponse, BuilderResponse } from '../../lib/types';
+import type { MapStop } from '../../components/map/PlanMap';
 
 type DayGroup = { dayNumber: number; stops: (PlanStop & { id?: string })[] };
 
@@ -183,27 +185,36 @@ export default function PlanDetailScreen() {
   const heroSubtitle = `${plan.city} \u00B7 ${plan.durationDays} ${plan.durationDays === 1 ? 'day' : 'days'}`;
   const totalStops = days.reduce((acc, d) => acc + d.stops.length, 0);
 
+  // Build MapStop[] for the overview map
+  const mapStops: MapStop[] = days.flatMap((d) =>
+    d.stops
+      .filter((s) => s.place?.latitude && s.place?.longitude)
+      .map((s, i) => ({
+        id: `${s.placeId}-${d.dayNumber}-${i}`,
+        name: s.place?.name ?? '',
+        latitude: parseFloat(s.place?.latitude ?? '0'),
+        longitude: parseFloat(s.place?.longitude ?? '0'),
+        category: s.place?.category,
+      })),
+  );
+
   return (
     <View style={s.root}>
-      {/* Hero parallax */}
-      <Animated.View style={[s.heroContainer, heroAnimatedStyle]}>
-        <PhotoHero
-          localImage={localCover}
-          imageUrl={heroImageUrl}
-          fallbackCategory={heroFallbackCategory}
-          title={plan.name}
-          subtitle={heroSubtitle}
-          height={HERO_MAX}
-          withSafeArea
-        />
-      </Animated.View>
-
       <Animated.ScrollView
-        contentContainerStyle={[s.scroll, { paddingTop: HERO_MAX + spacing.md }]}
+        contentContainerStyle={[s.scroll, { paddingTop: spacing.md }]}
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
+        {/* Plan title */}
+        <Text style={s.planTitle}>{plan.name}</Text>
+        {/* Overview map showing all stops + route */}
+        {mapStops.length >= 2 && (
+          <View style={s.overviewMapContainer}>
+            <PlanOverviewMap stops={mapStops} />
+          </View>
+        )}
+
         {/* Quick stats */}
         <View style={s.statsRow}>
           <View style={s.statItem}>
@@ -309,17 +320,12 @@ export default function PlanDetailScreen() {
             router.push(`/follow/${id === 'preview' ? plan.id : id}`);
           }}
         >
-          <LinearGradient
-            colors={[colors.electricBlue, '#2563eb']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={s.followBtn}
-          >
+          <View style={s.followBtn}>
             <Ionicons name="navigate-outline" size={20} color="#FFFFFF" />
             <Text style={s.followBtnText}>
               {isAuthenticated ? 'Follow this plan' : 'Sign in to follow'}
             </Text>
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -439,6 +445,25 @@ const s = StyleSheet.create({
   heroContainer: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, overflow: 'hidden',
   },
+  overviewMapContainer: {
+    height: 300,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+  },
+  planTitle: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 22,
+    color: colors.deepOcean,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  planSubtitle: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
 
   // Stats row
   statsRow: {
@@ -553,6 +578,8 @@ const s = StyleSheet.create({
   followBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, paddingVertical: 16, borderRadius: borderRadius.lg,
+    borderCurve: 'continuous',
+    backgroundColor: colors.sunsetOrange,
   },
   followBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' },
 });

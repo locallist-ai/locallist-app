@@ -194,21 +194,7 @@ export default function PlansScreen() {
             <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
 
-          {/* Import from video */}
-          <TouchableOpacity
-            style={s.chooserCard}
-            activeOpacity={0.8}
-            onPress={() => router.push('/builder/import-video')}
-          >
-            <View style={[s.chooserIconWrap, { backgroundColor: '#fce7f3' }]}>
-              <Ionicons name="videocam-outline" size={32} color="#ec4899" />
-            </View>
-            <View style={s.chooserTextWrap}>
-              <Text style={s.chooserTitle}>{t('plans.importVideo')}</Text>
-              <Text style={s.chooserSub}>{t('plans.importVideoSub')}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
-          </TouchableOpacity>
+          {/* Import from video — deferred to post-V1 (Session 71) */}
 
           {/* My Plans */}
           {isAuthenticated && (
