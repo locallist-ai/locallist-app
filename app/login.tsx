@@ -12,15 +12,29 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
+import {
+  getAuth,
+  signInWithCredential,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  AppleAuthProvider,
+  updateProfile,
+} from '@react-native-firebase/auth';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { colors, fonts, spacing, borderRadius } from '../lib/theme';
-import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import type { AuthResponse } from '../lib/types';
+import { logger } from '../lib/logger';
+import { ForgotPasswordModal } from '../components/ui/ForgotPasswordModal';
 
-// Required for Google Auth redirect to close the browser on web
-WebBrowser.maybeCompleteAuthSession();
+// Configure Google Sign-In with webClientId from google-services.json
+GoogleSignin.configure({
+  webClientId: '195843426507-92etgqen23mv2epi9i3b4so8ghasd7lu.apps.googleusercontent.com',
+});
+
+function getFirebaseAuth() {
+  return getAuth();
+}
 
 type AuthStep = 'choose' | 'credentials';
 type CredentialsMode = 'login' | 'register';
@@ -35,7 +49,6 @@ const PASSWORD_RULES = [
 ];
 
 export default function LoginScreen() {
-  const { login } = useAuth();
   const [step, setStep] = useState<AuthStep>('choose');
   const [credentialsMode, setCredentialsMode] = useState<CredentialsMode>('login');
   const [email, setEmail] = useState('');
@@ -44,50 +57,13 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const [forgotModalVisible, setForgotModalVisible] = useState(false);
+  const { syncError, retrySync } = useAuth();
 
   // Check Apple Sign In availability on mount
   useEffect(() => {
     AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
   }, []);
-
-  // Google OAuth setup — pass a dummy clientId when env vars are missing to satisfy
-  // the hook's invariant (can't skip hooks conditionally). The Google button is hidden
-  // when unconfigured so the dummy value is never used for a real auth flow.
-  const googleConfigured = !!process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
-  const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || 'unconfigured.apps.googleusercontent.com',
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-  });
-
-  // Handle Google OAuth response
-  useEffect(() => {
-    if (googleResponse?.type !== 'success') return;
-
-    const idToken = googleResponse.params.id_token;
-    if (!idToken) {
-      setError('Google Sign In failed — no token received');
-      setLoading(null);
-      return;
-    }
-
-    (async () => {
-      const res = await api<AuthResponse>(
-        '/auth/signin',
-        {
-          method: 'POST',
-          body: { provider: 'google', idToken },
-        },
-      );
-
-      if (res.data) {
-        await login(res.data.user, res.data.accessToken, res.data.refreshToken);
-      } else {
-        setError(res.error ?? 'Google Sign In failed');
-      }
-      setLoading(null);
-    })();
-  }, [googleResponse]);
 
   const handleAppleSignIn = async () => {
     try {
@@ -100,29 +76,39 @@ export default function LoginScreen() {
         ],
       });
 
-      const name = credential.fullName
-        ? [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(' ')
-        : undefined;
+      if (!credential.identityToken) {
+        setError('Apple Sign In failed — no token received');
+        return;
+      }
 
-      const res = await api<AuthResponse>(
-        '/auth/signin',
-        {
-          method: 'POST',
-          body: {
-            provider: 'apple',
-            idToken: credential.identityToken,
-            name: name || undefined,
-          },
-        },
+      // Create Firebase credential from Apple token
+      const appleCredential = AppleAuthProvider.credential(
+        credential.identityToken,
+        credential.authorizationCode ?? undefined,
       );
 
-      if (res.data) {
-        await login(res.data.user, res.data.accessToken, res.data.refreshToken);
-      } else {
-        setError(res.error ?? 'Sign in failed');
+      // Sign in to Firebase (triggers onAuthStateChanged → backend sync)
+      const userCredential = await signInWithCredential(getFirebaseAuth(), appleCredential);
+
+      // Update display name if Apple provided it (only on first sign-in)
+      if (credential.fullName) {
+        const displayName = [credential.fullName.givenName, credential.fullName.familyName]
+          .filter(Boolean)
+          .join(' ');
+        if (displayName) {
+          await updateProfile(userCredential.user, { displayName });
+        }
       }
     } catch (err: unknown) {
-      if (err instanceof Error && 'code' in err && (err as { code: string }).code === 'ERR_REQUEST_CANCELED') return;
+      if (err instanceof Error && 'code' in err) {
+        const code = (err as { code: string }).code;
+        if (code === 'ERR_REQUEST_CANCELED') return;
+        if (code === 'auth/account-exists-with-different-credential') {
+          setError('This email is already registered with a different sign-in method. Try using your email and password instead.');
+          return;
+        }
+      }
+      logger.error('Apple Sign In failed', err);
       setError('Apple Sign In failed');
     } finally {
       setLoading(null);
@@ -130,19 +116,67 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSignIn = async () => {
-    setError(null);
-    setLoading('google');
+    try {
+      setError(null);
+      setLoading('google');
 
-    if (!googleRequest) {
-      setError('Google Sign In is not configured yet');
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const response = await GoogleSignin.signIn();
+
+      if (!response.data?.idToken) {
+        setError('Google Sign In failed — no token received');
+        return;
+      }
+
+      // Create Firebase credential from Google token
+      const googleCredential = GoogleAuthProvider.credential(response.data.idToken);
+
+      // Sign in to Firebase (triggers onAuthStateChanged → backend sync)
+      await signInWithCredential(getFirebaseAuth(), googleCredential);
+    } catch (err: unknown) {
+      if (err instanceof Error && 'code' in err) {
+        const code = (err as { code: string }).code;
+        // User cancelled
+        if (code === 'SIGN_IN_CANCELLED' || code === '12501') return;
+        if (code === 'auth/account-exists-with-different-credential') {
+          setError('This email is already registered with email/password. Please sign in with your password instead.');
+          return;
+        }
+      }
+      logger.error('Google Sign In failed', err);
+      setError('Google Sign In failed');
+    } finally {
       setLoading(null);
+    }
+  };
+
+  const handleLogin = async () => {
+    setError(null);
+
+    if (!email.trim() || !email.includes('@')) {
+      setError('Please enter a valid email');
+      return;
+    }
+    if (!password.trim()) {
+      setError('Please enter a password');
       return;
     }
 
+    setLoading('email');
+
     try {
-      await googlePromptAsync();
-    } catch {
-      setError('Google Sign In failed');
+      // Firebase email/password sign-in (triggers onAuthStateChanged → backend sync)
+      await signInWithEmailAndPassword(getFirebaseAuth(), email.trim(), password.trim());
+    } catch (err: unknown) {
+      const code = err instanceof Error && 'code' in err ? (err as { code: string }).code : '';
+      if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        setError('Invalid email or password');
+      } else if (code === 'auth/too-many-requests') {
+        setError('Too many attempts. Please try again later.');
+      } else {
+        setError('Login failed');
+      }
+    } finally {
       setLoading(null);
     }
   };
@@ -150,7 +184,6 @@ export default function LoginScreen() {
   const handleRegister = async () => {
     setError(null);
 
-    // Validate inputs
     if (!email.trim() || !email.includes('@')) {
       setError('Please enter a valid email');
       return;
@@ -162,59 +195,25 @@ export default function LoginScreen() {
 
     setLoading('email');
 
-    const res = await api<AuthResponse>(
-      '/auth/register',
-      {
-        method: 'POST',
-        body: {
-          email: email.trim(),
-          password: password.trim(),
-          name: name.trim() || undefined,
-        },
-      },
-    );
+    try {
+      // Firebase create account (triggers onAuthStateChanged → backend sync)
+      const userCredential = await createUserWithEmailAndPassword(getFirebaseAuth(), email.trim(), password.trim());
 
-    setLoading(null);
-
-    if (res.data) {
-      await login(res.data.user, res.data.accessToken, res.data.refreshToken);
-    } else {
-      setError(res.error ?? 'Registration failed');
-    }
-  };
-
-  const handleLogin = async () => {
-    setError(null);
-
-    // Validate inputs
-    if (!email.trim() || !email.includes('@')) {
-      setError('Please enter a valid email');
-      return;
-    }
-    if (!password.trim()) {
-      setError('Please enter a password');
-      return;
-    }
-
-    setLoading('email');
-
-    const res = await api<AuthResponse>(
-      '/auth/login',
-      {
-        method: 'POST',
-        body: {
-          email: email.trim(),
-          password: password.trim(),
-        },
-      },
-    );
-
-    setLoading(null);
-
-    if (res.data) {
-      await login(res.data.user, res.data.accessToken, res.data.refreshToken);
-    } else {
-      setError(res.error ?? 'Login failed');
+      // Set display name if provided
+      if (name.trim()) {
+        await updateProfile(userCredential.user, { displayName: name.trim() });
+      }
+    } catch (err: unknown) {
+      const code = err instanceof Error && 'code' in err ? (err as { code: string }).code : '';
+      if (code === 'auth/email-already-in-use') {
+        setError('An account with this email already exists. Try signing in.');
+      } else if (code === 'auth/weak-password') {
+        setError('Password is too weak');
+      } else {
+        setError('Registration failed');
+      }
+    } finally {
+      setLoading(null);
     }
   };
 
@@ -295,6 +294,47 @@ export default function LoginScreen() {
           </View>
         )}
 
+        {syncError && !error && (
+          <View
+            style={{
+              backgroundColor: colors.sunsetOrange + '12',
+              borderRadius: borderRadius.md,
+              borderCurve: 'continuous',
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              marginBottom: spacing.md,
+              width: '100%',
+              alignItems: 'center',
+              gap: spacing.sm,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: fonts.body,
+                fontSize: 14,
+                color: colors.sunsetOrange,
+                textAlign: 'center',
+              }}
+            >
+              {syncError}
+            </Text>
+            <Pressable
+              style={({ pressed }) => ({
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: borderRadius.sm,
+                backgroundColor: colors.sunsetOrange,
+                opacity: pressed ? 0.85 : 1,
+              })}
+              onPress={retrySync}
+            >
+              <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 14, color: '#FFFFFF' }}>
+                Retry
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {step === 'choose' ? (
           <View style={{ width: '100%', gap: 12 }}>
             {/* Apple */}
@@ -329,39 +369,37 @@ export default function LoginScreen() {
               </Pressable>
             )}
 
-            {/* Google — only shown when EXPO_PUBLIC_GOOGLE_CLIENT_ID is set */}
-            {googleConfigured && (
-              <Pressable
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 10,
-                  width: '100%',
-                  paddingVertical: 16,
-                  borderRadius: borderRadius.lg,
-                  borderCurve: 'continuous',
-                  backgroundColor: colors.bgCard,
-                  borderWidth: 1.5,
-                  borderColor: colors.borderColor,
-                  opacity: loading ? 0.6 : pressed ? 0.85 : 1,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
-                onPress={handleGoogleSignIn}
-                disabled={!!loading}
-              >
-                {loading === 'google' ? (
-                  <ActivityIndicator size="small" color={colors.deepOcean} />
-                ) : (
-                  <>
-                    <Ionicons name="logo-google" size={20} color={colors.deepOcean} />
-                    <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.deepOcean }}>
-                      Continue with Google
-                    </Text>
-                  </>
-                )}
-              </Pressable>
-            )}
+            {/* Google */}
+            <Pressable
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                width: '100%',
+                paddingVertical: 16,
+                borderRadius: borderRadius.lg,
+                borderCurve: 'continuous',
+                backgroundColor: colors.bgCard,
+                borderWidth: 1.5,
+                borderColor: colors.borderColor,
+                opacity: loading ? 0.6 : pressed ? 0.85 : 1,
+                transform: [{ scale: pressed ? 0.98 : 1 }],
+              })}
+              onPress={handleGoogleSignIn}
+              disabled={!!loading}
+            >
+              {loading === 'google' ? (
+                <ActivityIndicator size="small" color={colors.deepOcean} />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={20} color={colors.deepOcean} />
+                  <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.deepOcean }}>
+                    Continue with Google
+                  </Text>
+                </>
+              )}
+            </Pressable>
 
             {/* Email */}
             <Pressable
@@ -524,6 +562,28 @@ export default function LoginScreen() {
               )}
             </Pressable>
 
+            {/* Forgot Password (login only) */}
+            {credentialsMode === 'login' && (
+              <Pressable
+                style={({ pressed }) => ({
+                  paddingVertical: spacing.sm,
+                  alignItems: 'center' as const,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+                onPress={() => setForgotModalVisible(true)}
+              >
+                <Text
+                  style={{
+                    fontFamily: fonts.body,
+                    fontSize: 14,
+                    color: colors.electricBlue,
+                  }}
+                >
+                  Forgot password?
+                </Text>
+              </Pressable>
+            )}
+
             {/* Toggle Register/Login */}
             <Pressable
               style={({ pressed }) => ({
@@ -574,6 +634,12 @@ export default function LoginScreen() {
           </View>
         )}
       </ScrollView>
+
+      <ForgotPasswordModal
+        visible={forgotModalVisible}
+        initialEmail={email.trim()}
+        onClose={() => setForgotModalVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

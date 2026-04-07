@@ -10,12 +10,11 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  useAnimatedGestureHandler,
   runOnJS,
 } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { StopCard } from './StopCard';
 import { colors, fonts, borderRadius, spacing } from '../../lib/theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -81,33 +80,28 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
   const callSwipeLeft = () => { if (onSwipeLeft) onSwipeLeft(); };
   const callSwipeRight = () => { if (onSwipeRight) onSwipeRight(); };
 
-  // Gesture handler for swipes
-  const gestureHandler = useAnimatedGestureHandler({
-    onStart: (_, ctx: { startX: number }) => {
-      ctx.startX = translateX.value;
-    },
-    onActive: (event, ctx: { startX: number }) => {
-      translateX.value = ctx.startX + event.translationX;
-    },
-    onEnd: (event) => {
-      // Swipe left (next)
+  const startX = useSharedValue(0);
+
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
+      startX.value = translateX.value;
+    })
+    .onUpdate((event) => {
+      translateX.value = startX.value + event.translationX;
+    })
+    .onEnd((event) => {
       if (event.translationX < -SWIPE_THRESHOLD) {
         translateX.value = withSpring(-400, { damping: 10 });
         runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
         runOnJS(callSwipeLeft)();
-      }
-      // Swipe right (previous)
-      else if (event.translationX > SWIPE_THRESHOLD) {
+      } else if (event.translationX > SWIPE_THRESHOLD) {
         translateX.value = withSpring(400, { damping: 10 });
         runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
         runOnJS(callSwipeRight)();
-      }
-      // No swipe, reset
-      else {
+      } else {
         translateX.value = withSpring(0, { damping: 12 });
       }
-    },
-  });
+    });
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -133,7 +127,7 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <PanGestureHandler onGestureEvent={gestureHandler}>
+      <GestureDetector gesture={panGesture}>
         <Animated.View style={[styles.container, animatedStyle, style]}>
           {/* Handle bar */}
           <View style={styles.handleBar}>
@@ -188,7 +182,7 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
             </TouchableOpacity>
           </View>
         </Animated.View>
-      </PanGestureHandler>
+      </GestureDetector>
     </GestureHandlerRootView>
   );
 };

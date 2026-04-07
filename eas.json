@@ -1,16 +1,21 @@
 {
   "cli": {
-    "version": ">= 12.0.0"
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
     },
     "preview": {
-      "distribution": "internal",
-      "ios": {
-        "simulator": true
+      "distribution": "store",
+      "autoIncrement": true,
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "production": {
@@ -20,9 +25,10 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "",
-        "ascAppId": "",
-        "appleTeamId": ""
+        "ascAppId": "6761691270",
+        "ascApiKeyPath": "C:\\Users\\Pablo\\Downloads\\AuthKey_GL43B4X78G.p8",
+        "ascApiKeyIssuerId": "5c6f3a5c-05d7-42ef-b123-86d4509620ac",
+        "ascApiKeyId": "GL43B4X78G"
       }
     }
   }

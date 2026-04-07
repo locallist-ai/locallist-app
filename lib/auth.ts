@@ -1,33 +1,34 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { api, setTokens, clearTokens, getAccessToken } from './api';
+import '@react-native-firebase/app';
+import { getAuth, onAuthStateChanged, signOut } from '@react-native-firebase/auth';
+import { api } from './api';
 import { logger } from './logger';
+
+function getFirebaseAuth() {
+  return getAuth();
+}
 
 interface User {
   id: string;
   email: string;
   name: string | null;
+  image: string | null;
   tier: 'free' | 'pro';
+  role: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  /** Derived from `user.tier === 'pro'` — gates premium features (RevenueCat subscription). */
   isPro: boolean;
-  /** True when logged-in user is a founder (@locallist.ai). Enables dev tools. */
   isAdmin: boolean;
   isLoading: boolean;
-  login: (userData: User, accessToken: string, refreshToken: string) => Promise<void>;
+  syncError: string | null;
+  retrySync: () => Promise<void>;
   logout: () => Promise<void>;
-  /** Override tier locally for testing. Pass null to reset to real tier. */
   setTierOverride: (tier: 'free' | 'pro' | null) => void;
 }
 
-/**
- * Auth state for the app. On mount, attempts auto-login by reading persisted
- * tokens from SecureStore and fetching /account. `isLoading` stays true until
- * this check completes, allowing screens to show a splash/skeleton.
- */
 const ADMIN_DOMAIN = '@locallist.ai';
 
 const AuthContext = createContext<AuthContextType>({
@@ -36,7 +37,8 @@ const AuthContext = createContext<AuthContextType>({
   isPro: false,
   isAdmin: false,
   isLoading: true,
-  login: async () => { },
+  syncError: null,
+  retrySync: async () => { },
   logout: async () => { },
   setTierOverride: () => { },
 });
@@ -45,45 +47,69 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+async function syncUserWithBackend(): Promise<User | null> {
+  const res = await api<{ user: User }>('/auth/sync', { method: 'POST' });
+  if (res.data?.user) {
+    return res.data.user;
+  }
+  logger.warn('Backend sync failed', res.error);
+  return null;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [tierOverride, setTierOverride] = useState<'free' | 'pro' | null>(null);
+  const syncingRef = React.useRef(false);
 
   const isAdmin = !!user?.email?.endsWith(ADMIN_DOMAIN);
   const effectiveTier = tierOverride ?? user?.tier ?? 'free';
 
-  const login = useCallback(async (userData: User, accessToken: string, refreshToken: string) => {
-    await setTokens(accessToken, refreshToken);
-    setUser(userData);
+  const doSync = useCallback(async () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    try {
+      const backendUser = await syncUserWithBackend();
+      if (backendUser) {
+        setUser(backendUser);
+        setSyncError(null);
+      } else {
+        setUser(null);
+        setSyncError('Could not connect to server. Please try again.');
+      }
+    } finally {
+      syncingRef.current = false;
+    }
   }, []);
 
+  const retrySync = useCallback(async () => {
+    if (!getFirebaseAuth().currentUser) return;
+    setIsLoading(true);
+    await doSync();
+    setIsLoading(false);
+  }, [doSync]);
+
   const logout = useCallback(async () => {
-    await clearTokens();
+    await signOut(getFirebaseAuth());
     setUser(null);
+    setSyncError(null);
     setTierOverride(null);
   }, []);
 
-  // Auto-login: try to load user from stored token on mount
   useEffect(() => {
-    (async () => {
-      try {
-        const token = await getAccessToken();
-        if (!token) {
-          setIsLoading(false);
-          return;
-        }
-        const res = await api<{ user: User }>('/account');
-        if (res.data?.user) {
-          setUser(res.data.user);
-        }
-      } catch (error) {
-        logger.warn('Auto-login failed, starting fresh', error);
-      } finally {
-        setIsLoading(false);
+    const unsubscribe = onAuthStateChanged(getFirebaseAuth(), async (firebaseUser) => {
+      if (firebaseUser) {
+        await doSync();
+      } else {
+        setUser(null);
+        setSyncError(null);
       }
-    })();
-  }, []);
+      setIsLoading(false);
+    });
+
+    return unsubscribe;
+  }, [doSync]);
 
   return React.createElement(
     AuthContext.Provider,
@@ -94,7 +120,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isPro: effectiveTier === 'pro',
         isAdmin,
         isLoading,
-        login,
+        syncError,
+        retrySync,
         logout,
         setTierOverride,
       },

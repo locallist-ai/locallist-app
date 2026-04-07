@@ -90,7 +90,3 @@ Pulsar `a` para abrir en Android. Hot reload funciona automaticamente para cambi
 - `lib/i18n/` — i18n infrastructure (i18next + expo-localization, EN/ES translations)
 - `assets/fonts/` — Inter (4 weights) + Playfair Display (3 weights), loaded via useFonts in _layout.tsx
 
-## Screens NOT yet implemented (backend ready, no UI)
-
-- Place detail screen
-- Builder UI (AI plan wizard) — API endpoint exists, no app screen
