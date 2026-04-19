@@ -20,9 +20,11 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "",
-        "ascAppId": "",
-        "appleTeamId": ""
+        "ascAppId": "6761691270",
+        "appleTeamId": "G5HH86P845",
+        "ascApiKeyPath": "/Users/pablo/.appstoreconnect/AuthKey_GL43B4X78G.p8",
+        "ascApiKeyId": "GL43B4X78G",
+        "ascApiKeyIssuerId": "5c6f3a5c-05d7-42ef-b123-86d4509620ac"
       }
     }
   }
