@@ -82,7 +82,7 @@
         "NSPrivacyTracking": false,
         "NSPrivacyTrackingDomains": []
       },
-      "buildNumber": "2"
+      "buildNumber": "4"
     },
     "android": {
       "package": "app.locallist.android",
