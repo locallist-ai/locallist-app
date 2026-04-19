@@ -4,7 +4,7 @@
     "slug": "locallist",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon-square.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "locallist",
@@ -17,7 +17,6 @@
       "supportsTablet": false,
       "bundleIdentifier": "app.locallist.ios",
       "usesAppleSignIn": true,
-      "deploymentTarget": "16.0",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
@@ -82,12 +81,13 @@
         ],
         "NSPrivacyTracking": false,
         "NSPrivacyTrackingDomains": []
-      }
+      },
+      "buildNumber": "2"
     },
     "android": {
       "package": "app.locallist.android",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
+        "foregroundImage": "./assets/images/icon-square.png",
         "backgroundColor": "#F2EFE9"
       },
       "edgeToEdgeEnabled": true,
@@ -128,8 +128,10 @@
     ],
     "extra": {
       "eas": {
-        "projectId": ""
-      }
-    }
+        "projectId": "b1555ea2-47f5-4e3d-b1c7-63b4642c2aef"
+      },
+      "router": {}
+    },
+    "owner": "pablolocallist"
   }
 }
