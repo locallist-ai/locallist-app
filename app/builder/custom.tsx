@@ -66,7 +66,7 @@ export default function CustomBuilderScreen() {
         </View>
 
         {/* Title */}
-        <Animated.View entering={FadeInDown.duration(500).springify().damping(16)} style={s.titleSection}>
+        <Animated.View entering={FadeInDown.duration(320)} style={s.titleSection}>
           <View style={s.titleIcon}>
             <Ionicons name="map-outline" size={28} color={colors.sunsetOrange} />
           </View>
