@@ -24,6 +24,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 type AuthStep = 'choose' | 'credentials';
 type CredentialsMode = 'login' | 'register';
+type AuthMode = 'signin' | 'signup';
 
 // Password requirements
 const PASSWORD_RULES = [
@@ -37,6 +38,7 @@ const PASSWORD_RULES = [
 export default function LoginScreen() {
   const { login } = useAuth();
   const [step, setStep] = useState<AuthStep>('choose');
+  const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [credentialsMode, setCredentialsMode] = useState<CredentialsMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -131,10 +133,16 @@ export default function LoginScreen() {
 
   const handleGoogleSignIn = async () => {
     setError(null);
+
+    if (!googleConfigured) {
+      setError('Google Sign In no está configurado en este build. Usa Apple o email por ahora.');
+      return;
+    }
+
     setLoading('google');
 
     if (!googleRequest) {
-      setError('Google Sign In is not configured yet');
+      setError('Google Sign In is not ready yet — try again in a moment');
       setLoading(null);
       return;
     }
@@ -253,7 +261,9 @@ export default function LoginScreen() {
             textAlign: 'center',
           }}
         >
-          {step === 'choose' ? 'Sign in to LocalList' : credentialsMode === 'login' ? 'Sign in' : 'Create account'}
+          {step === 'choose'
+            ? (authMode === 'signin' ? 'Welcome back' : 'Join LocalList')
+            : credentialsMode === 'login' ? 'Sign in' : 'Create account'}
         </Text>
         <Text
           style={{
@@ -297,6 +307,48 @@ export default function LoginScreen() {
 
         {step === 'choose' ? (
           <View style={{ width: '100%', gap: 12 }}>
+            {/* Top toggle Sign in / Sign up — deja claro que las 3 opciones
+                de abajo sirven tanto para registrarse como para volver a entrar. */}
+            <View
+              style={{
+                flexDirection: 'row',
+                backgroundColor: colors.bgCard,
+                borderRadius: borderRadius.lg,
+                borderCurve: 'continuous',
+                padding: 4,
+                marginBottom: spacing.sm,
+              }}
+            >
+              {(['signin', 'signup'] as const).map((mode) => {
+                const active = authMode === mode;
+                return (
+                  <Pressable
+                    key={mode}
+                    onPress={() => { setError(null); setAuthMode(mode); }}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: borderRadius.md,
+                      borderCurve: 'continuous',
+                      backgroundColor: active ? colors.sunsetOrange : 'transparent',
+                      alignItems: 'center',
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: fonts.bodySemiBold,
+                        fontSize: 14,
+                        color: active ? '#FFFFFF' : colors.textSecondary,
+                      }}
+                    >
+                      {mode === 'signin' ? 'Sign in' : 'Sign up'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             {/* Apple */}
             {appleAvailable && (
               <Pressable
@@ -322,46 +374,46 @@ export default function LoginScreen() {
                   <>
                     <Ionicons name="logo-apple" size={20} color="#FFFFFF" />
                     <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' }}>
-                      Continue with Apple
+                      {authMode === 'signin' ? 'Sign in with Apple' : 'Sign up with Apple'}
                     </Text>
                   </>
                 )}
               </Pressable>
             )}
 
-            {/* Google — only shown when EXPO_PUBLIC_GOOGLE_CLIENT_ID is set */}
-            {googleConfigured && (
-              <Pressable
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 10,
-                  width: '100%',
-                  paddingVertical: 16,
-                  borderRadius: borderRadius.lg,
-                  borderCurve: 'continuous',
-                  backgroundColor: colors.bgCard,
-                  borderWidth: 1.5,
-                  borderColor: colors.borderColor,
-                  opacity: loading ? 0.6 : pressed ? 0.85 : 1,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
-                onPress={handleGoogleSignIn}
-                disabled={!!loading}
-              >
-                {loading === 'google' ? (
-                  <ActivityIndicator size="small" color={colors.deepOcean} />
-                ) : (
-                  <>
-                    <Ionicons name="logo-google" size={20} color={colors.deepOcean} />
-                    <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.deepOcean }}>
-                      Continue with Google
-                    </Text>
-                  </>
-                )}
-              </Pressable>
-            )}
+            {/* Google — siempre visible. Si el env var no está configurado,
+                handleGoogleSignIn muestra un error claro en runtime en lugar
+                de que el botón desaparezca sin explicación. */}
+            <Pressable
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                width: '100%',
+                paddingVertical: 16,
+                borderRadius: borderRadius.lg,
+                borderCurve: 'continuous',
+                backgroundColor: colors.bgCard,
+                borderWidth: 1.5,
+                borderColor: colors.borderColor,
+                opacity: loading ? 0.6 : pressed ? 0.85 : 1,
+                transform: [{ scale: pressed ? 0.98 : 1 }],
+              })}
+              onPress={handleGoogleSignIn}
+              disabled={!!loading}
+            >
+              {loading === 'google' ? (
+                <ActivityIndicator size="small" color={colors.deepOcean} />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={20} color={colors.deepOcean} />
+                  <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.deepOcean }}>
+                    {authMode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}
+                  </Text>
+                </>
+              )}
+            </Pressable>
 
             {/* Email */}
             <Pressable
@@ -380,12 +432,16 @@ export default function LoginScreen() {
                 opacity: loading ? 0.6 : pressed ? 0.85 : 1,
                 transform: [{ scale: pressed ? 0.98 : 1 }],
               })}
-              onPress={() => { setError(null); setStep('credentials'); setCredentialsMode('login'); }}
+              onPress={() => {
+                setError(null);
+                setStep('credentials');
+                setCredentialsMode(authMode === 'signin' ? 'login' : 'register');
+              }}
               disabled={!!loading}
             >
               <Ionicons name="mail-outline" size={20} color={colors.sunsetOrange} />
               <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.sunsetOrange }}>
-                Continue with Email
+                {authMode === 'signin' ? 'Sign in with Email' : 'Sign up with Email'}
               </Text>
             </Pressable>
           </View>
