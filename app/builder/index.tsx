@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Image, Dimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, SlideInRight, SlideOutLeft, Layout } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, FadeInRight, FadeOutLeft, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -103,7 +103,7 @@ export default function BuilderWizardScreen() {
             {[0, 1, 2].map((i) => (
                 <Animated.View
                     key={i}
-                    layout={Layout.springify()}
+                    layout={LinearTransition.duration(200)}
                     style={[
                         s.dot,
                         {
@@ -139,7 +139,7 @@ export default function BuilderWizardScreen() {
                 {/* Steps Content */}
                 <View style={s.stepContainer}>
                     {step === 0 && (
-                        <Animated.View entering={SlideInRight} exiting={SlideOutLeft} style={s.stepBody}>
+                        <Animated.View entering={FadeInRight.duration(260)} exiting={FadeOutLeft.duration(180)} style={s.stepBody}>
                             <Text style={s.title}>What's your vibe?</Text>
                             <Text style={s.subtitle}>Select the style of trip you are looking for.</Text>
 
@@ -164,7 +164,7 @@ export default function BuilderWizardScreen() {
                     )}
 
                     {step === 1 && (
-                        <Animated.View entering={SlideInRight} exiting={SlideOutLeft} style={s.stepBody}>
+                        <Animated.View entering={FadeInRight.duration(260)} exiting={FadeOutLeft.duration(180)} style={s.stepBody}>
                             <Text style={s.title}>Who's coming?</Text>
                             <Text style={s.subtitle}>Who are you going to share this amazing trip with?</Text>
 
@@ -189,7 +189,7 @@ export default function BuilderWizardScreen() {
                     )}
 
                     {step === 2 && (
-                        <Animated.View entering={SlideInRight} exiting={SlideOutLeft} style={s.stepBody}>
+                        <Animated.View entering={FadeInRight.duration(260)} exiting={FadeOutLeft.duration(180)} style={s.stepBody}>
                             <Text style={s.title}>Details</Text>
                             <Text style={s.subtitle}>How long will you stay and what's your budget?</Text>
 

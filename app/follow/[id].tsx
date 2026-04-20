@@ -41,14 +41,22 @@ const mapToStop = (planStop: PlanStop): Stop => ({
   priceRange: planStop.place?.priceRange ?? undefined,
 });
 
-/** Map PlanStop to the MapStop shape expected by PlanMap */
-const mapToMapStop = (planStop: PlanStop): MapStop => ({
-  id: planStop.placeId,
-  name: planStop.place?.name ?? 'Unknown',
-  latitude: parseFloat(planStop.place?.latitude ?? '0'),
-  longitude: parseFloat(planStop.place?.longitude ?? '0'),
-  category: planStop.place?.category,
-});
+/** Map PlanStop to the MapStop shape expected by PlanMap.
+ *  Returns null when lat/lng are missing or unparseable — the caller filters
+ *  these out so we never render a pin at (0,0) (Gulf of Guinea) for a place
+ *  with incomplete data. */
+const mapToMapStop = (planStop: PlanStop): MapStop | null => {
+  const lat = parseFloat(planStop.place?.latitude ?? '');
+  const lng = parseFloat(planStop.place?.longitude ?? '');
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return {
+    id: planStop.placeId,
+    name: planStop.place?.name ?? 'Unknown',
+    latitude: lat,
+    longitude: lng,
+    category: planStop.place?.category,
+  };
+};
 
 export default function FollowModeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -65,9 +73,11 @@ export default function FollowModeScreen() {
   // Animated progress bar width (0..1)
   const progressAnim = useSharedValue(0);
 
-  // Convert PlanStops to MapStop[] for PlanMap (memoised)
+  // Convert PlanStops to MapStop[] for PlanMap (memoised).
+  // Stops without valid coords are dropped from the map but remain in
+  // BottomSheetStop so the user still sees the info card.
   const mapStops = useMemo<MapStop[]>(
-    () => allStops.map(mapToMapStop),
+    () => allStops.map(mapToMapStop).filter((s): s is MapStop => s !== null),
     [allStops],
   );
 
