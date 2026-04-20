@@ -121,7 +121,7 @@ export default function LoginScreen() {
       if (res.data) {
         await login(res.data.user, res.data.accessToken, res.data.refreshToken);
       } else {
-        setError(res.error ?? 'Sign in failed');
+        setError(res.error ?? 'Log in failed');
       }
     } catch (err: unknown) {
       if (err instanceof Error && 'code' in err && (err as { code: string }).code === 'ERR_REQUEST_CANCELED') return;
@@ -263,7 +263,7 @@ export default function LoginScreen() {
         >
           {step === 'choose'
             ? (authMode === 'signin' ? 'Welcome back' : 'Join LocalList')
-            : credentialsMode === 'login' ? 'Sign in' : 'Create account'}
+            : credentialsMode === 'login' ? 'Log in' : 'Create account'}
         </Text>
         <Text
           style={{
@@ -307,7 +307,7 @@ export default function LoginScreen() {
 
         {step === 'choose' ? (
           <View style={{ width: '100%', gap: 12 }}>
-            {/* Top toggle Sign in / Sign up — deja claro que las 3 opciones
+            {/* Top toggle Log in / Sign up — deja claro que las 3 opciones
                 de abajo sirven tanto para registrarse como para volver a entrar. */}
             <View
               style={{
@@ -342,7 +342,7 @@ export default function LoginScreen() {
                         color: active ? '#FFFFFF' : colors.textSecondary,
                       }}
                     >
-                      {mode === 'signin' ? 'Sign in' : 'Sign up'}
+                      {mode === 'signin' ? 'Log in' : 'Sign up'}
                     </Text>
                   </Pressable>
                 );
@@ -374,7 +374,7 @@ export default function LoginScreen() {
                   <>
                     <Ionicons name="logo-apple" size={20} color="#FFFFFF" />
                     <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' }}>
-                      {authMode === 'signin' ? 'Sign in with Apple' : 'Sign up with Apple'}
+                      {authMode === 'signin' ? 'Log in with Apple' : 'Sign up with Apple'}
                     </Text>
                   </>
                 )}
@@ -409,7 +409,7 @@ export default function LoginScreen() {
                 <>
                   <Ionicons name="logo-google" size={20} color={colors.deepOcean} />
                   <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.deepOcean }}>
-                    {authMode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}
+                    {authMode === 'signin' ? 'Log in with Google' : 'Sign up with Google'}
                   </Text>
                 </>
               )}
@@ -441,7 +441,7 @@ export default function LoginScreen() {
             >
               <Ionicons name="mail-outline" size={20} color={colors.sunsetOrange} />
               <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.sunsetOrange }}>
-                {authMode === 'signin' ? 'Sign in with Email' : 'Sign up with Email'}
+                {authMode === 'signin' ? 'Log in with Email' : 'Sign up with Email'}
               </Text>
             </Pressable>
           </View>
@@ -575,7 +575,7 @@ export default function LoginScreen() {
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' }}>
-                  {credentialsMode === 'login' ? 'Sign In' : 'Create Account'}
+                  {credentialsMode === 'login' ? 'Log In' : 'Create Account'}
                 </Text>
               )}
             </Pressable>
@@ -603,7 +603,7 @@ export default function LoginScreen() {
               >
                 {credentialsMode === 'login' ? "Don't have an account? " : 'Already have an account? '}
                 <Text style={{ color: colors.sunsetOrange, fontFamily: fonts.bodySemiBold }}>
-                  {credentialsMode === 'login' ? 'Create one' : 'Sign in'}
+                  {credentialsMode === 'login' ? 'Create one' : 'Log in'}
                 </Text>
               </Text>
             </Pressable>
