@@ -67,6 +67,66 @@ Pulsar `a` para abrir en Android. Hot reload funciona automaticamente para cambi
 - **Ver logs RN**: `adb logcat -s "ReactNativeJS"` para ver console.log del app
 - **`adb` o `emulator` no encontrado**: Abrir una terminal nueva (las env vars se cargan al abrir terminal)
 
+## Auth setup — Google Sign-In Client IDs
+
+El código en `app/login.tsx:58-63` lee tres env vars públicas (bundle-time, inyectadas por EAS, no secretos):
+
+- `EXPO_PUBLIC_GOOGLE_CLIENT_ID` — Web OAuth Client (se usa también para validar ID tokens en backend).
+- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` — iOS OAuth Client.
+- `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` — Android OAuth Client.
+
+Mientras no estén configuradas el botón de Google queda inert y muestra un mensaje informativo (fallback en `login.tsx:137-140`). Apple Sign In y email/password siguen funcionando.
+
+### 1. Crear los 3 OAuth clients en Google Cloud Console
+
+En https://console.cloud.google.com/apis/credentials (proyecto LocalList):
+
+| Tipo | Campos relevantes | Env var resultante |
+|---|---|---|
+| Web application | name: `LocalList Backend`. No redirect URIs necesarios para ID-token-only. | `EXPO_PUBLIC_GOOGLE_CLIENT_ID` |
+| iOS | Bundle ID: `app.locallist.ios` (de `app.json` L18) | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` |
+| Android | Package name: `app.locallist.android` (de `app.json` L89) + SHA-1 del keystore managed por EAS (`eas credentials` → Android → ver fingerprint) | `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` |
+
+Si preview y production usan keystores distintos, añade ambos SHA-1 al mismo Android OAuth Client (válido).
+
+### 2. Publicarlos como EAS environment variables
+
+```bash
+cd ~/Developer/locallist/locallist-app
+
+# preview
+eas env:create --environment preview --name EXPO_PUBLIC_GOOGLE_CLIENT_ID --value '<web-client-id>' --visibility plaintext
+eas env:create --environment preview --name EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID --value '<ios-client-id>' --visibility plaintext
+eas env:create --environment preview --name EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID --value '<android-client-id>' --visibility plaintext
+
+# production (mismos valores o distintos según el caso)
+eas env:create --environment production --name EXPO_PUBLIC_GOOGLE_CLIENT_ID --value '<web-client-id>' --visibility plaintext
+eas env:create --environment production --name EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID --value '<ios-client-id>' --visibility plaintext
+eas env:create --environment production --name EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID --value '<android-client-id>' --visibility plaintext
+```
+
+Verificar: `eas env:list --environment preview`.
+
+### 3. Rebuild
+
+```bash
+eas build --profile preview --platform ios   # (o android)
+```
+
+Cloud builds **no leen `.env` local** — requieren `eas env:*` o `eas env:push` (ver "EAS env vars requieren env:push" en memoria).
+
+### 4. Smoke test
+
+1. Instalar el build nuevo.
+2. Abrir `/login` → tap "Log in with Google" → consent screen de Google → completar → landing en `(tabs)/index.tsx`.
+3. Backend logs (Railway): `POST /auth/signin` → 200 OK con `provider=google`.
+4. Si aparece "Google Sign In no está configurado en este build" → las env vars no llegaron al bundle; revisar `eas env:list` y que el build se haya hecho **después** del `eas env:create`.
+
+### Notas
+
+- Los `EXPO_PUBLIC_*` son públicos por diseño (van en el bundle cliente). La seguridad real viene del bundle ID / package + SHA-1 + domain ownership en Google, no de ocultar el Client ID.
+- Convención del repo: **no** se mantienen `.env*` locales; todo vive en EAS environments y se documenta aquí.
+
 ## Key Files
 
 - `app/_layout.tsx` — Root layout (useFonts, SafeAreaProvider, splash animation, AuthGate)
