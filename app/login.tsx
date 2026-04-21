@@ -64,7 +64,15 @@ export default function LoginScreen() {
 
   // Handle Google OAuth response
   useEffect(() => {
-    if (googleResponse?.type !== 'success') return;
+    if (!googleResponse) return;
+
+    if (googleResponse.type !== 'success') {
+      setLoading(null);
+      if (googleResponse.type === 'error') {
+        setError('Google Sign In failed');
+      }
+      return;
+    }
 
     const idToken = googleResponse.params.id_token;
     if (!idToken) {
