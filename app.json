@@ -17,6 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "app.locallist.ios",
       "usesAppleSignIn": true,
+      "deploymentTarget": "16.0",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
@@ -25,7 +26,8 @@
             ]
           }
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "LocalList may request your location in the future to surface nearby places. We do not currently collect your location."
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [

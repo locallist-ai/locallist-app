@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, type ViewStyle } from 'react-native';
+import { View, StyleSheet, Pressable, Text, Linking, type ViewStyle } from 'react-native';
 import MapLibreGL, { type MapViewRef, type CameraRef } from '@maplibre/maplibre-react-native';
 import Animated, {
   useSharedValue,
@@ -168,6 +168,16 @@ export const PlanMap: React.FC<PlanMapProps> = ({
           </MapLibreGL.PointAnnotation>
         ))}
       </MapLibreGL.MapView>
+
+      <Pressable
+        onPress={() => Linking.openURL('https://www.openstreetmap.org/copyright')}
+        style={styles.attribution}
+        hitSlop={6}
+        accessibilityRole="link"
+        accessibilityLabel="OpenStreetMap copyright"
+      >
+        <Text style={styles.attributionText}>© OpenStreetMap</Text>
+      </Pressable>
     </View>
   );
 };
@@ -200,5 +210,19 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: '#FFFFFF',
+  },
+  attribution: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderRadius: 3,
+  },
+  attributionText: {
+    fontSize: 10,
+    color: '#333',
+    fontWeight: '500',
   },
 });
