@@ -257,7 +257,7 @@ export default function LoginScreen() {
       >
         <Image
           source={require('../assets/images/icon.png')}
-          style={{ width: 64, height: 80, marginBottom: spacing.lg }}
+          style={{ width: 180, height: 180, marginTop: spacing.xxl, marginBottom: spacing.sm }}
           resizeMode="contain"
         />
         <Text
