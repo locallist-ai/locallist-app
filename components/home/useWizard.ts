@@ -117,6 +117,10 @@ export const useWizard = (): UseWizardResult => {
       tripContext: {
         groupType: selections[1] ?? 'solo',
         preferences: selections[2] ? [selections[2]] : [],
+        // El step 3 selecciona valores semánticos (adventure/relax/cultural) que ya son vibes,
+        // no solo "preferences". Enviarlos también como vibes para que el rerank del backend
+        // los use como señal adicional (ver TripContextDto.Vibes + PR #42 api-net).
+        vibes: selections[2] ? [selections[2]] : [],
         days: daysFromDuration(selections[0]),
       },
     };
