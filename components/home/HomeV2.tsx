@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
 import Animated, {
   SlideInRight,
@@ -8,18 +8,15 @@ import Animated, {
   useAnimatedSensor,
   SensorType,
   useAnimatedStyle,
-  useSharedValue,
-  withTiming,
   interpolate,
   Extrapolate,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { colors, fonts } from '../../lib/theme';
+import { fonts } from '../../lib/theme';
 import { CITIES, STEPS, TOTAL_STEPS } from './constants';
 import { useWizard } from './useWizard';
-import { HomeLanding } from './HomeLanding';
 import { CityCard } from './CityCard';
 import { WizardStep } from './WizardStep';
 import { ChatStep } from './ChatStep';
@@ -34,33 +31,14 @@ export const HomeV2: React.FC = () => {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const wizard = useWizard();
 
-  // Crossfade: both views stay mounted, animate opacity on UI thread
-  const wizardProgress = useSharedValue(0);
-  useEffect(() => {
-    wizardProgress.value = withTiming(wizard.showWizard ? 1 : 0, { duration: 350 });
-  }, [wizard.showWizard]);
-
-  const landingStyle = useAnimatedStyle(() => ({
-    opacity: 1 - wizardProgress.value,
-  }));
-  const wizardStyle = useAnimatedStyle(() => ({
-    opacity: wizardProgress.value,
-  }));
-
-  const landingPointerEvents = wizard.showWizard ? 'none' as const : 'auto' as const;
-  const wizardPointerEvents = wizard.showWizard ? 'auto' as const : 'none' as const;
-
   // Parallax background via device sensor
-  // When wizard is fully visible (wizardProgress=1), factor=0 → no transform work on GPU
   const animatedSensor = useAnimatedSensor(SensorType.ROTATION, { interval: 16 });
   const bgStyle = useAnimatedStyle(() => {
-    const factor = 1 - wizardProgress.value;
-    if (factor < 0.01) return {}; // Skip transform entirely when wizard covers landing
     const { pitch, roll } = animatedSensor.sensor.value;
     return {
       transform: [
-        { translateX: interpolate(roll, [-0.5, 0.5], [-20, 20], Extrapolate.CLAMP) * factor },
-        { translateY: interpolate(pitch, [-0.5, 0.5], [-20, 20], Extrapolate.CLAMP) * factor },
+        { translateX: interpolate(roll, [-0.5, 0.5], [-20, 20], Extrapolate.CLAMP) },
+        { translateY: interpolate(pitch, [-0.5, 0.5], [-20, 20], Extrapolate.CLAMP) },
       ],
     };
   });
@@ -87,31 +65,23 @@ export const HomeV2: React.FC = () => {
       />
       <View style={styles.bgOverlay} />
 
-      {/* Home Landing — crossfaded with wizard */}
-      <Animated.View pointerEvents={landingPointerEvents} style={[styles.fullAbsolute, landingStyle]}>
-        <HomeLanding
-          onCreatePlan={wizard.openWizard}
-          screenWidth={screenWidth}
-          screenHeight={screenHeight}
-        />
-      </Animated.View>
-
-      {/* Wizard — crossfaded with landing */}
-      <Animated.View
-        pointerEvents={wizardPointerEvents}
-        style={[styles.fullAbsolute, { paddingTop: insets.top + 12 }, wizardStyle]}
-      >
-        {/* Header: back button + progress dots */}
+      {/* Wizard */}
+      <View style={[styles.fullAbsolute, { paddingTop: insets.top + 12 }]}>
+        {/* Header: back button (hidden on step 0) + progress dots */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={wizard.handleBack}
-            activeOpacity={0.7}
-            style={styles.backButton}
-            accessibilityLabel={wizard.step === 0 ? 'Close' : 'Back'}
-            accessibilityRole="button"
-          >
-            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
+          {wizard.step > 0 ? (
+            <TouchableOpacity
+              onPress={wizard.handleBack}
+              activeOpacity={0.7}
+              style={styles.backButton}
+              accessibilityLabel="Back"
+              accessibilityRole="button"
+            >
+              <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.headerSpacer} />
+          )}
           <View style={styles.dotsCenter}>
             <ProgressDots current={wizard.step} total={TOTAL_STEPS} />
           </View>
@@ -124,7 +94,7 @@ export const HomeV2: React.FC = () => {
         {/* Step content */}
         <View style={styles.stepContent}>
           {isCityStep && (
-            <Animated.View key="step-city" entering={entering} exiting={exiting} style={styles.stepFill}>
+            <Animated.View key="step-city" entering={entering} exiting={exiting} style={styles.stepFillTop}>
               <Text style={styles.cityTitle}>{t('destination.title')}</Text>
               <Text style={styles.citySubtitle}>{t('destination.subtitle')}</Text>
               <View style={styles.cityList}>
@@ -160,7 +130,7 @@ export const HomeV2: React.FC = () => {
             </Animated.View>
           )}
         </View>
-      </Animated.View>
+      </View>
     </View>
   );
 };
@@ -221,6 +191,11 @@ const styles = StyleSheet.create({
   stepFill: {
     flex: 1,
     justifyContent: 'center',
+  },
+  stepFillTop: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 100,
   },
   cityTitle: {
     fontFamily: fonts.headingBold,

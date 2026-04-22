@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ImpactFeedbackStyle } from 'expo-haptics';
 import { api } from '../../lib/api';
+import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan-store';
 import { hapticImpact } from './constants';
 import type { BuilderResponse } from '../../lib/types';
@@ -10,8 +11,6 @@ import type { BuilderResponse } from '../../lib/types';
 // ── Return type ──
 
 export interface UseWizardResult {
-  /** Whether the wizard overlay is visible */
-  showWizard: boolean;
   /** Current step index (0 = city, 1-4 = prefs, 5 = chat) */
   step: number;
   /** Slide direction for enter/exit animations */
@@ -27,9 +26,7 @@ export interface UseWizardResult {
   /** Whether the AI bubble text should be shown (after typing dots) */
   showBubbleText: boolean;
 
-  /** Open the wizard from the landing screen */
-  openWizard: () => void;
-  /** Navigate back one step (or close wizard from step 0) */
+  /** Navigate back one step (no-op at step 0) */
   handleBack: () => void;
   /** Select a city and auto-advance */
   handleCitySelect: (cityName: string) => void;
@@ -49,7 +46,6 @@ export const useWizard = (): UseWizardResult => {
   const { t } = useTranslation();
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [showWizard, setShowWizard] = useState(false);
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [selections, setSelections] = useState<(string | null)[]>([null, null, null, null]);
@@ -79,21 +75,9 @@ export const useWizard = (): UseWizardResult => {
     setStep((s) => Math.min(s + 1, 5));
   }, []);
 
-  const openWizard = useCallback(() => {
-    setDirection('forward');
-    setStep(0);
-    setSelections([null, null, null, null]);
-    setMessage('');
-    setShowBubbleText(false);
-    setShowWizard(true);
-  }, []);
-
   const handleBack = useCallback(() => {
+    if (step === 0) return;
     hapticImpact(ImpactFeedbackStyle.Light);
-    if (step === 0) {
-      setShowWizard(false);
-      return;
-    }
     setDirection('back');
     setStep((s) => Math.max(s - 1, 0));
   }, [step]);
@@ -120,25 +104,43 @@ export const useWizard = (): UseWizardResult => {
     setLoading(true);
     hapticImpact(ImpactFeedbackStyle.Medium);
 
+    // Backend's TripContextDto has `Days: int? [Range(1,7)]`, not `duration`.
+    // Duration option ids are stringified integers ("1" | "2" | "3") — parse to int.
+    const daysFromDuration = (id: string | null | undefined): number | undefined => {
+      if (!id) return undefined;
+      const n = parseInt(id, 10);
+      return Number.isFinite(n) && n >= 1 && n <= 7 ? n : undefined;
+    };
+
     const body = {
       message: message.trim() || t('place.defaultMessage'),
       tripContext: {
         groupType: selections[1] ?? 'solo',
         preferences: selections[2] ? [selections[2]] : [],
-        duration: selections[0] ?? undefined,
-        budget: selections[3] ?? undefined,
+        days: daysFromDuration(selections[0]),
       },
     };
 
+    // Dev-only inspection of the builder request/response. `logger.debug` is a
+    // no-op in Release (`MIN_LEVEL = 'warn'` when __DEV__ is false), so these
+    // calls disappear at runtime in TestFlight / App Store builds without
+    // needing `#if DEBUG`-style guards. Passing the objects directly (not
+    // JSON.stringify) avoids evaluation cost in prod too.
+    logger.debug('[builder/chat] REQUEST', body);
+
     try {
       const res = await api<BuilderResponse>('/builder/chat', { method: 'POST', body });
+      logger.debug('[builder/chat] RESPONSE status', res.status);
       if (res.data) {
+        logger.debug('[builder/chat] RESPONSE body', res.data);
         setPreviewPlan(res.data);
         router.push('/plan/preview');
       } else {
+        logger.debug('[builder/chat] ERROR body', res.errorBody);
         setError(res.error ?? t('wizard.errorDefault'));
       }
-    } catch {
+    } catch (e) {
+      logger.error('[builder/chat] THROW', e);
       setError(t('wizard.errorDefault'));
     } finally {
       setLoading(false);
@@ -146,7 +148,6 @@ export const useWizard = (): UseWizardResult => {
   }, [loading, message, selections, t]);
 
   return {
-    showWizard,
     step,
     direction,
     selections,
@@ -154,7 +155,6 @@ export const useWizard = (): UseWizardResult => {
     loading,
     error,
     showBubbleText,
-    openWizard,
     handleBack,
     handleCitySelect,
     handleSelect,
