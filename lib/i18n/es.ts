@@ -8,7 +8,6 @@ export default {
     account: 'Cuenta',
   },
   home: {
-    subtitle: 'Tu curador de viajes con IA.',
     createPlan: 'Crear un Plan',
   },
   wizard: {
@@ -30,8 +29,8 @@ export default {
     buildMyPlan: 'Crear mi plan',
     errorDefault: 'Algo salió mal',
     duration1Day: '1 día',
-    duration2_3Days: '2-3 días',
-    duration4Days: '4+ días',
+    duration2Days: '2 días',
+    duration3Days: '3 días',
     companySolo: 'Solo/a',
     companyCouple: 'Pareja',
     companyFamily: 'Familia',

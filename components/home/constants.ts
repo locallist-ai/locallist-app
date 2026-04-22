@@ -42,8 +42,8 @@ export const CITIES: City[] = [
 
 export const DURATION_OPTIONS: StepOption[] = [
   { id: '1', icon: require('../../assets/images/icon_1day.png'), labelKey: 'wizard.duration1Day', emoji: '\u2600\uFE0F' },
-  { id: '2-3', icon: require('../../assets/images/icon_3days.png'), labelKey: 'wizard.duration2_3Days', emoji: '\u{1F338}' },
-  { id: '4+', icon: require('../../assets/images/icon_4days.png'), labelKey: 'wizard.duration4Days', emoji: '\u2708\uFE0F' },
+  { id: '2', icon: require('../../assets/images/icon_3days.png'), labelKey: 'wizard.duration2Days', emoji: '\u{1F338}' },
+  { id: '3', icon: require('../../assets/images/icon_3days.png'), labelKey: 'wizard.duration3Days', emoji: '\u{1F33C}' },
 ];
 
 export const COMPANY_OPTIONS: StepOption[] = [

@@ -28,8 +28,8 @@ const COMPANY_OPTIONS = [
 
 const DURATION_OPTIONS = [
     { id: '1', icon: 'sunny-outline' as const, label: '1 day' },
-    { id: '2-3', icon: 'flower-outline' as const, label: '2-3 days' },
-    { id: '4+', icon: 'airplane-outline' as const, label: '4+ days' },
+    { id: '2', icon: 'flower-outline' as const, label: '2 days' },
+    { id: '3', icon: 'leaf-outline' as const, label: '3 days' },
 ];
 
 const BUDGET_OPTIONS = [
@@ -76,14 +76,20 @@ export default function BuilderWizardScreen() {
     const generatePlan = async () => {
         setLoading(true);
         setError(null);
+        // Backend's TripContextDto expects `Days: int? [Range(1,7)]`, not `duration`.
+        // Duration option ids are stringified integers ("1" | "2" | "3") — parse to int.
+        const daysFromDuration = (id: string | null): number | undefined => {
+            if (!id) return undefined;
+            const n = parseInt(id, 10);
+            return Number.isFinite(n) && n >= 1 && n <= 7 ? n : undefined;
+        };
         const body = {
             message: 'Plan a great trip for me',
             tripContext: {
                 groupType: company ?? 'solo',
                 preferences: style ? [style] : [],
                 vibes: style ? [style] : [],
-                duration: duration ?? undefined,
-                budget: budget ?? undefined,
+                days: daysFromDuration(duration),
             },
         };
 

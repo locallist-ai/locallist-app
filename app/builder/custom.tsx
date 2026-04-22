@@ -17,7 +17,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 
-const DURATION_OPTIONS = [1, 2, 3, 4, 5] as const;
+const DURATION_OPTIONS = [1, 2, 3] as const;
 
 export default function CustomBuilderScreen() {
   const insets = useSafeAreaInsets();
