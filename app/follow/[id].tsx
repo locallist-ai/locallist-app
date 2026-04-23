@@ -39,6 +39,9 @@ const mapToStop = (planStop: PlanStop): Stop => ({
   whyThisPlace: planStop.place?.whyThisPlace,
   duration: planStop.suggestedDurationMin ?? undefined,
   priceRange: planStop.place?.priceRange ?? undefined,
+  googleRating: planStop.place?.googleRating ?? null,
+  googleReviewCount: planStop.place?.googleReviewCount ?? null,
+  travelFromPrevious: planStop.travelFromPrevious ?? null,
 });
 
 /** Map PlanStop to the MapStop shape expected by PlanMap.
@@ -210,13 +213,31 @@ export default function FollowModeScreen() {
     );
   }
 
+  // Pin tap del mapa mueve el currentIndex. El mapStops está filtrado (stops sin
+  // lat/lng quedan fuera del mapa), así que resolvemos por id contra allStops.
+  const handlePinPress = (mapIndex: number) => {
+    const tapped = mapStops[mapIndex];
+    if (!tapped) return;
+    const targetIndex = allStops.findIndex((s) => s.placeId === tapped.id);
+    if (targetIndex >= 0 && targetIndex !== currentIndex) {
+      setCurrentIndex(targetIndex);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
   // ─── Main layout: full-screen map + overlays ───
   return (
     <View style={s.root}>
       {/* Full-screen map background */}
       <PlanMap
         stops={mapStops}
-        activePinIndex={currentIndex}
+        activePinIndex={Math.max(
+          0,
+          mapStops.findIndex(
+            (s) => allStops[currentIndex] && s.id === allStops[currentIndex].placeId,
+          ),
+        )}
+        onPinPress={handlePinPress}
         style={s.map}
       />
 

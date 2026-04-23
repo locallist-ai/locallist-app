@@ -20,6 +20,8 @@ interface PlanMapProps {
   stops: MapStop[];
   activePinIndex?: number;
   onCameraUpdate?: (center: { latitude: number; longitude: number }) => void;
+  /** Callback cuando el usuario tap un pin. Recibe el índice del stop. */
+  onPinPress?: (index: number) => void;
   style?: ViewStyle;
 }
 
@@ -30,6 +32,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
   stops,
   activePinIndex = 0,
   onCameraUpdate,
+  onPinPress,
   style,
 }) => {
   const mapRef = useRef<MapViewRef>(null);
@@ -146,6 +149,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
             key={stop.id}
             id={stop.id}
             coordinate={[stop.longitude, stop.latitude]}
+            onSelected={onPinPress ? () => onPinPress(index) : undefined}
           >
             <View
               style={[

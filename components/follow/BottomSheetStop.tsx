@@ -28,6 +28,13 @@ export interface Stop {
   whyThisPlace?: string;
   duration?: number;
   priceRange?: string;
+  googleRating?: number | null;
+  googleReviewCount?: number | null;
+  travelFromPrevious?: {
+    distance_km: number;
+    duration_min: number;
+    mode: string;
+  } | null;
 }
 
 interface Plan {
