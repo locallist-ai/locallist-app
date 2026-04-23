@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,9 @@ import {
   ScrollView,
 } from 'react-native';
 import { PhotoHero, type Category } from '../ui/PhotoHero';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
+import { TIME_BLOCK_EMOJI, DEFAULT_STOP_EMOJI } from '../../lib/timeBlocks';
 
 interface Stop {
   id: string;
@@ -16,10 +18,12 @@ interface Stop {
   neighborhood?: string;
   photos?: { url: string }[];
   whyThisPlace?: string;
-  duration?: number; // in minutes
+  duration?: number;
   priceRange?: string;
   googleRating?: number | null;
   googleReviewCount?: number | null;
+  timeBlock?: string;
+  suggestedArrival?: string;
   travelFromPrevious?: {
     distance_km: number;
     duration_min: number;
@@ -27,27 +31,17 @@ interface Stop {
   } | null;
 }
 
-interface Plan {
-  category?: string;
-}
-
 interface StopCardProps {
   stop: Stop;
-  plan?: Plan;
-  index?: number;
-  totalStops?: number;
 }
 
-const getCategoryColor = (category?: string): string => {
-  const colors: Record<string, string> = {
-    Food: '#f97316',
-    Outdoors: '#10b981',
-    Coffee: '#92400e',
-    Nightlife: '#1e1b4b',
-    Culture: '#0f172a',
-    Wellness: '#7c3aed',
-  };
-  return colors[category || 'Culture'] || '#0f172a';
+const CATEGORY_COLOR: Record<string, string> = {
+  Food: '#f97316',
+  Outdoors: '#10b981',
+  Coffee: '#92400e',
+  Nightlife: '#1e1b4b',
+  Culture: '#0f172a',
+  Wellness: '#7c3aed',
 };
 
 const formatDuration = (minutes?: number): string => {
@@ -58,74 +52,92 @@ const formatDuration = (minutes?: number): string => {
   return `${hours}h${mins > 0 ? ` ${mins}m` : ''}`;
 };
 
-export const StopCard: React.FC<StopCardProps> = ({
-  stop,
-  plan,
-  index = 0,
-  totalStops = 1,
-}) => {
+const WHY_TRUNCATE_LENGTH = 140;
+
+export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
+  const [whyExpanded, setWhyExpanded] = useState(false);
   const photoUrl = stop.photos?.[0]?.url;
-  const categoryColor = getCategoryColor(stop.category);
+  const categoryColor = CATEGORY_COLOR[stop.category ?? 'Culture'] ?? '#0f172a';
+
+  const timeEmoji = stop.timeBlock ? TIME_BLOCK_EMOJI[stop.timeBlock] ?? DEFAULT_STOP_EMOJI : null;
+  const travel = stop.travelFromPrevious;
+  const why = stop.whyThisPlace ?? '';
+  const whyNeedsTruncate = why.length > WHY_TRUNCATE_LENGTH;
+  const whyDisplay = whyExpanded || !whyNeedsTruncate ? why : `${why.slice(0, WHY_TRUNCATE_LENGTH).trim()}…`;
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
-      scrollEnabled={true}
-      nestedScrollEnabled={true}
+      scrollEnabled
+      nestedScrollEnabled
       showsVerticalScrollIndicator={false}
     >
-      {/* Photo */}
       <PhotoHero
         imageUrl={photoUrl}
         fallbackCategory={(stop.category as Category) || 'Culture'}
-        height={200}
+        height={180}
       />
 
-      {/* Content */}
       <View style={styles.content}>
-        {/* Place name */}
+        {(timeEmoji || stop.suggestedArrival) && (
+          <View style={styles.topMetaRow}>
+            {timeEmoji && (
+              <View style={styles.timePill}>
+                <Text style={styles.timeEmoji}>{timeEmoji}</Text>
+                {stop.suggestedArrival && (
+                  <Text style={styles.timePillText}>{stop.suggestedArrival}</Text>
+                )}
+              </View>
+            )}
+            {travel && travel.duration_min > 0 && (
+              <View style={styles.travelPill}>
+                <MaterialCommunityIcons
+                  name={travel.mode === 'walk' ? 'walk' : 'car'}
+                  size={13}
+                  color="#0369a1"
+                />
+                <Text style={styles.travelPillText}>
+                  {Math.round(travel.duration_min)}m from prev
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         <Text style={styles.name}>{stop.name}</Text>
 
-        {/* Category & Neighborhood */}
         <View style={styles.metaRow}>
-          <View style={[styles.categoryBadge, { backgroundColor: categoryColor }]}>
-            <Text style={styles.categoryText}>{stop.category || 'Other'}</Text>
-          </View>
+          {stop.category && (
+            <View style={[styles.categoryBadge, { backgroundColor: categoryColor }]}>
+              <Text style={styles.categoryText}>{stop.category}</Text>
+            </View>
+          )}
           {stop.neighborhood && (
-            <Text style={styles.neighborhood}>• {stop.neighborhood}</Text>
+            <View style={styles.neighborhoodRow}>
+              <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
+              <Text style={styles.neighborhood}>{stop.neighborhood}</Text>
+            </View>
           )}
         </View>
 
-        {/* Why This Place */}
-        {stop.whyThisPlace && (
-          <>
-            <Text style={styles.sectionLabel}>Why this place</Text>
-            <Text style={styles.description}>{stop.whyThisPlace}</Text>
-          </>
-        )}
-
-        {/* Info row: Duration, Price, Rating, Travel */}
-        {(stop.duration || stop.priceRange || stop.googleRating || stop.travelFromPrevious) && (
+        {(stop.duration || stop.priceRange || stop.googleRating) && (
           <View style={styles.infoRow}>
             {stop.duration && (
               <View style={styles.infoPill}>
-                <MaterialCommunityIcons name="clock-outline" size={14} color="#0f172a" />
+                <MaterialCommunityIcons name="clock-outline" size={14} color={colors.deepOcean} />
                 <Text style={styles.infoPillText}>{formatDuration(stop.duration)}</Text>
               </View>
             )}
-
             {stop.priceRange && (
-              <View style={styles.infoPill}>
-                <MaterialCommunityIcons name="currency-usd" size={14} color="#0f172a" />
-                <Text style={styles.infoPillText}>{stop.priceRange}</Text>
+              <View style={[styles.infoPill, styles.pricePill]}>
+                <Text style={styles.pricePillText}>{stop.priceRange}</Text>
               </View>
             )}
-
             {typeof stop.googleRating === 'number' && stop.googleRating > 0 && (
-              <View style={styles.infoPill}>
-                <MaterialCommunityIcons name="star" size={14} color="#f59e0b" />
-                <Text style={styles.infoPillText}>
+              <View style={[styles.infoPill, styles.ratingPill]}>
+                <MaterialCommunityIcons name="star" size={13} color="#b45309" />
+                <Text style={styles.ratingPillText}>
                   {stop.googleRating.toFixed(1)}
                   {typeof stop.googleReviewCount === 'number' && stop.googleReviewCount > 0
                     ? ` · ${stop.googleReviewCount}`
@@ -133,18 +145,24 @@ export const StopCard: React.FC<StopCardProps> = ({
                 </Text>
               </View>
             )}
+          </View>
+        )}
 
-            {stop.travelFromPrevious && stop.travelFromPrevious.duration_min > 0 && (
-              <View style={[styles.infoPill, styles.travelPill]}>
-                <MaterialCommunityIcons
-                  name={stop.travelFromPrevious.mode === 'walk' ? 'walk' : 'car'}
-                  size={14}
-                  color="#0369a1"
-                />
-                <Text style={[styles.infoPillText, styles.travelPillText]}>
-                  {stop.travelFromPrevious.duration_min}m
+        {why.length > 0 && (
+          <View style={styles.whyBlock}>
+            <Text style={styles.sectionLabel}>Why this place</Text>
+            <Text style={styles.description}>{whyDisplay}</Text>
+            {whyNeedsTruncate && (
+              <TouchableOpacity
+                onPress={() => setWhyExpanded((v) => !v)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={whyExpanded ? 'Show less' : 'Show more'}
+              >
+                <Text style={styles.whyToggle}>
+                  {whyExpanded ? 'Show less' : 'Show more'}
                 </Text>
-              </View>
+              </TouchableOpacity>
             )}
           </View>
         )}
@@ -156,80 +174,143 @@ export const StopCard: React.FC<StopCardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.bgCard,
   },
   contentContainer: {
-    paddingBottom: 24,
+    paddingBottom: spacing.lg,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+  },
+  topMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  timePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.sunsetOrange + '15',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+  },
+  timeEmoji: { fontSize: 14 },
+  timePillText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.sunsetOrange,
+  },
+  travelPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#e0f2fe',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+  },
+  travelPillText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: '#0369a1',
   },
   name: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0f172a',
+    fontFamily: fonts.headingBold,
+    fontSize: 24,
+    lineHeight: 30,
+    color: colors.deepOcean,
     marginBottom: 8,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: spacing.sm,
   },
   categoryBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 8,
+    borderRadius: borderRadius.sm,
   },
   categoryText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 11,
     color: '#FFFFFF',
-  },
-  neighborhood: {
-    fontSize: 14,
-    color: '#64748b',
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0f172a',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 4,
-    marginTop: 8,
   },
-  description: {
-    fontSize: 15,
-    color: '#334155',
-    lineHeight: 22,
-    marginBottom: 12,
+  neighborhoodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  neighborhood: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   infoRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
     flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: spacing.md,
   },
   infoPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
     backgroundColor: '#f1f5f9',
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 6,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
   },
   infoPillText: {
+    fontFamily: fonts.bodySemiBold,
     fontSize: 12,
-    fontWeight: '600',
-    color: '#0f172a',
+    color: colors.deepOcean,
   },
-  travelPill: {
-    backgroundColor: '#e0f2fe',
+  pricePill: {
+    backgroundColor: colors.successEmerald + '15',
   },
-  travelPillText: {
-    color: '#0369a1',
+  pricePillText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: '#059669',
+  },
+  ratingPill: {
+    backgroundColor: '#fffbeb',
+  },
+  ratingPillText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: '#b45309',
+  },
+  whyBlock: {
+    marginTop: 4,
+  },
+  sectionLabel: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 11,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  description: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.textMain,
+  },
+  whyToggle: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.sunsetOrange,
+    marginTop: 4,
   },
 });

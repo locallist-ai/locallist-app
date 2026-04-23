@@ -11,25 +11,20 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { PlanMap } from '../../components/map/PlanMap';
 import { BottomSheetStop, type Stop } from '../../components/follow/BottomSheetStop';
+import { NextStopsCarousel, type PreviewStop } from '../../components/follow/NextStopsCarousel';
+import { ProgressDots } from '../../components/ui/design-system';
 import { useOfflineTiles } from '../../components/map/useOfflineTiles';
 import type { PlanStop, PlanDetailResponse } from '../../lib/types';
 import type { MapStop } from '../../components/map/PlanMap';
 
 type FollowSession = { id: string; planId: string; status: string };
 
-/** Map PlanStop to the Stop shape expected by BottomSheetStop */
 const mapToStop = (planStop: PlanStop): Stop => ({
   id: planStop.placeId,
   name: planStop.place?.name ?? 'Unknown place',
@@ -41,13 +36,11 @@ const mapToStop = (planStop: PlanStop): Stop => ({
   priceRange: planStop.place?.priceRange ?? undefined,
   googleRating: planStop.place?.googleRating ?? null,
   googleReviewCount: planStop.place?.googleReviewCount ?? null,
+  timeBlock: planStop.timeBlock ?? undefined,
+  suggestedArrival: planStop.suggestedArrival ?? undefined,
   travelFromPrevious: planStop.travelFromPrevious ?? null,
 });
 
-/** Map PlanStop to the MapStop shape expected by PlanMap.
- *  Returns null when lat/lng are missing or unparseable — the caller filters
- *  these out so we never render a pin at (0,0) (Gulf of Guinea) for a place
- *  with incomplete data. */
 const mapToMapStop = (planStop: PlanStop): MapStop | null => {
   const lat = parseFloat(planStop.place?.latitude ?? '');
   const lng = parseFloat(planStop.place?.longitude ?? '');
@@ -61,6 +54,15 @@ const mapToMapStop = (planStop: PlanStop): MapStop | null => {
   };
 };
 
+const mapToPreviewStop = (planStop: PlanStop): PreviewStop => ({
+  id: planStop.placeId,
+  name: planStop.place?.name ?? 'Unknown',
+  timeBlock: planStop.timeBlock ?? undefined,
+  suggestedArrival: planStop.suggestedArrival ?? undefined,
+  photoUrl: planStop.place?.photos?.[0] ?? undefined,
+  category: planStop.place?.category,
+});
+
 export default function FollowModeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { isAuthenticated } = useAuth();
@@ -73,49 +75,27 @@ export default function FollowModeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Animated progress bar width (0..1)
-  const progressAnim = useSharedValue(0);
-
-  // Convert PlanStops to MapStop[] for PlanMap (memoised).
-  // Stops without valid coords are dropped from the map but remain in
-  // BottomSheetStop so the user still sees the info card.
   const mapStops = useMemo<MapStop[]>(
     () => allStops.map(mapToMapStop).filter((s): s is MapStop => s !== null),
     [allStops],
   );
 
-  // Current stop mapped for BottomSheetStop (memoised)
   const currentStop = useMemo(
     () => (allStops.length > 0 ? mapToStop(allStops[currentIndex]) : null),
     [allStops, currentIndex],
   );
 
-  // Offline tiles
+  const previewStops = useMemo<PreviewStop[]>(
+    () => allStops.map(mapToPreviewStop),
+    [allStops],
+  );
+
   const offlineTileStops = useMemo(
-    () =>
-      mapStops.map((s) => ({
-        latitude: s.latitude,
-        longitude: s.longitude,
-      })),
+    () => mapStops.map((s) => ({ latitude: s.latitude, longitude: s.longitude })),
     [mapStops],
   );
   const { tileUrl, isDownloading, hasCache } = useOfflineTiles(offlineTileStops);
 
-  // ─── Animate progress bar when currentIndex or total changes ───
-  useEffect(() => {
-    if (allStops.length === 0) return;
-    const target = (currentIndex + 1) / allStops.length;
-    progressAnim.value = withTiming(target, {
-      duration: 400,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [currentIndex, allStops.length, progressAnim]);
-
-  const progressBarStyle = useAnimatedStyle(() => ({
-    width: `${progressAnim.value * 100}%`,
-  }));
-
-  // ─── Auth guard + load plan ───
   useEffect(() => {
     if (!isAuthenticated) {
       router.replace('/login');
@@ -125,7 +105,6 @@ export default function FollowModeScreen() {
   }, [id, isAuthenticated]);
 
   const startSession = async () => {
-    // Fetch plan details
     const planRes = await api<PlanDetailResponse>(`/plans/${id}`);
     if (!planRes.data) {
       setError(planRes.error ?? 'Failed to load plan');
@@ -139,7 +118,6 @@ export default function FollowModeScreen() {
       .flatMap((d) => d.stops.sort((a, b) => a.orderIndex - b.orderIndex));
     setAllStops(stops);
 
-    // Start follow session
     const sessionRes = await api<FollowSession>('/follow/start', {
       method: 'POST',
       body: { planId: id },
@@ -147,11 +125,15 @@ export default function FollowModeScreen() {
     if (sessionRes.data) {
       setSession(sessionRes.data);
     }
-    // Non-blocking: session creation failing shouldn't block the UI
     setLoading(false);
   };
 
-  // ─── Navigation handlers ───
+  const goTo = (nextIndex: number) => {
+    if (nextIndex < 0 || nextIndex >= allStops.length) return;
+    setCurrentIndex(nextIndex);
+    Haptics.selectionAsync();
+  };
+
   const handleNext = () => {
     if (currentIndex < allStops.length - 1) {
       setCurrentIndex(currentIndex + 1);
@@ -161,9 +143,7 @@ export default function FollowModeScreen() {
   };
 
   const handlePrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
+    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
   };
 
   const handleSkip = () => {
@@ -175,9 +155,7 @@ export default function FollowModeScreen() {
   };
 
   const handleComplete = async () => {
-    // Haptic feedback for completion
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
     if (session) {
       await api(`/follow/${session.id}/complete`, { method: 'PATCH' });
     }
@@ -190,7 +168,6 @@ export default function FollowModeScreen() {
     router.back();
   };
 
-  // ─── Loading state ───
   if (loading) {
     return (
       <View style={s.center}>
@@ -200,7 +177,6 @@ export default function FollowModeScreen() {
     );
   }
 
-  // ─── Error state ───
   if (error || allStops.length === 0) {
     return (
       <View style={s.center}>
@@ -213,80 +189,90 @@ export default function FollowModeScreen() {
     );
   }
 
-  // Pin tap del mapa mueve el currentIndex. El mapStops está filtrado (stops sin
-  // lat/lng quedan fuera del mapa), así que resolvemos por id contra allStops.
   const handlePinPress = (mapIndex: number) => {
     const tapped = mapStops[mapIndex];
     if (!tapped) return;
-    const targetIndex = allStops.findIndex((s) => s.placeId === tapped.id);
+    const targetIndex = allStops.findIndex((st) => st.placeId === tapped.id);
     if (targetIndex >= 0 && targetIndex !== currentIndex) {
-      setCurrentIndex(targetIndex);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      goTo(targetIndex);
     }
   };
 
-  // ─── Main layout: full-screen map + overlays ───
+  const activeMapPinIndex = Math.max(
+    0,
+    mapStops.findIndex(
+      (st) => allStops[currentIndex] && st.id === allStops[currentIndex].placeId,
+    ),
+  );
+
   return (
     <View style={s.root}>
-      {/* Full-screen map background */}
       <PlanMap
         stops={mapStops}
-        activePinIndex={Math.max(
-          0,
-          mapStops.findIndex(
-            (s) => allStops[currentIndex] && s.id === allStops[currentIndex].placeId,
-          ),
-        )}
+        activePinIndex={activeMapPinIndex}
         onPinPress={handlePinPress}
         style={s.map}
       />
 
-      {/* Transparent top bar overlay */}
-      <BlurView intensity={70} tint="light" style={[s.topBarOverlay, { paddingTop: insets.top + spacing.xs }]}>
+      <BlurView
+        intensity={70}
+        tint="light"
+        style={[s.topBarOverlay, { paddingTop: insets.top + spacing.xs }]}
+      >
         <View style={s.topBarRow}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={s.closeButton}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Close Follow Mode"
           >
             <Ionicons name="close" size={24} color={colors.deepOcean} />
           </TouchableOpacity>
 
-          <Text style={s.topTitle} numberOfLines={1}>
-            {planName}
-          </Text>
+          <Text style={s.topTitle} numberOfLines={1}>{planName}</Text>
 
           <Text style={s.stopCounter}>
-            Stop {currentIndex + 1}/{allStops.length}
+            {currentIndex + 1}/{allStops.length}
           </Text>
         </View>
 
-        {/* Animated progress bar */}
-        <View style={s.progressBg}>
-          <Animated.View style={[s.progressFill, progressBarStyle]} />
+        <View style={s.dotsRow}>
+          <ProgressDots
+            total={allStops.length}
+            current={currentIndex}
+            size="sm"
+            colorPending="rgba(15, 23, 42, 0.18)"
+          />
         </View>
       </BlurView>
 
-      {/* Bottom sheet stop overlay */}
-      <View style={[s.bottomSheetWrap, { paddingBottom: insets.bottom }]}>
-        {currentStop && (
+      <View
+        pointerEvents="box-none"
+        style={[s.carouselWrap, { top: insets.top + 84 }]}
+      >
+        <NextStopsCarousel
+          stops={previewStops}
+          currentIndex={currentIndex}
+          onSelect={goTo}
+        />
+      </View>
+
+      {currentStop && (
+        <View style={s.bottomSheetWrap} pointerEvents="box-none">
           <BottomSheetStop
             stop={currentStop}
-            index={currentIndex}
-            totalStops={allStops.length}
             onSwipeLeft={handleNext}
             onSwipeRight={handlePrev}
             onPause={handlePause}
             onSkip={handleSkip}
             onNext={handleNext}
           />
-        )}
-      </View>
-    </View >
+        </View>
+      )}
+    </View>
   );
 }
-
-const BOTTOM_SHEET_HEIGHT = 350;
 
 const s = StyleSheet.create({
   root: {
@@ -325,13 +311,9 @@ const s = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
   },
-
-  // Full-screen map
   map: {
     ...StyleSheet.absoluteFillObject,
   },
-
-  // Top bar overlay (positioned absolutely over the map)
   topBarOverlay: {
     position: 'absolute',
     top: 0,
@@ -353,49 +335,38 @@ const s = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   topTitle: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 16,
+    fontFamily: fonts.headingSemiBold,
+    fontSize: 18,
     color: colors.deepOcean,
     flex: 1,
     textAlign: 'center',
     marginHorizontal: spacing.sm,
   },
   stopCounter: {
-    fontFamily: fonts.bodyMedium,
+    fontFamily: fonts.bodySemiBold,
     fontSize: 13,
     color: colors.textSecondary,
-    minWidth: 60,
+    minWidth: 48,
     textAlign: 'right',
   },
-
-  // Animated progress bar
-  progressBg: {
-    height: 4,
-    backgroundColor: colors.borderColor,
-    borderRadius: 2,
-    overflow: 'hidden',
+  dotsRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
   },
-  progressFill: {
-    height: 4,
-    backgroundColor: colors.electricBlue,
-    borderRadius: 2,
-  },
-
-  // Bottom sheet wrapper
-  bottomSheetWrap: {
+  carouselWrap: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    height: BOTTOM_SHEET_HEIGHT,
-    zIndex: 10,
+    zIndex: 9,
   },
-  bottomSheet: {
-    flex: 1,
+  bottomSheetWrap: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
   },
 });
