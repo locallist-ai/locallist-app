@@ -43,6 +43,8 @@ export default {
     budgetPremium: 'Premium',
   },
   plans: {
+    chooserTitle: 'Tu próximo\nplan',
+    chooserSubtitle: '¿Cómo quieres empezar?',
     exploreCurated: 'Explora planes curados',
     exploreCuratedSub: 'Seleccionados por locales que conocen lo mejor',
     buildYourOwn: 'Crea tu propio plan',
@@ -50,6 +52,9 @@ export default {
     buildYourOwnLocked: 'Función Plus',
     importVideo: 'Importar desde Reels o TikTok',
     importVideoSub: 'Pega un enlace y lo convertimos en un plan',
+    myPlans: 'Mis Planes',
+    myPlansCount: '{{count}} plan{{s}} guardado{{s}}',
+    myPlansEmpty: 'Tus planes creados',
   },
   destination: {
     title: '¿A dónde\nvamos?',
