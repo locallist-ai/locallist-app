@@ -18,6 +18,13 @@ interface Stop {
   whyThisPlace?: string;
   duration?: number; // in minutes
   priceRange?: string;
+  googleRating?: number | null;
+  googleReviewCount?: number | null;
+  travelFromPrevious?: {
+    distance_km: number;
+    duration_min: number;
+    mode: string;
+  } | null;
 }
 
 interface Plan {
@@ -63,8 +70,10 @@ export const StopCard: React.FC<StopCardProps> = ({
   return (
     <ScrollView
       style={styles.container}
-      scrollEnabled={false}
-      nestedScrollEnabled={false}
+      contentContainerStyle={styles.contentContainer}
+      scrollEnabled={true}
+      nestedScrollEnabled={true}
+      showsVerticalScrollIndicator={false}
     >
       {/* Photo */}
       <PhotoHero
@@ -96,30 +105,45 @@ export const StopCard: React.FC<StopCardProps> = ({
           </>
         )}
 
-        {/* Info row: Duration & Price */}
-        {(stop.duration || stop.priceRange) && (
+        {/* Info row: Duration, Price, Rating, Travel */}
+        {(stop.duration || stop.priceRange || stop.googleRating || stop.travelFromPrevious) && (
           <View style={styles.infoRow}>
             {stop.duration && (
               <View style={styles.infoPill}>
-                <MaterialCommunityIcons
-                  name="clock-outline"
-                  size={14}
-                  color="#0f172a"
-                />
-                <Text style={styles.infoPillText}>
-                  {formatDuration(stop.duration)}
-                </Text>
+                <MaterialCommunityIcons name="clock-outline" size={14} color="#0f172a" />
+                <Text style={styles.infoPillText}>{formatDuration(stop.duration)}</Text>
               </View>
             )}
 
             {stop.priceRange && (
               <View style={styles.infoPill}>
-                <MaterialCommunityIcons
-                  name="currency-usd"
-                  size={14}
-                  color="#0f172a"
-                />
+                <MaterialCommunityIcons name="currency-usd" size={14} color="#0f172a" />
                 <Text style={styles.infoPillText}>{stop.priceRange}</Text>
+              </View>
+            )}
+
+            {typeof stop.googleRating === 'number' && stop.googleRating > 0 && (
+              <View style={styles.infoPill}>
+                <MaterialCommunityIcons name="star" size={14} color="#f59e0b" />
+                <Text style={styles.infoPillText}>
+                  {stop.googleRating.toFixed(1)}
+                  {typeof stop.googleReviewCount === 'number' && stop.googleReviewCount > 0
+                    ? ` · ${stop.googleReviewCount}`
+                    : ''}
+                </Text>
+              </View>
+            )}
+
+            {stop.travelFromPrevious && stop.travelFromPrevious.duration_min > 0 && (
+              <View style={[styles.infoPill, styles.travelPill]}>
+                <MaterialCommunityIcons
+                  name={stop.travelFromPrevious.mode === 'walk' ? 'walk' : 'car'}
+                  size={14}
+                  color="#0369a1"
+                />
+                <Text style={[styles.infoPillText, styles.travelPillText]}>
+                  {stop.travelFromPrevious.duration_min}m
+                </Text>
               </View>
             )}
           </View>
@@ -133,6 +157,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  contentContainer: {
+    paddingBottom: 24,
   },
   content: {
     paddingHorizontal: 16,
@@ -183,6 +210,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginTop: 8,
+    flexWrap: 'wrap',
   },
   infoPill: {
     flexDirection: 'row',
@@ -197,5 +225,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#0f172a',
+  },
+  travelPill: {
+    backgroundColor: '#e0f2fe',
+  },
+  travelPillText: {
+    color: '#0369a1',
   },
 });

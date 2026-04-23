@@ -395,6 +395,22 @@ function StopCard({ stop }: { stop: PlanStop }) {
               <Text style={s.stopDurationText}>~{stop.suggestedDurationMin} min</Text>
             </View>
           )}
+          {typeof place?.googleRating === 'number' && place.googleRating > 0 && (
+            <View style={s.stopRatingChip}>
+              <Ionicons name="star" size={12} color="#f59e0b" />
+              <Text style={s.stopRatingText}>
+                {place.googleRating.toFixed(1)}
+                {typeof place.googleReviewCount === 'number' && place.googleReviewCount > 0
+                  ? ` · ${place.googleReviewCount}`
+                  : ''}
+              </Text>
+            </View>
+          )}
+          {place?.priceRange && (
+            <View style={s.stopPriceChip}>
+              <Text style={s.stopPriceText}>{place.priceRange}</Text>
+            </View>
+          )}
           <View style={s.stopArrow}>
             <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
           </View>
@@ -521,14 +537,27 @@ const s = StyleSheet.create({
     fontFamily: fonts.body, fontSize: 14, lineHeight: 20,
     color: colors.textMain, fontStyle: 'italic', marginBottom: 8,
   },
-  stopFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stopFooter: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+  },
   stopDurationChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: colors.electricBlue + '10',
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: borderRadius.full,
   },
   stopDurationText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.electricBlue },
-  stopArrow: { opacity: 0.4 },
+  stopRatingChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#fffbeb', // amber 50
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: borderRadius.full,
+  },
+  stopRatingText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: '#b45309' },
+  stopPriceChip: {
+    backgroundColor: colors.successEmerald + '15',
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: borderRadius.full,
+  },
+  stopPriceText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: '#059669' },
+  stopArrow: { opacity: 0.4, marginLeft: 'auto' },
 
   // Travel connector
   connectorRow: {
