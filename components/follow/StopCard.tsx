@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
 } from 'react-native';
 import { PhotoHero, type Category } from '../ui/PhotoHero';
@@ -52,18 +51,13 @@ const formatDuration = (minutes?: number): string => {
   return `${hours}h${mins > 0 ? ` ${mins}m` : ''}`;
 };
 
-const WHY_TRUNCATE_LENGTH = 140;
-
 export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
-  const [whyExpanded, setWhyExpanded] = useState(false);
   const photoUrl = stop.photos?.[0]?.url;
   const categoryColor = CATEGORY_COLOR[stop.category ?? 'Culture'] ?? '#0f172a';
 
   const timeEmoji = stop.timeBlock ? TIME_BLOCK_EMOJI[stop.timeBlock] ?? DEFAULT_STOP_EMOJI : null;
   const travel = stop.travelFromPrevious;
   const why = stop.whyThisPlace ?? '';
-  const whyNeedsTruncate = why.length > WHY_TRUNCATE_LENGTH;
-  const whyDisplay = whyExpanded || !whyNeedsTruncate ? why : `${why.slice(0, WHY_TRUNCATE_LENGTH).trim()}…`;
 
   return (
     <ScrollView
@@ -77,6 +71,7 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
         imageUrl={photoUrl}
         fallbackCategory={(stop.category as Category) || 'Culture'}
         height={180}
+        blurBackdrop
       />
 
       <View style={styles.content}>
@@ -151,19 +146,7 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
         {why.length > 0 && (
           <View style={styles.whyBlock}>
             <Text style={styles.sectionLabel}>Why this place</Text>
-            <Text style={styles.description}>{whyDisplay}</Text>
-            {whyNeedsTruncate && (
-              <TouchableOpacity
-                onPress={() => setWhyExpanded((v) => !v)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={whyExpanded ? 'Show less' : 'Show more'}
-              >
-                <Text style={styles.whyToggle}>
-                  {whyExpanded ? 'Show less' : 'Show more'}
-                </Text>
-              </TouchableOpacity>
-            )}
+            <Text style={styles.description}>{why}</Text>
           </View>
         )}
       </View>
@@ -306,11 +289,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     color: colors.textMain,
-  },
-  whyToggle: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 13,
-    color: colors.sunsetOrange,
-    marginTop: 4,
   },
 });

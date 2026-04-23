@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ImageSourcePropType } from 'react-native';
+import { View, Text, StyleSheet, ImageSourcePropType, Image as RNImage } from 'react-native';
 import { Image, ImageSource } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,8 @@ interface PhotoHeroProps {
   height?: number;
   /** When true, adds safe area inset padding at top (for full-screen heroes) */
   withSafeArea?: boolean;
+  /** When true, shows the full photo with a blurred version as backdrop (no cropping). */
+  blurBackdrop?: boolean;
   onImageLoadError?: () => void;
 }
 
@@ -36,6 +38,7 @@ export const PhotoHero: React.FC<PhotoHeroProps> = ({
   subtitle,
   height = 250,
   withSafeArea = false,
+  blurBackdrop = false,
   onImageLoadError,
 }) => {
   const insets = useSafeAreaInsets();
@@ -59,12 +62,24 @@ export const PhotoHero: React.FC<PhotoHeroProps> = ({
         style={styles.image}
       />
 
+      {/* Blur backdrop — same photo, cover+blurred, fills container edges
+       *  so the sharp image on top can use contentFit="contain" without
+       *  showing empty bars. */}
+      {shouldShowImage && blurBackdrop && (
+        <RNImage
+          source={imageSource as any}
+          style={styles.image}
+          resizeMode="cover"
+          blurRadius={25}
+        />
+      )}
+
       {/* Image loads on top with fade-in transition */}
       {shouldShowImage && (
         <Image
           source={imageSource}
           style={styles.image}
-          contentFit="cover"
+          contentFit={blurBackdrop ? 'contain' : 'cover'}
           transition={200}
           cachePolicy="memory-disk"
           onError={() => {

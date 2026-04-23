@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,23 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  Linking,
-  Alert,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { PhotoHero, type Category } from '../ui/PhotoHero';
+import { PhotoMosaic } from '../ui/PhotoMosaic';
 import { CategoryBadge } from '../ui/CategoryBadge';
 import { ProgressDots } from '../ui/design-system';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
@@ -30,12 +38,11 @@ interface PlanCardPagerProps {
   message?: string | null;
   isAuthenticated: boolean;
   isOwner: boolean;
-  heroImageUrl?: string;
+  heroPhotos: string[];
   onFollow: () => void;
   onEdit?: () => void;
+  onDelete?: () => void;
 }
-
-const WHY_TRUNCATE = 160;
 
 export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   plan,
@@ -44,15 +51,42 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   message,
   isAuthenticated,
   isOwner,
-  heroImageUrl,
+  heroPhotos,
   onFollow,
   onEdit,
+  onDelete,
 }) => {
   const [slide, setSlide] = useState(0);
+  const [hintVisible, setHintVisible] = useState(true);
   const scrollRef = useRef<ScrollView>(null);
   const lastHaptic = useRef(0);
+  const hintPulse = useSharedValue(0);
 
   const slotCount = 1 + stops.length;
+  const hasMoreSlides = slotCount > 1;
+
+  useEffect(() => {
+    if (!hasMoreSlides) return;
+    const bounceTimer = setTimeout(() => {
+      scrollRef.current?.scrollTo({ x: 56, animated: true });
+      const back = setTimeout(() => {
+        scrollRef.current?.scrollTo({ x: 0, animated: true });
+      }, 320);
+      return () => clearTimeout(back);
+    }, 700);
+    hintPulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 700, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 700, easing: Easing.in(Easing.quad) }),
+      ),
+      -1,
+      false,
+    );
+    return () => {
+      clearTimeout(bounceTimer);
+      cancelAnimation(hintPulse);
+    };
+  }, [hasMoreSlides, hintPulse]);
 
   const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const x = e.nativeEvent.contentOffset.x;
@@ -64,17 +98,21 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
         lastHaptic.current = Date.now();
       }
     }
-  };
-
-  const goToSlide = (idx: number) => {
-    if (idx < 0 || idx >= slotCount) return;
-    scrollRef.current?.scrollTo({ x: idx * SCREEN_WIDTH, animated: true });
+    if (hintVisible) {
+      setHintVisible(false);
+      cancelAnimation(hintPulse);
+    }
   };
 
   const slideLabel = useMemo(() => {
     if (slide === 0) return 'Overview';
     return `Stop ${slide} of ${stops.length}`;
   }, [slide, stops.length]);
+
+  const hintAnimStyle = useAnimatedStyle(() => ({
+    opacity: 0.55 + hintPulse.value * 0.45,
+    transform: [{ translateX: hintPulse.value * 6 }],
+  }));
 
   return (
     <View style={styles.root}>
@@ -91,12 +129,12 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
           plan={plan}
           totalStops={totalStops}
           message={message}
-          heroImageUrl={heroImageUrl}
+          heroPhotos={heroPhotos}
           isAuthenticated={isAuthenticated}
           isOwner={isOwner}
           onFollow={onFollow}
           onEdit={onEdit}
-          onStart={() => goToSlide(1)}
+          onDelete={onDelete}
         />
         {stops.map((stop, idx) => (
           <StopSlot
@@ -109,16 +147,6 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
       </ScrollView>
 
       <View style={styles.footer} pointerEvents="box-none">
-        <TouchableOpacity
-          disabled={slide === 0}
-          onPress={() => goToSlide(slide - 1)}
-          style={[styles.navBtn, slide === 0 && styles.navBtnDisabled]}
-          accessibilityRole="button"
-          accessibilityLabel="Previous slide"
-        >
-          <Ionicons name="chevron-back" size={22} color={slide === 0 ? colors.borderColor : colors.deepOcean} />
-        </TouchableOpacity>
-
         <View style={styles.footerCenter}>
           <ProgressDots
             total={slotCount}
@@ -129,15 +157,13 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
           <Text style={styles.slideLabel}>{slideLabel}</Text>
         </View>
 
-        <TouchableOpacity
-          disabled={slide === slotCount - 1}
-          onPress={() => goToSlide(slide + 1)}
-          style={[styles.navBtn, slide === slotCount - 1 && styles.navBtnDisabled]}
-          accessibilityRole="button"
-          accessibilityLabel="Next slide"
-        >
-          <Ionicons name="chevron-forward" size={22} color={slide === slotCount - 1 ? colors.borderColor : colors.deepOcean} />
-        </TouchableOpacity>
+        {hintVisible && hasMoreSlides && slide === 0 && (
+          <Animated.View pointerEvents="none" style={[styles.swipeHint, hintAnimStyle]}>
+            <Text style={styles.swipeHintText}>Swipe</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.sunsetOrange} />
+            <Ionicons name="chevron-forward" size={16} color={colors.sunsetOrange} style={styles.swipeHintSecondChevron} />
+          </Animated.View>
+        )}
       </View>
     </View>
   );
@@ -149,24 +175,24 @@ interface OverviewSlotProps {
   plan: Plan;
   totalStops: number;
   message?: string | null;
-  heroImageUrl?: string;
+  heroPhotos: string[];
   isAuthenticated: boolean;
   isOwner: boolean;
   onFollow: () => void;
   onEdit?: () => void;
-  onStart: () => void;
+  onDelete?: () => void;
 }
 
 const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
   plan,
   totalStops,
   message,
-  heroImageUrl,
+  heroPhotos,
   isAuthenticated,
   isOwner,
   onFollow,
   onEdit,
-  onStart,
+  onDelete,
 }) => {
   const heroFallback = (plan.category ?? plan.type ?? 'Culture') as Category;
   const heroSubtitle = `${plan.city} · ${plan.durationDays} ${plan.durationDays === 1 ? 'day' : 'days'}`;
@@ -177,29 +203,35 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
       contentContainerStyle={styles.slotContent}
       showsVerticalScrollIndicator={false}
     >
-      <PhotoHero
-        imageUrl={heroImageUrl}
+      <PhotoMosaic
+        photos={heroPhotos}
         fallbackCategory={heroFallback}
-        title={plan.name}
-        subtitle={heroSubtitle}
-        height={260}
-        withSafeArea
+        height={280}
       />
 
-      <View style={styles.body}>
-        <View style={styles.statsRow}>
-          <Stat icon="location-outline" text={plan.city} />
-          <Dot />
-          <Stat icon="calendar-outline" text={`${plan.durationDays} ${plan.durationDays === 1 ? 'day' : 'days'}`} />
-          <Dot />
-          <Stat icon="flag-outline" text={`${totalStops} stops`} />
+      <View style={styles.overviewPanel}>
+        <Text style={styles.overviewTitle}>{plan.name}</Text>
+        <Text style={styles.overviewSubtitle}>{heroSubtitle}</Text>
+
+        <View style={styles.pillsRow}>
+          <View style={styles.pill}>
+            <Ionicons name="location-outline" size={14} color={colors.sunsetOrange} />
+            <Text style={styles.pillText}>{plan.city}</Text>
+          </View>
+          <View style={styles.pill}>
+            <Ionicons name="calendar-outline" size={14} color={colors.sunsetOrange} />
+            <Text style={styles.pillText}>
+              {plan.durationDays} {plan.durationDays === 1 ? 'day' : 'days'}
+            </Text>
+          </View>
+          <View style={styles.pill}>
+            <Ionicons name="flag-outline" size={14} color={colors.sunsetOrange} />
+            <Text style={styles.pillText}>{totalStops} stops</Text>
+          </View>
           {plan.type && (
-            <>
-              <Dot />
-              <View style={styles.typeBadge}>
-                <Text style={styles.typeBadgeText}>{plan.type}</Text>
-              </View>
-            </>
+            <View style={styles.typePill}>
+              <Text style={styles.typePillText}>{plan.type}</Text>
+            </View>
           )}
         </View>
 
@@ -217,17 +249,33 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
           </View>
         )}
 
-        {isOwner && onEdit && (
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={onEdit}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Edit this plan"
-          >
-            <Ionicons name="create-outline" size={16} color={colors.sunsetOrange} />
-            <Text style={styles.editBtnText}>Edit Plan</Text>
-          </TouchableOpacity>
+        {isOwner && (onEdit || onDelete) && (
+          <View style={styles.ownerActions}>
+            {onEdit && (
+              <TouchableOpacity
+                style={[styles.editBtn, styles.ownerActionBtn]}
+                onPress={onEdit}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Edit this plan"
+              >
+                <Ionicons name="create-outline" size={16} color={colors.sunsetOrange} />
+                <Text style={styles.editBtnText}>Edit</Text>
+              </TouchableOpacity>
+            )}
+            {onDelete && (
+              <TouchableOpacity
+                style={[styles.deleteBtn, styles.ownerActionBtn]}
+                onPress={onDelete}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Delete this plan"
+              >
+                <Ionicons name="trash-outline" size={16} color={colors.error} />
+                <Text style={styles.deleteBtnText}>Delete</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
 
         <TouchableOpacity
@@ -249,17 +297,6 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
             </Text>
           </LinearGradient>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={onStart}
-          style={styles.browseBtn}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Browse stops"
-        >
-          <Text style={styles.browseBtnText}>Browse stops</Text>
-          <Ionicons name="arrow-forward" size={16} color={colors.deepOcean} />
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -275,7 +312,6 @@ interface StopSlotProps {
 }
 
 const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) => {
-  const [expanded, setExpanded] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
   const place = stop.place;
   const photos = place?.photos ?? [];
@@ -283,8 +319,6 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) =>
   const fallbackCategory = (place?.category ?? 'Culture') as Category;
   const timeEmoji = stop.timeBlock ? TIME_BLOCK_EMOJI[stop.timeBlock] ?? null : null;
   const why = place?.whyThisPlace ?? '';
-  const needsTruncate = why.length > WHY_TRUNCATE;
-  const whyDisplay = expanded || !needsTruncate ? why : `${why.slice(0, WHY_TRUNCATE).trim()}…`;
 
   const chipTokens = useMemo(() => {
     const tokens: string[] = [];
@@ -293,16 +327,6 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) =>
     if (place?.bestFor) tokens.push(...place.bestFor.slice(0, 2));
     return Array.from(new Set(tokens)).slice(0, 5);
   }, [place]);
-
-  const openMaps = () => {
-    if (!place?.latitude || !place?.longitude) {
-      Alert.alert('Location unavailable', 'This place does not have coordinates yet.');
-      return;
-    }
-    const query = encodeURIComponent(place.name);
-    const url = `https://maps.apple.com/?q=${query}&ll=${place.latitude},${place.longitude}`;
-    Linking.openURL(url).catch(() => {});
-  };
 
   return (
     <ScrollView
@@ -315,6 +339,7 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) =>
           imageUrl={activePhoto}
           fallbackCategory={fallbackCategory}
           height={260}
+          blurBackdrop
         />
         {timeEmoji && (
           <View style={styles.timeOverlay}>
@@ -410,49 +435,14 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) =>
         {why.length > 0 && (
           <View style={styles.whyBlock}>
             <Text style={styles.sectionLabel}>Why this place</Text>
-            <Text style={styles.whyText}>{whyDisplay}</Text>
-            {needsTruncate && (
-              <TouchableOpacity
-                onPress={() => setExpanded((v) => !v)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-              >
-                <Text style={styles.whyToggle}>
-                  {expanded ? 'Show less' : 'Show more'}
-                </Text>
-              </TouchableOpacity>
-            )}
+            <Text style={styles.whyText}>{why}</Text>
           </View>
         )}
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            onPress={openMaps}
-            activeOpacity={0.7}
-            style={styles.actionBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Open in Maps"
-          >
-            <Ionicons name="map-outline" size={18} color={colors.deepOcean} />
-            <Text style={styles.actionBtnText}>Open in Maps</Text>
-          </TouchableOpacity>
-        </View>
       </View>
     </ScrollView>
   );
 });
 StopSlot.displayName = 'StopSlot';
-
-/* ───── Subcomponents ───── */
-
-const Stat: React.FC<{ icon: keyof typeof Ionicons.glyphMap; text: string }> = ({ icon, text }) => (
-  <View style={styles.statItem}>
-    <Ionicons name={icon} size={15} color={colors.sunsetOrange} />
-    <Text style={styles.statText}>{text}</Text>
-  </View>
-);
-
-const Dot: React.FC = () => <View style={styles.statDot} />;
 
 /* ───── Styles ───── */
 
@@ -466,35 +456,78 @@ const styles = StyleSheet.create({
   },
   slot: {
     width: SCREEN_WIDTH,
+    backgroundColor: colors.bgCard,
   },
   slotContent: {
+    flexGrow: 1,
     paddingBottom: 110, // space for footer
+    backgroundColor: colors.bgCard,
   },
   body: {
+    flex: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     gap: spacing.sm,
+    backgroundColor: colors.bgCard,
   },
 
   /* Overview */
-  statsRow: {
+  overviewPanel: {
+    marginTop: -24,
+    backgroundColor: colors.bgCard,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  overviewTitle: {
+    fontFamily: fonts.headingBold,
+    fontSize: 28,
+    lineHeight: 34,
+    color: colors.deepOcean,
+  },
+  overviewSubtitle: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: -4,
+  },
+  pillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
-    gap: 8,
+    gap: 5,
+    backgroundColor: colors.sunsetOrange + '12',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
   },
-  statItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  statText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.deepOcean },
-  statDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.borderColor },
-  typeBadge: {
-    backgroundColor: colors.sunsetOrange + '15',
-    paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full,
+  pillText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.deepOcean,
   },
-  typeBadgeText: { fontFamily: fonts.bodySemiBold, fontSize: 11, color: colors.sunsetOrange },
+  typePill: {
+    backgroundColor: colors.deepOcean,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
+  },
+  typePillText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 11,
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   description: {
     fontFamily: fonts.body,
     fontSize: 15,
@@ -511,6 +544,13 @@ const styles = StyleSheet.create({
   messageHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   messageLabel: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.sunsetOrange },
   messageText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.textMain },
+  ownerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  ownerActionBtn: {
+    flex: 1,
+  },
   editBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, paddingVertical: 10,
@@ -519,6 +559,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sunsetOrange + '08',
   },
   editBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.sunsetOrange },
+  deleteBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 10,
+    borderRadius: borderRadius.md, borderWidth: 1,
+    borderColor: colors.error + '40',
+    backgroundColor: colors.error + '08',
+  },
+  deleteBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.error },
   ctaWrap: { marginTop: spacing.xs },
   cta: {
     flexDirection: 'row',
@@ -529,14 +577,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
   },
   ctaText: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' },
-  browseBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 10,
-  },
-  browseBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.deepOcean },
 
   /* Stop hero overlays */
   stopHeroWrap: {
@@ -653,31 +693,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   whyText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.textMain },
-  whyToggle: {
-    fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.sunsetOrange, marginTop: 4,
-  },
-
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: spacing.sm,
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.bgCard,
-    borderWidth: 1,
-    borderColor: colors.borderColor,
-  },
-  actionBtnText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 14,
-    color: colors.deepOcean,
-  },
 
   /* Footer */
   footer: {
@@ -686,17 +701,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(242,239,233,0.92)',
-    borderTopWidth: 1,
-    borderTopColor: colors.borderColor,
+    justifyContent: 'center',
   },
   footerCenter: {
     alignItems: 'center',
     gap: 4,
-    flex: 1,
   },
   slideLabel: {
     fontFamily: fonts.bodySemiBold,
@@ -705,17 +715,26 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  navBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  swipeHint: {
+    position: 'absolute',
+    right: spacing.md,
+    bottom: spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgCard,
-    borderWidth: 1,
-    borderColor: colors.borderColor,
+    backgroundColor: colors.sunsetOrange + '18',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
+    gap: 2,
   },
-  navBtnDisabled: {
-    opacity: 0.4,
+  swipeHintText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.sunsetOrange,
+    marginRight: 4,
+  },
+  swipeHintSecondChevron: {
+    marginLeft: -10,
+    opacity: 0.6,
   },
 });

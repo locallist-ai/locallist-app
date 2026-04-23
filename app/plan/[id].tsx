@@ -5,15 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { getPreviewPlan } from '../../lib/plan-store';
 import { PlanCardPager } from '../../components/plan/PlanCardPager';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import type { Plan, PlanStop, PlanDetailResponse } from '../../lib/types';
 
 function flattenStopsFromDays(days: { dayNumber: number; stops: PlanStop[] }[]): PlanStop[] {
@@ -41,6 +44,8 @@ export default function PlanDetailScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (id === 'preview') {
@@ -76,11 +81,26 @@ export default function PlanDetailScreen() {
     return () => { cancelled = true; };
   }, [id]);
 
-  const heroImageUrl = useMemo(() => {
-    if (!plan) return undefined;
-    if (plan.image) return plan.image;
-    const firstPhoto = stops[0]?.place?.photos?.[0];
-    return firstPhoto ?? undefined;
+  // Build the hero mosaic: up to 4 unique photos, drawn from diverse stops
+  // (first photo of different stops, then plan.image if present and not already
+  // included). This avoids the hero being identical to the first stop's image
+  // while still reflecting places that actually appear in the plan.
+  const heroPhotos = useMemo<string[]>(() => {
+    const picked: string[] = [];
+    const seen = new Set<string>();
+    for (const st of stops) {
+      const photo = st.place?.photos?.[0];
+      if (photo && !seen.has(photo)) {
+        picked.push(photo);
+        seen.add(photo);
+        if (picked.length >= 4) break;
+      }
+    }
+    if (plan?.image && !seen.has(plan.image)) {
+      picked.unshift(plan.image);
+      if (picked.length > 4) picked.length = 4;
+    }
+    return picked;
   }, [plan, stops]);
 
   if (loading) {
@@ -115,6 +135,25 @@ export default function PlanDetailScreen() {
     router.push(`/plan/edit/${id}`);
   };
 
+  const handleDelete = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setDeleteVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    const res = await api(`/plans/${id}`, { method: 'DELETE' });
+    setDeleting(false);
+    setDeleteVisible(false);
+    if (res.status === 204 || (res.status >= 200 && res.status < 300)) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } else {
+      Alert.alert('Delete failed', res.error ?? 'Could not delete this plan. Please try again.');
+    }
+  };
+
   return (
     <View style={[s.root, { paddingTop: 0 }]}>
       <TouchableOpacity
@@ -134,9 +173,24 @@ export default function PlanDetailScreen() {
         message={message}
         isAuthenticated={isAuthenticated}
         isOwner={isOwner && id !== 'preview'}
-        heroImageUrl={heroImageUrl}
+        heroPhotos={heroPhotos}
         onFollow={handleFollow}
         onEdit={id !== 'preview' ? handleEdit : undefined}
+        onDelete={id !== 'preview' && isOwner ? handleDelete : undefined}
+      />
+
+      <ConfirmModal
+        visible={deleteVisible}
+        icon="trash-outline"
+        iconColor={colors.error}
+        title="Delete this plan?"
+        body="This will permanently remove the plan, its stops, and any follow sessions tied to it. This action cannot be undone."
+        confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+        confirmDestructive
+        onCancel={() => {
+          if (!deleting) setDeleteVisible(false);
+        }}
+        onConfirm={confirmDelete}
       />
     </View>
   );
