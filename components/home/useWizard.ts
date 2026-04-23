@@ -102,6 +102,23 @@ export const useWizard = (): UseWizardResult => {
 
   const handleGenerate = useCallback(async () => {
     if (loading) return;
+
+    // Client-side validation — espejo de ValidateMinimumInput del backend (PR #48 api-net).
+    // Evita roundtrip innecesario al backend cuando sabemos que va a devolver 400.
+    // Regla: ≥3 de 5 señales wizard {city, days, groupType, preferences, budget}.
+    const hasCity = !!city;
+    const hasDays = !!selections[0];
+    const hasGroupType = !!selections[1];
+    const hasPreferences = !!selections[2];
+    const hasBudget = !!selections[3];
+    const wizardSignals = [hasCity, hasDays, hasGroupType, hasPreferences, hasBudget]
+      .filter(Boolean).length;
+    if (wizardSignals < 3) {
+      hapticImpact(ImpactFeedbackStyle.Heavy);
+      setError(t('wizard.errorInsufficientInput'));
+      return;
+    }
+
     setError(null);
     setLoading(true);
     hapticImpact(ImpactFeedbackStyle.Medium);
@@ -122,8 +139,10 @@ export const useWizard = (): UseWizardResult => {
     // - groupType (step 2): solo/couple/family-kids/etc.
     // - preferences + vibes (step 3): mismo valor (adventure/relax/cultural).
     // - budget (step 4): budget/moderate/premium.
+    // El chat es opcional. Si usuario no escribió nada, enviamos string vacío; el
+    // backend lo acepta (PR #48 Message nullable) y usa solo el wizard para el pipeline.
     const body = {
-      message: message.trim() || t('place.defaultMessage'),
+      message: message.trim(),
       tripContext: {
         city: city ?? undefined,
         groupType: selections[1] ?? 'solo',

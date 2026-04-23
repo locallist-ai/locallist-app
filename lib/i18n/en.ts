@@ -28,6 +28,7 @@ export default {
     chatPlaceholder: 'Add details or leave blank...',
     buildMyPlan: 'Build my plan',
     errorDefault: 'Something went wrong',
+    errorInsufficientInput: 'Please complete at least 3 wizard steps before building your plan (city, duration, group, style, budget).',
     duration1Day: '1 day',
     duration2Days: '2 days',
     duration3Days: '3 days',
