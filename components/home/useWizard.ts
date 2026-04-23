@@ -49,6 +49,7 @@ export const useWizard = (): UseWizardResult => {
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [selections, setSelections] = useState<(string | null)[]>([null, null, null, null]);
+  const [city, setCity] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +83,8 @@ export const useWizard = (): UseWizardResult => {
     setStep((s) => Math.max(s - 1, 0));
   }, [step]);
 
-  const handleCitySelect = useCallback((_cityName: string) => {
+  const handleCitySelect = useCallback((cityName: string) => {
+    setCity(cityName);
     advanceToNext();
   }, [advanceToNext]);
 
@@ -112,16 +114,23 @@ export const useWizard = (): UseWizardResult => {
       return Number.isFinite(n) && n >= 1 && n <= 7 ? n : undefined;
     };
 
+    // El tripContext recoge TODAS las señales capturadas por el wizard para que el
+    // backend pueda contar las completadas y rechazar con 400 'insufficient_input'
+    // si no llegan al umbral mínimo (ver PR #47 api-net + ValidateMinimumInput).
+    // - city (step 0): seleccionado en el chooser de ciudad.
+    // - days (step 1): 1/2/3 via daysFromDuration.
+    // - groupType (step 2): solo/couple/family-kids/etc.
+    // - preferences + vibes (step 3): mismo valor (adventure/relax/cultural).
+    // - budget (step 4): budget/moderate/premium.
     const body = {
       message: message.trim() || t('place.defaultMessage'),
       tripContext: {
+        city: city ?? undefined,
         groupType: selections[1] ?? 'solo',
         preferences: selections[2] ? [selections[2]] : [],
-        // El step 3 selecciona valores semánticos (adventure/relax/cultural) que ya son vibes,
-        // no solo "preferences". Enviarlos también como vibes para que el rerank del backend
-        // los use como señal adicional (ver TripContextDto.Vibes + PR #42 api-net).
         vibes: selections[2] ? [selections[2]] : [],
         days: daysFromDuration(selections[0]),
+        budget: selections[3] ?? undefined,
       },
     };
 
@@ -149,7 +158,7 @@ export const useWizard = (): UseWizardResult => {
     } finally {
       setLoading(false);
     }
-  }, [loading, message, selections, t]);
+  }, [loading, message, selections, city, t]);
 
   return {
     step,
