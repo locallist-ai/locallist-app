@@ -18,6 +18,7 @@ import { useAuth } from '../../lib/auth';
 import { getCached, setCache, isFresh } from '../../lib/api-cache';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
 import { SkeletonCard } from '../../components/ui/SkeletonCard';
+import { EditorialTitle, StepSubtitle } from '../../components/ui/design-system';
 import type { Plan } from '../../lib/types';
 import type { ImageSourcePropType } from 'react-native';
 
@@ -154,18 +155,26 @@ export default function PlansScreen() {
     return (
       <View style={s.root}>
         <ScrollView contentContainerStyle={s.chooserContainer} showsVerticalScrollIndicator={false}>
+          <View style={s.chooserHeader}>
+            <EditorialTitle text={t('plans.chooserTitle')} size="md" align="left" />
+            <StepSubtitle
+              text={t('plans.chooserSubtitle')}
+              size="md"
+              align="left"
+              style={{ marginTop: 8 }}
+            />
+          </View>
+
           {/* Explore curated plans */}
           <TouchableOpacity
             style={s.chooserCard}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
             onPress={() => {
               setMode('curated');
               if (!cached) fetchPlans().finally(() => setLoading(false));
             }}
           >
-            <View style={s.chooserIconWrap}>
-              <Ionicons name="compass-outline" size={32} color={colors.electricBlue} />
-            </View>
+            <Text style={s.chooserEmoji}>🧭</Text>
             <View style={s.chooserTextWrap}>
               <Text style={s.chooserTitle}>{t('plans.exploreCurated')}</Text>
               <Text style={s.chooserSub}>{t('plans.exploreCuratedSub')}</Text>
@@ -176,12 +185,10 @@ export default function PlansScreen() {
           {/* Build your own (Premium) */}
           <TouchableOpacity
             style={s.chooserCard}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
             onPress={() => router.push('/builder/custom')}
           >
-            <View style={[s.chooserIconWrap, { backgroundColor: colors.sunsetOrangeLight }]}>
-              <Ionicons name="sparkles-outline" size={32} color={colors.sunsetOrange} />
-            </View>
+            <Text style={s.chooserEmoji}>✨</Text>
             <View style={s.chooserTextWrap}>
               <View style={s.chooserTitleRow}>
                 <Text style={s.chooserTitle}>{t('plans.buildYourOwn')}</Text>
@@ -197,12 +204,10 @@ export default function PlansScreen() {
           {/* Import from video */}
           <TouchableOpacity
             style={s.chooserCard}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
             onPress={() => router.push('/builder/import-video')}
           >
-            <View style={[s.chooserIconWrap, { backgroundColor: '#fce7f3' }]}>
-              <Ionicons name="videocam-outline" size={32} color="#ec4899" />
-            </View>
+            <Text style={s.chooserEmoji}>🎬</Text>
             <View style={s.chooserTextWrap}>
               <Text style={s.chooserTitle}>{t('plans.importVideo')}</Text>
               <Text style={s.chooserSub}>{t('plans.importVideoSub')}</Text>
@@ -214,18 +219,16 @@ export default function PlansScreen() {
           {isAuthenticated && (
             <TouchableOpacity
               style={s.chooserCard}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               onPress={() => setMode('mine')}
             >
-              <View style={[s.chooserIconWrap, { backgroundColor: colors.sunsetOrange + '12' }]}>
-                <Ionicons name="bookmark-outline" size={32} color={colors.sunsetOrange} />
-              </View>
+              <Text style={s.chooserEmoji}>📌</Text>
               <View style={s.chooserTextWrap}>
-                <Text style={s.chooserTitle}>My Plans</Text>
+                <Text style={s.chooserTitle}>{t('plans.myPlans')}</Text>
                 <Text style={s.chooserSub}>
                   {myPlans.length > 0
-                    ? `${myPlans.length} ${myPlans.length === 1 ? 'plan' : 'plans'} saved`
-                    : 'Your created plans'}
+                    ? t('plans.myPlansCount', { count: myPlans.length, s: myPlans.length === 1 ? '' : 's' })
+                    : t('plans.myPlansEmpty')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
@@ -404,36 +407,42 @@ export default function PlansScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bgMain },
 
-  // Chooser cards
+  // Chooser cards — lenguaje wizard (ChoiceChip-like)
   chooserContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    flexGrow: 1,
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
-    paddingVertical: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+  },
+  chooserHeader: {
+    marginBottom: spacing.lg,
   },
   chooserCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    gap: spacing.md,
+    borderRadius: 20,
+    borderCurve: 'continuous',
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    gap: 16,
+    // Shadow wizard-like
+    shadowColor: colors.sunsetOrange,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  chooserIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.electricBlueLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+  chooserEmoji: {
+    fontSize: 32,
   },
   chooserTextWrap: {
     flex: 1,
   },
   chooserTitle: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 17,
+    fontFamily: fonts.headingSemiBold,
+    fontSize: 22,
     color: colors.deepOcean,
     marginBottom: 2,
   },

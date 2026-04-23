@@ -4,7 +4,8 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { colors, fonts } from '../../lib/theme';
+import { fonts } from '../../lib/theme';
+import { EditorialTitle, StepSubtitle } from '../ui/design-system';
 import { OptionCard } from './OptionCard';
 import type { WizardStepConfig } from './constants';
 
@@ -32,12 +33,20 @@ export const WizardStep: React.FC<WizardStepProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>
-        {t(config.titleKey)}
-      </Text>
-      <Text style={styles.subtitle}>
-        {t(config.subtitleKey)}
-      </Text>
+      <EditorialTitle
+        text={t(config.titleKey)}
+        size="md"
+        color="#FFFFFF"
+        withShadow
+        style={styles.titleSpacing}
+      />
+      <StepSubtitle
+        text={t(config.subtitleKey)}
+        size="md"
+        color="rgba(255, 255, 255, 0.7)"
+        withShadow
+        style={styles.subtitleSpacing}
+      />
 
       {/* Option cards */}
       <View>
@@ -84,27 +93,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  title: {
-    fontFamily: fonts.headingBold,
-    fontSize: 36,
-    lineHeight: 44,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
+  titleSpacing: {
     marginBottom: 8,
   },
-  subtitle: {
-    fontFamily: fonts.body,
-    fontSize: 15,
-    lineHeight: 22,
-    color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'center',
+  subtitleSpacing: {
     marginBottom: 24,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
   skipWrapper: {
     marginTop: 20,
