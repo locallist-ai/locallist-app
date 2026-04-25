@@ -154,6 +154,49 @@ export const STEPS: WizardStepConfig[] = [
 /** Index de la step de interests dentro de STEPS (= step de wizard - 1). */
 export const INTERESTS_STEP_INDEX_IN_STEPS = 3;
 
+// Sub-options para company step (drill-down). Pablo 2026-04-25: cada step
+// del wizard puede llevar a un menú de refinamiento. Aquí, al picar un parent
+// (solo/couple/family), abre un sheet con tags adicionales que matchean con
+// Place.suitableFor / bestFor en el catálogo.
+export const COMPANY_SUBCATEGORIES: Record<string, SubcategoryOption[]> = {
+  solo: [
+    { id: 'backpacker', label: 'Backpacker', emoji: '\u{1F392}' },
+    { id: 'digital-nomad', label: 'Digital nomad', emoji: '\u{1F4BB}' },
+    { id: 'business', label: 'Business', emoji: '\u{1F454}' },
+    { id: 'social', label: 'Social', emoji: '\u{1F4AC}' },
+  ],
+  couple: [
+    { id: 'honeymoon', label: 'Honeymoon', emoji: '\u{1F48D}' },
+    { id: 'dating', label: 'Dating', emoji: '\u{1F378}' },
+    { id: 'anniversary', label: 'Anniversary', emoji: '\u{1F381}' },
+  ],
+  family: [
+    { id: 'with-kids', label: 'With kids', emoji: '\u{1F9D2}' },
+    { id: 'with-teens', label: 'With teens', emoji: '\u{1F3AE}' },
+    { id: 'multi-gen', label: 'Multi-gen', emoji: '\u{1F46A}' },
+  ],
+};
+
+// Sub-options para style step (drill-down). Refina el vibe del trip dentro de
+// adventure/relax/cultural. Tags mapean a bestFor/bestTime en el catálogo.
+export const STYLE_SUBCATEGORIES: Record<string, SubcategoryOption[]> = {
+  adventure: [
+    { id: 'urban', label: 'Urban explorer', emoji: '\u{1F306}' },
+    { id: 'outdoor', label: 'Outdoor', emoji: '\u{1F3D5}\uFE0F' },
+    { id: 'foodie', label: 'Foodie', emoji: '\u{1F371}' },
+  ],
+  relax: [
+    { id: 'beach', label: 'Beach lounge', emoji: '\u{1F3D6}\uFE0F' },
+    { id: 'spa', label: 'Spa retreat', emoji: '\u{1F9D6}' },
+    { id: 'slow', label: 'Slow mornings', emoji: '\u{1F31E}' },
+  ],
+  cultural: [
+    { id: 'museums', label: 'Museums', emoji: '\u{1F3DB}\uFE0F' },
+    { id: 'history', label: 'History', emoji: '\u{1F4DC}' },
+    { id: 'art', label: 'Local art', emoji: '\u{1F3A8}' },
+  ],
+};
+
 // ── Helpers ──
 
 export const hapticSelect = (): void => {

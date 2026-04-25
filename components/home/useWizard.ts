@@ -52,6 +52,19 @@ export interface UseWizardResult {
   budgetAmount: number | null;
   /** Setter del amount. Sincroniza también el tier en selections[4]. */
   setBudgetAmount: (n: number | null) => void;
+
+  /** Sub-tags del company parent activo (ej. ['honeymoon'] cuando couple). */
+  companySubs: string[];
+  /** Setter de sub-tags para el company activo. */
+  setCompanySubs: (subs: string[]) => void;
+  /** Sub-tags del style parent activo. */
+  styleSubs: string[];
+  /** Setter de sub-tags para el style activo. */
+  setStyleSubs: (subs: string[]) => void;
+  /** Selector del parent en company step (resetea subs si cambia). */
+  selectCompany: (id: string) => void;
+  /** Selector del parent en style step (resetea subs si cambia). */
+  selectStyle: (id: string) => void;
 }
 
 // ── Hook ──
@@ -86,6 +99,11 @@ export const useWizard = (): UseWizardResult => {
       return next;
     });
   }, []);
+
+  // Drill-down state para Company y Style. Solo se mantienen los subs del
+  // parent ACTIVO; al cambiar parent se resetean (ver handleSelect override).
+  const [companySubs, setCompanySubs] = useState<string[]>([]);
+  const [styleSubs, setStyleSubs] = useState<string[]>([]);
 
   // Show bubble text after a delay when reaching the chat step.
   // En WIZARD_ONLY no entramos a step 5, este efecto queda dormido.
@@ -148,6 +166,35 @@ export const useWizard = (): UseWizardResult => {
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
     advanceTimerRef.current = setTimeout(advanceToNext, 350);
   }, [step, advanceToNext]);
+
+  // Selectores de parents con drill-down. RefineableStep llama estos handlers
+  // cuando el usuario tap un parent — NO auto-advance aquí, el sheet del
+  // RefineableStep maneja el continue. Al cambiar de parent, reseteamos los
+  // sub-tags del parent anterior (no tienen sentido fuera de su contexto).
+  const selectCompany = useCallback((id: string) => {
+    hapticImpact(ImpactFeedbackStyle.Light);
+    setSelections((prev) => {
+      if (prev[1] !== id) {
+        // Parent cambió, reset subs del anterior.
+        setCompanySubs([]);
+      }
+      const next = [...prev];
+      next[1] = id;
+      return next;
+    });
+  }, []);
+
+  const selectStyle = useCallback((id: string) => {
+    hapticImpact(ImpactFeedbackStyle.Light);
+    setSelections((prev) => {
+      if (prev[2] !== id) {
+        setStyleSubs([]);
+      }
+      const next = [...prev];
+      next[2] = id;
+      return next;
+    });
+  }, []);
 
   const toggleInterest = useCallback((id: string) => {
     hapticImpact(ImpactFeedbackStyle.Light);
@@ -241,6 +288,11 @@ export const useWizard = (): UseWizardResult => {
         categories: interests.length > 0 ? interests : undefined,
         subcategories:
           Object.keys(subcategoryPicks).length > 0 ? subcategoryPicks : undefined,
+        // Drill-down tags para company/style. Solo se envían los del parent
+        // ACTUALMENTE seleccionado (al cambiar parent, los subs anteriores se
+        // limpian — ver selectCompany/selectStyle).
+        companyTags: companySubs.length > 0 ? companySubs : undefined,
+        styleTags: styleSubs.length > 0 ? styleSubs : undefined,
       },
     };
 
@@ -268,7 +320,7 @@ export const useWizard = (): UseWizardResult => {
     } finally {
       setLoading(false);
     }
-  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, t]);
+  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, companySubs, styleSubs, t]);
 
   // Mantener el ref siempre apuntando al último handleGenerate. advanceToNext
   // lo invoca cuando el usuario completa el último step de prefs y necesitamos
@@ -298,5 +350,11 @@ export const useWizard = (): UseWizardResult => {
     setSubcategoriesFor,
     budgetAmount,
     setBudgetAmount,
+    companySubs,
+    setCompanySubs,
+    styleSubs,
+    setStyleSubs,
+    selectCompany,
+    selectStyle,
   };
 };

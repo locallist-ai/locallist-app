@@ -16,13 +16,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { fonts } from '../../lib/theme';
-import { CITIES, STEPS, TOTAL_STEPS, WIZARD_ONLY, INTERESTS_STEP_INDEX_IN_STEPS } from './constants';
+import {
+  CITIES,
+  STEPS,
+  TOTAL_STEPS,
+  WIZARD_ONLY,
+  INTERESTS_STEP_INDEX_IN_STEPS,
+  COMPANY_SUBCATEGORIES,
+  STYLE_SUBCATEGORIES,
+} from './constants';
 import { useWizard } from './useWizard';
 import { CityCard } from './CityCard';
 import { WizardStep } from './WizardStep';
 import { ChatStep } from './ChatStep';
 import { InterestsStep } from './InterestsStep';
 import { BudgetStep } from './BudgetStep';
+import { RefineableStep } from './RefineableStep';
 import { StepDecorations } from './StepDecorations';
 import { ProgressDots } from './ProgressDots';
 
@@ -56,13 +65,23 @@ export const HomeV2: React.FC = () => {
 
   const isCityStep = wizard.step === 0;
   const stepIndexInSteps = wizard.step - 1; // 0..STEPS.length-1
+  // Steps con drill-down sheet (single-select parent + sub-tags multi):
+  // index 1 = company, index 2 = style. Index 3 = interests (multi parents).
+  const isCompanyStep = stepIndexInSteps === 1;
+  const isStyleStep = stepIndexInSteps === 2;
   const isInterestsStep = stepIndexInSteps === INTERESTS_STEP_INDEX_IN_STEPS;
   // Budget = último step. Custom input numérico, no chips (Pablo 2026-04-25).
   const isBudgetStep = stepIndexInSteps === STEPS.length - 1;
-  const currentStepConfig =
-    stepIndexInSteps >= 0 && stepIndexInSteps < STEPS.length && !isInterestsStep && !isBudgetStep
-      ? STEPS[stepIndexInSteps]
-      : null;
+  // Steps que usan WizardStep estándar (single-select sin drill-down): solo
+  // duration (index 0) tras los cambios de Pablo.
+  const usesWizardStep =
+    stepIndexInSteps >= 0 &&
+    stepIndexInSteps < STEPS.length &&
+    !isCompanyStep &&
+    !isStyleStep &&
+    !isInterestsStep &&
+    !isBudgetStep;
+  const currentStepConfig = usesWizardStep ? STEPS[stepIndexInSteps] : null;
   // Chat step queda como step 6 cuando WIZARD_ONLY=false (legacy). En
   // WIZARD_ONLY no se alcanza nunca — el ChatStep code se conserva intacto.
   const isChatStep = wizard.step === STEPS.length + 1;
@@ -125,6 +144,34 @@ export const HomeV2: React.FC = () => {
                 selectedId={wizard.selections[wizard.step - 1]}
                 onSelect={wizard.handleSelect}
                 onSkip={wizard.advanceToNext}
+              />
+            </Animated.View>
+          )}
+
+          {isCompanyStep && (
+            <Animated.View key="step-company" entering={entering} exiting={exiting} style={styles.stepFill}>
+              <RefineableStep
+                config={STEPS[1]}
+                selectedId={wizard.selections[1]}
+                subOptionsByParent={COMPANY_SUBCATEGORIES}
+                selectedSubs={wizard.companySubs}
+                onSelect={wizard.selectCompany}
+                onSetSubs={wizard.setCompanySubs}
+                onContinue={wizard.advanceToNext}
+              />
+            </Animated.View>
+          )}
+
+          {isStyleStep && (
+            <Animated.View key="step-style" entering={entering} exiting={exiting} style={styles.stepFill}>
+              <RefineableStep
+                config={STEPS[2]}
+                selectedId={wizard.selections[2]}
+                subOptionsByParent={STYLE_SUBCATEGORIES}
+                selectedSubs={wizard.styleSubs}
+                onSelect={wizard.selectStyle}
+                onSetSubs={wizard.setStyleSubs}
+                onContinue={wizard.advanceToNext}
               />
             </Animated.View>
           )}
