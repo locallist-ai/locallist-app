@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet, ActivityIndicator } from 'react-native';
 import Animated, {
   SlideInRight,
   SlideOutLeft,
   SlideInLeft,
   SlideOutRight,
+  FadeIn,
   useAnimatedSensor,
   SensorType,
   useAnimatedStyle,
@@ -15,11 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { fonts } from '../../lib/theme';
-import { CITIES, STEPS, TOTAL_STEPS } from './constants';
+import { CITIES, STEPS, TOTAL_STEPS, WIZARD_ONLY, INTERESTS_STEP_INDEX_IN_STEPS } from './constants';
 import { useWizard } from './useWizard';
 import { CityCard } from './CityCard';
 import { WizardStep } from './WizardStep';
 import { ChatStep } from './ChatStep';
+import { InterestsStep } from './InterestsStep';
 import { StepDecorations } from './StepDecorations';
 import { ProgressDots } from './ProgressDots';
 
@@ -52,8 +54,15 @@ export const HomeV2: React.FC = () => {
     : SlideOutRight.duration(300);
 
   const isCityStep = wizard.step === 0;
-  const currentStepConfig = (wizard.step >= 1 && wizard.step <= 4) ? STEPS[wizard.step - 1] : null;
-  const isChatStep = wizard.step === 5;
+  const stepIndexInSteps = wizard.step - 1; // 0..STEPS.length-1
+  const isInterestsStep = stepIndexInSteps === INTERESTS_STEP_INDEX_IN_STEPS;
+  const currentStepConfig =
+    stepIndexInSteps >= 0 && stepIndexInSteps < STEPS.length && !isInterestsStep
+      ? STEPS[stepIndexInSteps]
+      : null;
+  // Chat step queda como step 6 cuando WIZARD_ONLY=false (legacy). En
+  // WIZARD_ONLY no se alcanza nunca — el ChatStep code se conserva intacto.
+  const isChatStep = wizard.step === STEPS.length + 1;
 
   return (
     <View style={styles.root}>
@@ -117,7 +126,20 @@ export const HomeV2: React.FC = () => {
             </Animated.View>
           )}
 
-          {isChatStep && (
+          {isInterestsStep && (
+            <Animated.View key="step-interests" entering={entering} exiting={exiting} style={styles.stepFill}>
+              <InterestsStep
+                interests={wizard.interests}
+                subcategoryPicks={wizard.subcategoryPicks}
+                onToggleInterest={wizard.toggleInterest}
+                onSetSubcategories={wizard.setSubcategoriesFor}
+                onContinue={wizard.advanceToNext}
+                onSkip={wizard.advanceToNext}
+              />
+            </Animated.View>
+          )}
+
+          {isChatStep && !WIZARD_ONLY && (
             <Animated.View key="step-chat" entering={entering} exiting={exiting} style={styles.stepFill}>
               <ChatStep
                 message={wizard.message}
@@ -127,6 +149,41 @@ export const HomeV2: React.FC = () => {
                 error={wizard.error}
                 onGenerate={wizard.handleGenerate}
               />
+            </Animated.View>
+          )}
+
+          {/* WIZARD_ONLY: loading overlay tras seleccionar el último step de
+            * preferencias. Sustituye al ChatStep como pantalla de generación. */}
+          {WIZARD_ONLY && (wizard.loading || wizard.error) && (
+            <Animated.View
+              key="step-generating"
+              entering={FadeIn.duration(300)}
+              style={[styles.stepFill, styles.generatingWrap]}
+              pointerEvents="auto"
+            >
+              {wizard.loading && (
+                <>
+                  <ActivityIndicator size="large" color="#FFFFFF" />
+                  <Text style={styles.generatingText}>
+                    {t('wizard.generating')}
+                  </Text>
+                </>
+              )}
+              {wizard.error && !wizard.loading && (
+                <>
+                  <Ionicons name="alert-circle-outline" size={48} color="#FFFFFF" />
+                  <Text style={styles.generatingError}>{wizard.error}</Text>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={wizard.handleGenerate}
+                    style={styles.retryBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry"
+                  >
+                    <Text style={styles.retryBtnText}>{t('wizard.retry')}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </Animated.View>
           )}
         </View>
@@ -221,5 +278,43 @@ const styles = StyleSheet.create({
   },
   cityList: {
     width: '100%',
+  },
+  generatingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  generatingText: {
+    fontFamily: fonts.headingSemiBold,
+    fontSize: 22,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  generatingError: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  retryBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  retryBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: '#FFFFFF',
   },
 });

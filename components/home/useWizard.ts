@@ -5,7 +5,7 @@ import { ImpactFeedbackStyle } from 'expo-haptics';
 import { api } from '../../lib/api';
 import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan-store';
-import { hapticImpact } from './constants';
+import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX } from './constants';
 import type { BuilderResponse } from '../../lib/types';
 
 // ── Return type ──
@@ -38,6 +38,15 @@ export interface UseWizardResult {
   setMessage: (text: string) => void;
   /** Submit the wizard and generate a plan */
   handleGenerate: () => void;
+
+  /** Top-level interests (multi). */
+  interests: string[];
+  /** Sub-categorías por interest top-level: { food: ['sushi','italian'] }. */
+  subcategoryPicks: Record<string, string[]>;
+  /** Toggle add/remove de un interest top-level. */
+  toggleInterest: (id: string) => void;
+  /** Setter de subcategorías para un interest concreto. */
+  setSubcategoriesFor: (interestId: string, subs: string[]) => void;
 }
 
 // ── Hook ──
@@ -48,16 +57,23 @@ export const useWizard = (): UseWizardResult => {
 
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
-  const [selections, setSelections] = useState<(string | null)[]>([null, null, null, null]);
+  // Slot indices: 0=days, 1=company, 2=style, 3=interests-marker (unused),
+  // 4=budget. Slot 3 queda null porque interests usa estado dedicado.
+  const [selections, setSelections] = useState<(string | null)[]>([null, null, null, null, null]);
   const [city, setCity] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBubbleText, setShowBubbleText] = useState(false);
 
-  // Show bubble text after a delay when reaching the chat step
+  // Interests step state — multi-select + sub-categorías por interest.
+  const [interests, setInterests] = useState<string[]>([]);
+  const [subcategoryPicks, setSubcategoryPicks] = useState<Record<string, string[]>>({});
+
+  // Show bubble text after a delay when reaching the chat step.
+  // En WIZARD_ONLY no entramos a step 5, este efecto queda dormido.
   useEffect(() => {
-    if (step === 5) {
+    if (step === 5 && !WIZARD_ONLY) {
       const timer = setTimeout(() => setShowBubbleText(true), 800);
       return () => clearTimeout(timer);
     }
@@ -70,10 +86,23 @@ export const useWizard = (): UseWizardResult => {
     };
   }, []);
 
+  // Ref para que advanceToNext pueda llamar al último handleGenerate sin crear
+  // dependencias circulares en el useCallback (selections cambia en cada step).
+  const generateRef = useRef<() => void>(() => {});
+
   const advanceToNext = useCallback(() => {
     hapticImpact(ImpactFeedbackStyle.Light);
     setDirection('forward');
-    setStep((s) => Math.min(s + 1, 5));
+    setStep((s) => {
+      // Si ya estamos en el último step interactivo, disparar generate en vez
+      // de avanzar a un step inexistente. Diferimos al siguiente tick para que
+      // generateRef tenga el handleGenerate con las selections más recientes.
+      if (s >= LAST_STEP_INDEX) {
+        setTimeout(() => generateRef.current(), 50);
+        return s;
+      }
+      return s + 1;
+    });
   }, []);
 
   const handleBack = useCallback(() => {
@@ -89,6 +118,9 @@ export const useWizard = (): UseWizardResult => {
   }, [advanceToNext]);
 
   const handleSelect = useCallback((optionId: string) => {
+    // Step 4 = interests (multi-select), no usa este path; tiene su propio
+    // toggleInterest con botón Continue. Evitamos pisar selections[3].
+    if (step === 4) return;
     const prefIdx = step - 1;
     setSelections((prev) => {
       const next = [...prev];
@@ -100,17 +132,47 @@ export const useWizard = (): UseWizardResult => {
     advanceTimerRef.current = setTimeout(advanceToNext, 350);
   }, [step, advanceToNext]);
 
+  const toggleInterest = useCallback((id: string) => {
+    hapticImpact(ImpactFeedbackStyle.Light);
+    setInterests((prev) => {
+      if (prev.includes(id)) {
+        // Al deseleccionar, también limpiamos sus sub-picks.
+        setSubcategoryPicks((sp) => {
+          const next = { ...sp };
+          delete next[id];
+          return next;
+        });
+        return prev.filter((x) => x !== id);
+      }
+      return [...prev, id];
+    });
+  }, []);
+
+  const setSubcategoriesFor = useCallback((interestId: string, subs: string[]) => {
+    setSubcategoryPicks((prev) => {
+      const next = { ...prev };
+      if (subs.length === 0) {
+        delete next[interestId];
+      } else {
+        next[interestId] = subs;
+      }
+      return next;
+    });
+  }, []);
+
   const handleGenerate = useCallback(async () => {
     if (loading) return;
 
     // Client-side validation — espejo de ValidateMinimumInput del backend (PR #48 api-net).
     // Evita roundtrip innecesario al backend cuando sabemos que va a devolver 400.
-    // Regla: ≥3 de 5 señales wizard {city, days, groupType, preferences, budget}.
+    // Regla: ≥3 de 5 señales wizard {city, days, groupType, style, budget}. El
+    // nuevo step "interests" no se cuenta todavía porque el backend no los
+    // procesa aún — al activar matching backend, sumarlo al threshold.
     const hasCity = !!city;
     const hasDays = !!selections[0];
     const hasGroupType = !!selections[1];
     const hasPreferences = !!selections[2];
-    const hasBudget = !!selections[3];
+    const hasBudget = !!selections[4];
     const wizardSignals = [hasCity, hasDays, hasGroupType, hasPreferences, hasBudget]
       .filter(Boolean).length;
     if (wizardSignals < 3) {
@@ -140,16 +202,25 @@ export const useWizard = (): UseWizardResult => {
     // - preferences + vibes (step 3): mismo valor (adventure/relax/cultural).
     // - budget (step 4): budget/moderate/premium.
     // El chat es opcional. Si usuario no escribió nada, enviamos string vacío; el
-    // backend lo acepta (PR #48 Message nullable) y usa solo el wizard para el pipeline.
+    // backend lo acepta (PR #48 Message nullable) y usa solo el wizard para el
+    // pipeline. En WIZARD_ONLY siempre va vacío (Pablo 2026-04-25).
+    // `categories` = interests top-level (food, outdoors, ...) que el backend
+    // mapeará contra Place.Category. `subcategories` = drill-down per category
+    // que el backend mapeará contra Place.Subcategory (substring match).
+    // Backend: campos additive (System.Text.Json ignora unknown), añadidos al
+    // DTO en este turno; matching se implementa en sesión siguiente.
     const body = {
-      message: message.trim(),
+      message: WIZARD_ONLY ? '' : message.trim(),
       tripContext: {
         city: city ?? undefined,
         groupType: selections[1] ?? 'solo',
         preferences: selections[2] ? [selections[2]] : [],
         vibes: selections[2] ? [selections[2]] : [],
         days: daysFromDuration(selections[0]),
-        budget: selections[3] ?? undefined,
+        budget: selections[4] ?? undefined,
+        categories: interests.length > 0 ? interests : undefined,
+        subcategories:
+          Object.keys(subcategoryPicks).length > 0 ? subcategoryPicks : undefined,
       },
     };
 
@@ -177,7 +248,15 @@ export const useWizard = (): UseWizardResult => {
     } finally {
       setLoading(false);
     }
-  }, [loading, message, selections, city, t]);
+  }, [loading, message, selections, city, interests, subcategoryPicks, t]);
+
+  // Mantener el ref siempre apuntando al último handleGenerate. advanceToNext
+  // lo invoca cuando el usuario completa el último step de prefs y necesitamos
+  // disparar la generación sin tener handleGenerate como dependencia (evita
+  // re-crear advanceToNext en cada render con selections distinto).
+  useEffect(() => {
+    generateRef.current = handleGenerate;
+  }, [handleGenerate]);
 
   return {
     step,
@@ -193,5 +272,9 @@ export const useWizard = (): UseWizardResult => {
     advanceToNext,
     setMessage,
     handleGenerate,
+    interests,
+    subcategoryPicks,
+    toggleInterest,
+    setSubcategoriesFor,
   };
 };
