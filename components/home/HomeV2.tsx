@@ -22,6 +22,7 @@ import { CityCard } from './CityCard';
 import { WizardStep } from './WizardStep';
 import { ChatStep } from './ChatStep';
 import { InterestsStep } from './InterestsStep';
+import { BudgetStep } from './BudgetStep';
 import { StepDecorations } from './StepDecorations';
 import { ProgressDots } from './ProgressDots';
 
@@ -56,8 +57,10 @@ export const HomeV2: React.FC = () => {
   const isCityStep = wizard.step === 0;
   const stepIndexInSteps = wizard.step - 1; // 0..STEPS.length-1
   const isInterestsStep = stepIndexInSteps === INTERESTS_STEP_INDEX_IN_STEPS;
+  // Budget = último step. Custom input numérico, no chips (Pablo 2026-04-25).
+  const isBudgetStep = stepIndexInSteps === STEPS.length - 1;
   const currentStepConfig =
-    stepIndexInSteps >= 0 && stepIndexInSteps < STEPS.length && !isInterestsStep
+    stepIndexInSteps >= 0 && stepIndexInSteps < STEPS.length && !isInterestsStep && !isBudgetStep
       ? STEPS[stepIndexInSteps]
       : null;
   // Chat step queda como step 6 cuando WIZARD_ONLY=false (legacy). En
@@ -133,6 +136,17 @@ export const HomeV2: React.FC = () => {
                 subcategoryPicks={wizard.subcategoryPicks}
                 onToggleInterest={wizard.toggleInterest}
                 onSetSubcategories={wizard.setSubcategoriesFor}
+                onContinue={wizard.advanceToNext}
+                onSkip={wizard.advanceToNext}
+              />
+            </Animated.View>
+          )}
+
+          {isBudgetStep && (
+            <Animated.View key="step-budget" entering={entering} exiting={exiting} style={styles.stepFill}>
+              <BudgetStep
+                amount={wizard.budgetAmount}
+                onChangeAmount={wizard.setBudgetAmount}
                 onContinue={wizard.advanceToNext}
                 onSkip={wizard.advanceToNext}
               />

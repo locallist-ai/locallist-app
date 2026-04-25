@@ -5,7 +5,7 @@ import { ImpactFeedbackStyle } from 'expo-haptics';
 import { api } from '../../lib/api';
 import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan-store';
-import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX } from './constants';
+import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX, tierFromBudgetAmount } from './constants';
 import type { BuilderResponse } from '../../lib/types';
 
 // ── Return type ──
@@ -47,6 +47,11 @@ export interface UseWizardResult {
   toggleInterest: (id: string) => void;
   /** Setter de subcategorías para un interest concreto. */
   setSubcategoriesFor: (interestId: string, subs: string[]) => void;
+
+  /** Presupuesto USD/día/persona (custom). null = sin valor. */
+  budgetAmount: number | null;
+  /** Setter del amount. Sincroniza también el tier en selections[4]. */
+  setBudgetAmount: (n: number | null) => void;
 }
 
 // ── Hook ──
@@ -69,6 +74,18 @@ export const useWizard = (): UseWizardResult => {
   // Interests step state — multi-select + sub-categorías por interest.
   const [interests, setInterests] = useState<string[]>([]);
   const [subcategoryPicks, setSubcategoryPicks] = useState<Record<string, string[]>>({});
+
+  // Budget custom amount (USD/día/persona). El tier derivado se mantiene en
+  // selections[4] para no cambiar la firma del payload existente.
+  const [budgetAmount, setBudgetAmountState] = useState<number | null>(null);
+  const setBudgetAmount = useCallback((n: number | null) => {
+    setBudgetAmountState(n);
+    setSelections((prev) => {
+      const next = [...prev];
+      next[4] = n != null && n > 0 ? tierFromBudgetAmount(n) : null;
+      return next;
+    });
+  }, []);
 
   // Show bubble text after a delay when reaching the chat step.
   // En WIZARD_ONLY no entramos a step 5, este efecto queda dormido.
@@ -207,6 +224,8 @@ export const useWizard = (): UseWizardResult => {
     // `categories` = interests top-level (food, outdoors, ...) que el backend
     // mapeará contra Place.Category. `subcategories` = drill-down per category
     // que el backend mapeará contra Place.Subcategory (substring match).
+    // `budget` = tier derivado desde budgetAmount (compat con backend actual).
+    // `budgetAmount` = USD/día/persona raw para futuro matching más fino.
     // Backend: campos additive (System.Text.Json ignora unknown), añadidos al
     // DTO en este turno; matching se implementa en sesión siguiente.
     const body = {
@@ -218,6 +237,7 @@ export const useWizard = (): UseWizardResult => {
         vibes: selections[2] ? [selections[2]] : [],
         days: daysFromDuration(selections[0]),
         budget: selections[4] ?? undefined,
+        budgetAmount: budgetAmount != null && budgetAmount > 0 ? budgetAmount : undefined,
         categories: interests.length > 0 ? interests : undefined,
         subcategories:
           Object.keys(subcategoryPicks).length > 0 ? subcategoryPicks : undefined,
@@ -248,7 +268,7 @@ export const useWizard = (): UseWizardResult => {
     } finally {
       setLoading(false);
     }
-  }, [loading, message, selections, city, interests, subcategoryPicks, t]);
+  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, t]);
 
   // Mantener el ref siempre apuntando al último handleGenerate. advanceToNext
   // lo invoca cuando el usuario completa el último step de prefs y necesitamos
@@ -276,5 +296,7 @@ export const useWizard = (): UseWizardResult => {
     subcategoryPicks,
     toggleInterest,
     setSubcategoriesFor,
+    budgetAmount,
+    setBudgetAmount,
   };
 };

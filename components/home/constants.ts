@@ -124,6 +124,22 @@ export const BUDGET_OPTIONS: StepOption[] = [
   { id: 'premium', icon: require('../../assets/images/icon_premium.png'), labelKey: 'wizard.budgetPremium', emoji: '\u{1F451}' },
 ];
 
+// Pesos USD/día/persona asignados a cada tier preset. Pablo 2026-04-25:
+// "en vez de 3 tabs, deberíamos dejar que el usuario ponga su presupuesto"
+// — el step ahora es input libre con estos presets como atajos.
+export const BUDGET_AMOUNT_PRESETS: Record<string, number> = {
+  budget: 50,
+  moderate: 150,
+  premium: 300,
+};
+
+/** Deriva tier ('budget'|'moderate'|'premium') desde un amount USD/día. */
+export const tierFromBudgetAmount = (amount: number): 'budget' | 'moderate' | 'premium' => {
+  if (amount < 80) return 'budget';
+  if (amount < 200) return 'moderate';
+  return 'premium';
+};
+
 export const STEPS: WizardStepConfig[] = [
   { titleKey: 'wizard.step1Title', subtitleKey: 'wizard.step1Subtitle', options: DURATION_OPTIONS },
   { titleKey: 'wizard.step2Title', subtitleKey: 'wizard.step2Subtitle', options: COMPANY_OPTIONS },
