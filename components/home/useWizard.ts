@@ -65,6 +65,8 @@ export interface UseWizardResult {
   selectCompany: (id: string) => void;
   /** Selector del parent en style step (resetea subs si cambia). */
   selectStyle: (id: string) => void;
+  /** Ciudad seleccionada (step 0). */
+  city: string | null;
 }
 
 // ── Hook ──
@@ -148,9 +150,11 @@ export const useWizard = (): UseWizardResult => {
   }, [step]);
 
   const handleCitySelect = useCallback((cityName: string) => {
+    // Pablo 2026-04-26: no auto-advance. Solo guardamos la ciudad; el usuario
+    // pulsa Continue/Skip explícitamente para avanzar.
     setCity(cityName);
-    advanceToNext();
-  }, [advanceToNext]);
+    hapticImpact(ImpactFeedbackStyle.Light);
+  }, []);
 
   const handleSelect = useCallback((optionId: string) => {
     // Step 4 = interests (multi-select), no usa este path; tiene su propio
@@ -162,10 +166,10 @@ export const useWizard = (): UseWizardResult => {
       next[prefIdx] = optionId;
       return next;
     });
-    // Clear any pending advance timer before setting a new one
-    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
-    advanceTimerRef.current = setTimeout(advanceToNext, 350);
-  }, [step, advanceToNext]);
+    hapticImpact(ImpactFeedbackStyle.Light);
+    // Pablo 2026-04-26: no auto-advance. El usuario pulsa Continue/Skip
+    // explícitamente. Antes había setTimeout(advanceToNext, 350).
+  }, [step]);
 
   // Selectores de parents con drill-down. RefineableStep llama estos handlers
   // cuando el usuario tap un parent — NO auto-advance aquí, el sheet del
@@ -312,7 +316,14 @@ export const useWizard = (): UseWizardResult => {
         router.push('/plan/preview');
       } else {
         logger.debug('[builder/chat] ERROR body', res.errorBody);
-        setError(res.error ?? t('wizard.errorDefault'));
+        // 429 = rate limit. Builder limita planes por hora (ver
+        // locallist-api-net Program.cs rate limiter). Mensaje específico
+        // amigable en vez del genérico.
+        if (res.status === 429) {
+          setError(t('wizard.errorRateLimit'));
+        } else {
+          setError(res.error ?? t('wizard.errorDefault'));
+        }
       }
     } catch (e) {
       logger.error('[builder/chat] THROW', e);
@@ -356,5 +367,6 @@ export const useWizard = (): UseWizardResult => {
     setStyleSubs,
     selectCompany,
     selectStyle,
+    city,
   };
 };

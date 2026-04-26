@@ -127,7 +127,8 @@
           "organization": "locallist",
           "project": "locallist-app"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "extra": {
       "eas": {

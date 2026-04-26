@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { fonts, colors, borderRadius } from '../../lib/theme';
@@ -113,7 +113,17 @@ export const InterestsStep: React.FC<InterestsStepProps> = ({
               accessibilityState={{ selected: isSelected }}
               accessibilityLabel={t(opt.labelKey)}
             >
-              <Text style={styles.chipEmoji}>{opt.emoji}</Text>
+              {opt.iconName ? (
+                <View style={[styles.iconBubble, isSelected && styles.iconBubbleSelected]}>
+                  <MaterialCommunityIcons
+                    name={opt.iconName}
+                    size={18}
+                    color={isSelected ? '#FFFFFF' : colors.sunsetOrange}
+                  />
+                </View>
+              ) : (
+                <Text style={styles.chipEmoji}>{opt.emoji}</Text>
+              )}
               <Text style={[styles.chipLabel, isSelected && styles.chipLabelSelected]}>
                 {t(opt.labelKey)}
               </Text>
@@ -205,6 +215,20 @@ const styles = StyleSheet.create({
   },
   chipEmoji: {
     fontSize: 20,
+  },
+  iconBubble: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(242, 239, 233, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
+  },
+  iconBubbleSelected: {
+    backgroundColor: colors.sunsetOrange,
+    borderColor: colors.sunsetOrange,
   },
   chipLabel: {
     fontFamily: fonts.bodySemiBold,

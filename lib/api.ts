@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from './safe-store';
 import { Platform } from 'react-native';
 import { logger } from './logger';
 

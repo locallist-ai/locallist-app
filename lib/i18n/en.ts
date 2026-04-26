@@ -4,8 +4,8 @@ export default {
   },
   tabs: {
     home: 'Home',
-    plans: 'Plans',
-    account: 'Account',
+    plans: 'Experiences',
+    account: 'Profile',
   },
   home: {
     createPlan: 'Create a Plan',
@@ -29,6 +29,7 @@ export default {
     buildMyPlan: 'Build my plan',
     errorDefault: 'Something went wrong',
     errorInsufficientInput: 'Please complete at least 3 wizard steps before building your plan (city, duration, group, style, budget).',
+    errorRateLimit: "You've hit the plan creation limit for now. Try again in a few minutes.",
     generating: 'Crafting your plan…',
     retry: 'Try again',
     stepInterestsTitle: "What kind of\nplaces?",

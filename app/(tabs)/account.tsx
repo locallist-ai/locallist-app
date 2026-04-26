@@ -31,6 +31,7 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/api';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { useHeroVariant, type HeroVariant } from '../../lib/hero-variant';
 
 const LANGUAGES = [
   { code: 'en', flag: '\u{1F1FA}\u{1F1F8}', labelKey: 'account.languageEnglish' as const },
@@ -130,6 +131,7 @@ function PlusUpsellCard({ t }: { t: ReturnType<typeof useTranslation>['t'] }) {
 export default function AccountScreen() {
   const { t, i18n } = useTranslation();
   const { user, isAuthenticated, isPro, isAdmin, logout, setTierOverride } = useAuth();
+  const [heroVariant, setHeroVariant] = useHeroVariant();
   const [langPickerVisible, setLangPickerVisible] = useState(false);
   const [pendingLang, setPendingLang] = useState<string | null>(null);
   const [logoutVisible, setLogoutVisible] = useState(false);
@@ -314,6 +316,33 @@ export default function AccountScreen() {
                 <Text style={s.rowText}>Reset to real tier</Text>
                 <Text style={s.rowValue}>{user?.tier ?? 'free'}</Text>
               </TouchableOpacity>
+            </View>
+
+            {/* Hero variant selector — Pablo 2026-04-25, A/B entre 3 fondos. */}
+            <View style={s.devHeader}>
+              <Ionicons name="image-outline" size={14} color={colors.sunsetOrange} />
+              <Text style={s.devHeaderText}>Wizard hero variant</Text>
+            </View>
+            <View style={[s.section, { flexDirection: 'row', gap: 8, padding: 8 }]}>
+              {(['photo', 'skia', 'veo'] as HeroVariant[]).map((v) => {
+                const active = heroVariant === v;
+                const label = v === 'photo' ? 'Photo' : v === 'skia' ? 'Skia' : 'Veo';
+                return (
+                  <TouchableOpacity
+                    key={v}
+                    activeOpacity={0.7}
+                    onPress={() => setHeroVariant(v)}
+                    style={[
+                      s.variantChip,
+                      active && s.variantChipActive,
+                    ]}
+                  >
+                    <Text style={[s.variantChipText, active && s.variantChipTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </Animated.View>
         )}
@@ -662,6 +691,28 @@ const s = StyleSheet.create({
     color: colors.sunsetOrange,
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  variantChip: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.bgMain,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
+  variantChipActive: {
+    backgroundColor: colors.sunsetOrange,
+    borderColor: colors.sunsetOrange,
+  },
+  variantChipText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.deepOcean,
+  },
+  variantChipTextActive: {
+    color: '#FFFFFF',
   },
 
   // Footer

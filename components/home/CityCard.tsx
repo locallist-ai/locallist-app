@@ -19,12 +19,13 @@ import type { City } from './constants';
 interface CityCardProps {
   city: City;
   index: number;
+  selected?: boolean;
   onSelect: (name: string) => void;
 }
 
 // ── Component ──
 
-export const CityCard: React.FC<CityCardProps> = React.memo(({ city, index, onSelect }) => {
+export const CityCard: React.FC<CityCardProps> = React.memo(({ city, index, selected = false, onSelect }) => {
   const pulse = useSharedValue(1);
   const glowOpacity = useSharedValue(0.4);
 
@@ -69,7 +70,7 @@ export const CityCard: React.FC<CityCardProps> = React.memo(({ city, index, onSe
           accessibilityLabel={city.name}
           accessibilityRole="button"
         >
-          <Animated.View style={[styles.card, borderStyle]}>
+          <Animated.View style={[styles.card, selected && styles.cardSelected, borderStyle]}>
             <BlurView intensity={60} tint="light" style={styles.blur}>
               <View style={styles.row}>
                 <View style={styles.nameRow}>
@@ -77,7 +78,7 @@ export const CityCard: React.FC<CityCardProps> = React.memo(({ city, index, onSe
                   <Text style={styles.name}>{city.name}</Text>
                 </View>
                 <View style={styles.arrowCircle}>
-                  <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
+                  <Ionicons name={selected ? 'checkmark' : 'arrow-forward'} size={22} color="#FFFFFF" />
                 </View>
               </View>
             </BlurView>
@@ -104,6 +105,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 18,
     elevation: 8,
+  },
+  cardSelected: {
+    borderWidth: 2,
+    shadowOpacity: 0.5,
+    shadowRadius: 22,
   },
   blur: {
     paddingHorizontal: 24,

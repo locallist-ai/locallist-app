@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { fonts, colors, borderRadius } from '../../lib/theme';
@@ -72,12 +72,12 @@ export const SubcategorySheet: React.FC<SubcategorySheetProps> = ({
         </Animated.View>
 
         <Animated.View
-          entering={SlideInDown.duration(280).springify().damping(18)}
-          exiting={SlideOutDown.duration(220)}
+          entering={SlideInDown.duration(220).easing(Easing.out(Easing.cubic))}
+          exiting={SlideOutDown.duration(180).easing(Easing.in(Easing.cubic))}
           style={[styles.sheetWrap, { paddingBottom: insets.bottom + 12 }]}
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
-            <BlurView intensity={80} tint="dark" style={styles.sheet}>
+            <BlurView intensity={90} tint="light" style={styles.sheet}>
               <View style={styles.handleBar} />
 
               <Text style={styles.title}>{title}</Text>
@@ -168,28 +168,28 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingHorizontal: 20,
     paddingBottom: 16,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(255, 255, 255, 0.78)',
   },
   handleBar: {
     alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.20)',
     marginBottom: 18,
   },
   title: {
     fontFamily: fonts.headingBold,
     fontSize: 24,
     lineHeight: 30,
-    color: '#FFFFFF',
+    color: colors.deepOcean,
     textAlign: 'center',
   },
   subtitle: {
     fontFamily: fonts.body,
     fontSize: 14,
     lineHeight: 20,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginTop: 6,
     marginBottom: 18,
@@ -211,12 +211,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(15, 23, 42, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
+    borderColor: 'rgba(15, 23, 42, 0.10)',
   },
   chipSelected: {
-    backgroundColor: 'rgba(249, 115, 22, 0.25)',
+    backgroundColor: 'rgba(249, 115, 22, 0.18)',
     borderColor: colors.sunsetOrange,
   },
   chipEmoji: {
@@ -225,10 +225,10 @@ const styles = StyleSheet.create({
   chipLabel: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 14,
-    color: '#FFFFFF',
+    color: colors.deepOcean,
   },
   chipLabelSelected: {
-    color: '#FFFFFF',
+    color: colors.deepOcean,
   },
   chipCheck: {
     marginLeft: 2,
@@ -244,14 +244,14 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(15, 23, 42, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(15, 23, 42, 0.12)',
   },
   skipText: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 15,
-    color: '#FFFFFF',
+    color: colors.deepOcean,
   },
   doneBtn: {
     flex: 1.4,

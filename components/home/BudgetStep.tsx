@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { fonts, colors, borderRadius } from '../../lib/theme';
@@ -75,19 +75,21 @@ export const BudgetStep: React.FC<BudgetStepProps> = ({
         style={styles.subtitleSpacing}
       />
 
-      <View style={styles.inputRow}>
-        <Text style={styles.currencyPrefix}>$</Text>
-        <TextInput
-          value={inputValue}
-          onChangeText={handleInputChange}
-          keyboardType="number-pad"
-          inputMode="numeric"
-          placeholder="0"
-          placeholderTextColor="rgba(255,255,255,0.35)"
-          maxLength={4}
-          style={styles.input}
-          accessibilityLabel={t('wizard.stepBudgetAmountTitle')}
-        />
+      <View style={styles.inputCardWrap}>
+        <View style={styles.inputCard}>
+          <Text style={styles.currencyPrefix}>$</Text>
+          <TextInput
+            value={inputValue}
+            onChangeText={handleInputChange}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            placeholder="0"
+            placeholderTextColor="rgba(255,255,255,0.35)"
+            maxLength={4}
+            style={styles.input}
+            accessibilityLabel={t('wizard.stepBudgetAmountTitle')}
+          />
+        </View>
       </View>
 
       {tier && (
@@ -96,7 +98,6 @@ export const BudgetStep: React.FC<BudgetStepProps> = ({
         </View>
       )}
 
-      <Text style={styles.presetsLabel}>{t('wizard.budgetPresetLabel')}</Text>
       <View style={styles.presetsRow}>
         {BUDGET_OPTIONS.map((opt) => {
           const presetAmount = BUDGET_AMOUNT_PRESETS[opt.id];
@@ -110,7 +111,17 @@ export const BudgetStep: React.FC<BudgetStepProps> = ({
               accessibilityRole="button"
               accessibilityLabel={`${t(opt.labelKey)} $${presetAmount}`}
             >
-              <Text style={styles.presetEmoji}>{opt.emoji}</Text>
+              {opt.iconName ? (
+                <View style={[styles.presetIconBubble, isActive && styles.presetIconBubbleActive]}>
+                  <MaterialCommunityIcons
+                    name={opt.iconName}
+                    size={16}
+                    color={isActive ? '#FFFFFF' : colors.sunsetOrange}
+                  />
+                </View>
+              ) : (
+                <Text style={styles.presetEmoji}>{opt.emoji}</Text>
+              )}
               <View style={styles.presetTextWrap}>
                 <Text style={styles.presetLabel}>{t(opt.labelKey)}</Text>
                 <Text style={styles.presetAmount}>${presetAmount}</Text>
@@ -149,11 +160,27 @@ const styles = StyleSheet.create({
   subtitleSpacing: {
     marginBottom: 28,
   },
-  inputRow: {
+  inputCardWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  inputCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 28,
+    backgroundColor: 'rgba(15, 23, 42, 0.32)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    minWidth: 200,
   },
   currencyPrefix: {
     fontFamily: fonts.headingBold,
@@ -192,20 +219,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  presetsLabel: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.65)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    textAlign: 'center',
-    marginTop: 32,
-    marginBottom: 12,
-  },
   presetsRow: {
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
+    marginTop: 32,
   },
   presetChip: {
     flexDirection: 'row',
@@ -224,6 +242,20 @@ const styles = StyleSheet.create({
   },
   presetEmoji: {
     fontSize: 18,
+  },
+  presetIconBubble: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(242, 239, 233, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
+  },
+  presetIconBubbleActive: {
+    backgroundColor: colors.sunsetOrange,
+    borderColor: colors.sunsetOrange,
   },
   presetTextWrap: {
     alignItems: 'flex-start',

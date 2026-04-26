@@ -7,11 +7,15 @@ import {
   TouchableOpacity,
   RefreshControl,
   ScrollView,
+  useWindowDimensions,
+  Image,
 } from 'react-native';
 import { router, useNavigation, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -48,10 +52,27 @@ function sortPlans(list: Plan[]): Plan[] {
 
 type PlansMode = 'chooser' | 'curated' | 'mine';
 
+// Bg layer compartido — misma estética que el wizard (HomeV2). Imagen de hero
+// fija + dark overlay para legibilidad de texto blanco encima. Pablo 2026-04-25:
+// "la página de my plans debe seguir la estética de las páginas del wizard,
+// debemos crear una imagen de fondo también para ella."
+const PlansHeroBg: React.FC<{ width: number; height: number }> = ({ width, height }) => (
+  <>
+    <Image
+      source={require('../../assets/images/hero-bg.jpg')}
+      style={[{ position: 'absolute', top: -100, left: -100, width: width + 200, height: height + 300 }]}
+      resizeMode="cover"
+    />
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.45)' }} />
+  </>
+);
+
 export default function PlansScreen() {
   const { t } = useTranslation();
   const { isAuthenticated } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [mode, setMode] = useState<PlansMode>('chooser');
   const [myPlans, setMyPlans] = useState<Plan[]>([]);
 
@@ -66,36 +87,12 @@ export default function PlansScreen() {
     }, [isAuthenticated])
   );
 
-  // Show/hide native header with back button based on mode
+  // El header nativo se queda oculto en TODOS los modos para que el bg hero
+  // se vea full-screen. El back/close de mine/curated se renderiza como
+  // floating pill encima del bg.
   useEffect(() => {
-    if (mode === 'curated' || mode === 'mine') {
-      navigation.setOptions({
-        headerShown: true,
-        title: mode === 'mine' ? 'My Plans' : '',
-        headerLeft: () => (
-          <TouchableOpacity
-            onPress={() => setMode('chooser')}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: colors.bgCard,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginLeft: spacing.sm,
-            }}
-          >
-            <Ionicons name="close" size={24} color={colors.textMain} />
-          </TouchableOpacity>
-        ),
-      });
-    } else {
-      navigation.setOptions({
-        headerShown: false,
-        headerLeft: undefined,
-      });
-    }
-  }, [mode, navigation, t]);
+    navigation.setOptions({ headerShown: false, headerLeft: undefined });
+  }, [navigation]);
 
   // Stale-while-revalidate: show cached data instantly (preloaded during splash)
   const cached = getCached<Plan[]>(PLANS_CACHE_KEY);
@@ -152,88 +149,91 @@ export default function PlansScreen() {
   }
 
   if (mode === 'chooser') {
+    const chooserCards: Array<{
+      icon: keyof typeof MaterialCommunityIcons.glyphMap;
+      title: string;
+      sub: string;
+      onPress: () => void;
+      badge?: string;
+    }> = [
+      {
+        icon: 'compass-outline',
+        title: t('plans.exploreCurated'),
+        sub: t('plans.exploreCuratedSub'),
+        onPress: () => {
+          setMode('curated');
+          if (!cached) fetchPlans().finally(() => setLoading(false));
+        },
+      },
+      {
+        icon: 'creation',
+        title: t('plans.buildYourOwn'),
+        sub: t('plans.buildYourOwnSub'),
+        onPress: () => router.push('/builder/custom'),
+        badge: 'Plus',
+      },
+      {
+        icon: 'movie-open-outline',
+        title: t('plans.importVideo'),
+        sub: t('plans.importVideoSub'),
+        onPress: () => router.push('/builder/import-video'),
+      },
+      ...(isAuthenticated
+        ? [
+            {
+              icon: 'pin-outline' as keyof typeof MaterialCommunityIcons.glyphMap,
+              title: t('plans.myPlans'),
+              sub:
+                myPlans.length > 0
+                  ? t('plans.myPlansCount', { count: myPlans.length, s: myPlans.length === 1 ? '' : 's' })
+                  : t('plans.myPlansEmpty'),
+              onPress: () => setMode('mine'),
+            },
+          ]
+        : []),
+    ];
     return (
       <View style={s.root}>
-        <ScrollView contentContainerStyle={s.chooserContainer} showsVerticalScrollIndicator={false}>
+        <PlansHeroBg width={screenWidth} height={screenHeight} />
+        <ScrollView
+          contentContainerStyle={[s.chooserContainer, { paddingTop: insets.top + spacing.lg }]}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={s.chooserHeader}>
-            <EditorialTitle text={t('plans.chooserTitle')} size="md" align="left" />
+            <EditorialTitle text={t('plans.chooserTitle')} size="md" align="left" color="#FFFFFF" withShadow />
             <StepSubtitle
               text={t('plans.chooserSubtitle')}
               size="md"
               align="left"
+              color="rgba(255,255,255,0.75)"
+              withShadow
               style={{ marginTop: 8 }}
             />
           </View>
 
-          {/* Explore curated plans */}
-          <TouchableOpacity
-            style={s.chooserCard}
-            activeOpacity={0.85}
-            onPress={() => {
-              setMode('curated');
-              if (!cached) fetchPlans().finally(() => setLoading(false));
-            }}
-          >
-            <Text style={s.chooserEmoji}>🧭</Text>
-            <View style={s.chooserTextWrap}>
-              <Text style={s.chooserTitle}>{t('plans.exploreCurated')}</Text>
-              <Text style={s.chooserSub}>{t('plans.exploreCuratedSub')}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
-          </TouchableOpacity>
-
-          {/* Build your own (Premium) */}
-          <TouchableOpacity
-            style={s.chooserCard}
-            activeOpacity={0.85}
-            onPress={() => router.push('/builder/custom')}
-          >
-            <Text style={s.chooserEmoji}>✨</Text>
-            <View style={s.chooserTextWrap}>
-              <View style={s.chooserTitleRow}>
-                <Text style={s.chooserTitle}>{t('plans.buildYourOwn')}</Text>
-                <View style={s.plusBadge}>
-                  <Text style={s.plusBadgeText}>Plus</Text>
-                </View>
-              </View>
-              <Text style={s.chooserSub}>{t('plans.buildYourOwnSub')}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
-          </TouchableOpacity>
-
-          {/* Import from video */}
-          <TouchableOpacity
-            style={s.chooserCard}
-            activeOpacity={0.85}
-            onPress={() => router.push('/builder/import-video')}
-          >
-            <Text style={s.chooserEmoji}>🎬</Text>
-            <View style={s.chooserTextWrap}>
-              <Text style={s.chooserTitle}>{t('plans.importVideo')}</Text>
-              <Text style={s.chooserSub}>{t('plans.importVideoSub')}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
-          </TouchableOpacity>
-
-          {/* My Plans */}
-          {isAuthenticated && (
-            <TouchableOpacity
-              style={s.chooserCard}
-              activeOpacity={0.85}
-              onPress={() => setMode('mine')}
-            >
-              <Text style={s.chooserEmoji}>📌</Text>
-              <View style={s.chooserTextWrap}>
-                <Text style={s.chooserTitle}>{t('plans.myPlans')}</Text>
-                <Text style={s.chooserSub}>
-                  {myPlans.length > 0
-                    ? t('plans.myPlansCount', { count: myPlans.length, s: myPlans.length === 1 ? '' : 's' })
-                    : t('plans.myPlansEmpty')}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
-          )}
+          {chooserCards.map((card, idx) => (
+            <Animated.View key={card.title} entering={FadeInDown.delay(idx * 70).duration(380)}>
+              <TouchableOpacity activeOpacity={0.85} onPress={card.onPress}>
+                <BlurView intensity={50} tint="light" style={s.chooserCard}>
+                  <View style={s.chooserIconBubble}>
+                    <MaterialCommunityIcons name={card.icon} size={26} color={colors.sunsetOrange} />
+                  </View>
+                  <View style={s.chooserTextWrap}>
+                    <View style={s.chooserTitleRow}>
+                      <Text style={s.chooserTitle}>{card.title}</Text>
+                      {card.badge && (
+                        <View style={s.plusBadge}>
+                          <Text style={s.plusBadgeText}>{card.badge}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={s.chooserSub}>{card.sub}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.85)" />
+                </BlurView>
+              </TouchableOpacity>
+            </Animated.View>
+          ))}
         </ScrollView>
       </View>
     );
@@ -242,11 +242,21 @@ export default function PlansScreen() {
   if (mode === 'mine') {
     return (
       <View style={s.root}>
+        <PlansHeroBg width={screenWidth} height={screenHeight} />
+        <TouchableOpacity
+          onPress={() => setMode('chooser')}
+          style={[s.floatingClose, { top: insets.top + spacing.xs }]}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Back to plans menu"
+        >
+          <Ionicons name="close" size={22} color="#FFFFFF" />
+        </TouchableOpacity>
         {myPlans.length === 0 ? (
           <View style={s.center}>
-            <Ionicons name="bookmark-outline" size={56} color={colors.textSecondary + '60'} />
-            <Text style={s.emptyTitle}>No plans yet</Text>
-            <Text style={s.emptyBody}>
+            <Ionicons name="bookmark-outline" size={56} color="rgba(255,255,255,0.6)" />
+            <Text style={[s.emptyTitle, s.emptyTitleOnHero]}>No plans yet</Text>
+            <Text style={[s.emptyBody, s.emptyBodyOnHero]}>
               Create your first plan with "Build Your Own"
             </Text>
           </View>
@@ -254,25 +264,39 @@ export default function PlansScreen() {
           <FlatList
             data={myPlans}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={s.list}
+            contentContainerStyle={[s.list, { paddingTop: insets.top + spacing.lg }]}
             showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              <View style={s.listHeader}>
+                <EditorialTitle text={t('plans.myPlans')} size="md" align="left" color="#FFFFFF" withShadow />
+                <StepSubtitle
+                  text={t('plans.myPlansCount', { count: myPlans.length, s: myPlans.length === 1 ? '' : 's' })}
+                  size="md"
+                  align="left"
+                  color="rgba(255,255,255,0.75)"
+                  withShadow
+                  style={{ marginTop: 6 }}
+                />
+              </View>
+            }
             renderItem={({ item, index }) => (
-              <Animated.View entering={FadeInDown.delay(index * 80)}>
+              <Animated.View entering={FadeInDown.delay(index * 70).duration(380)}>
                 <TouchableOpacity
-                  style={s.myPlanRow}
-                  activeOpacity={0.7}
+                  activeOpacity={0.85}
                   onPress={() => router.push(`/plan/${item.id}`)}
                 >
-                  <View style={s.myPlanIcon}>
-                    <Ionicons name="map" size={20} color={colors.sunsetOrange} />
-                  </View>
-                  <View style={s.myPlanInfo}>
-                    <Text style={s.myPlanName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={s.myPlanMeta}>
-                      {item.city} · {item.durationDays} {item.durationDays === 1 ? 'day' : 'days'}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                  <BlurView intensity={50} tint="light" style={s.myPlanRow}>
+                    <View style={s.myPlanIcon}>
+                      <MaterialCommunityIcons name="map-marker-radius" size={20} color={colors.sunsetOrange} />
+                    </View>
+                    <View style={s.myPlanInfo}>
+                      <Text style={s.myPlanName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={s.myPlanMeta}>
+                        {item.city} · {item.durationDays} {item.durationDays === 1 ? 'day' : 'days'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.85)" />
+                  </BlurView>
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -284,6 +308,22 @@ export default function PlansScreen() {
 
   return (
     <View style={s.root}>
+      <PlansHeroBg width={screenWidth} height={screenHeight} />
+      <TouchableOpacity
+        onPress={() => setMode('chooser')}
+        style={[s.floatingClose, { top: insets.top + spacing.xs }]}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Back to plans menu"
+      >
+        <Ionicons name="close" size={22} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      {/* Header on hero */}
+      <View style={[s.curatedHeader, { paddingTop: insets.top + spacing.xs + 56 }]}>
+        <EditorialTitle text={t('plans.exploreCurated')} size="md" align="left" color="#FFFFFF" withShadow />
+      </View>
+
       {/* Filter Chips */}
       <ScrollView
         horizontal
@@ -421,21 +461,37 @@ const s = StyleSheet.create({
   chooserCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
     borderRadius: 20,
     borderCurve: 'continuous',
     paddingVertical: 18,
     paddingHorizontal: 20,
     gap: 16,
-    // Shadow wizard-like
-    shadowColor: colors.sunsetOrange,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.18,
     shadowRadius: 12,
     elevation: 3,
+    marginBottom: spacing.sm,
   },
   chooserEmoji: {
     fontSize: 32,
+  },
+  chooserIconBubble: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.20)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
   },
   chooserTextWrap: {
     flex: 1,
@@ -443,8 +499,11 @@ const s = StyleSheet.create({
   chooserTitle: {
     fontFamily: fonts.headingSemiBold,
     fontSize: 22,
-    color: colors.deepOcean,
+    color: '#FFFFFF',
     marginBottom: 2,
+    textShadowColor: 'rgba(0,0,0,0.25)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   chooserTitleRow: {
     flexDirection: 'row',
@@ -465,23 +524,28 @@ const s = StyleSheet.create({
   chooserSub: {
     fontFamily: fonts.body,
     fontSize: 13,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.85)',
     lineHeight: 18,
   },
   myPlanRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    overflow: 'hidden',
+    borderRadius: 20,
+    borderCurve: 'continuous',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     marginBottom: spacing.sm,
     gap: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   myPlanIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.sunsetOrange + '12',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(15, 23, 42, 0.20)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -490,13 +554,40 @@ const s = StyleSheet.create({
   },
   myPlanName: {
     fontFamily: fonts.bodySemiBold,
-    fontSize: 15,
-    color: colors.deepOcean,
+    fontSize: 16,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   myPlanMeta: {
     fontFamily: fonts.body,
     fontSize: 12,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.75)',
+  },
+  listHeader: {
+    marginBottom: spacing.lg,
+  },
+  curatedHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  floatingClose: {
+    position: 'absolute',
+    right: spacing.md,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  emptyTitleOnHero: {
+    color: '#FFFFFF',
+  },
+  emptyBodyOnHero: {
+    color: 'rgba(255,255,255,0.75)',
   },
 
   center: {

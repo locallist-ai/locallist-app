@@ -51,27 +51,25 @@ export const RefineableStep: React.FC<RefineableStepProps> = ({
   const [activeSheetParent, setActiveSheetParent] = useState<string | null>(null);
 
   const handlePress = (parentId: string) => {
-    const wasSelected = selectedId === parentId;
     const subs = subOptionsByParent[parentId];
     const hasSubs = !!subs?.length;
 
     onSelect(parentId);
 
     if (hasSubs) {
-      // Si cambia de parent o aún no se eligieron subs, abrir sheet.
-      // Si re-tap del mismo parent ya seleccionado, también abrir para editar.
+      // Si cambia de parent o aún no se eligieron subs, abrir sheet para
+      // refinamiento opcional. Si re-tap del mismo parent ya seleccionado,
+      // también abrir para editar.
       setActiveSheetParent(parentId);
-    } else if (!wasSelected) {
-      // Parent sin subs y nuevo → auto-advance tras pequeño delay.
-      setTimeout(onContinue, 350);
     }
+    // Pablo 2026-04-26: NO auto-advance. El usuario pulsa Continue/Skip
+    // del bottom para avanzar al siguiente step.
   };
 
   const handleSheetConfirm = (subs: string[]) => {
     onSetSubs(subs);
     setActiveSheetParent(null);
-    // Avanzar al siguiente step automáticamente tras confirmar.
-    setTimeout(onContinue, 200);
+    // No auto-advance — el usuario sigue en este step hasta pulsar Continue.
   };
 
   const handleSheetCancel = () => {
@@ -116,15 +114,6 @@ export const RefineableStep: React.FC<RefineableStepProps> = ({
               />
               {isSelected && hasSubsAvailable && (
                 <View style={styles.refinementRow}>
-                  {subsForThis.length > 0 ? (
-                    <Text style={styles.refinementText}>
-                      {subsForThis.length === 1
-                        ? t('wizard.refinement1', { count: 1 })
-                        : t('wizard.refinementN', { count: subsForThis.length })}
-                    </Text>
-                  ) : (
-                    <Text style={styles.refinementHint}>{t('wizard.refinementTapToRefine')}</Text>
-                  )}
                   <TouchableOpacity
                     onPress={() => setActiveSheetParent(option.id)}
                     hitSlop={10}
@@ -146,11 +135,13 @@ export const RefineableStep: React.FC<RefineableStepProps> = ({
           activeOpacity={0.85}
           onPress={onContinue}
           style={styles.skipButton}
-          accessibilityLabel={t('wizard.skip')}
+          accessibilityLabel={selectedId ? t('wizard.interestContinue') : t('wizard.skip')}
           accessibilityRole="button"
         >
           <BlurView intensity={60} tint="light" style={styles.skipBlur}>
-            <Text style={styles.skipText}>{t('wizard.skip')}</Text>
+            <Text style={styles.skipText}>
+              {selectedId ? t('wizard.interestContinue') : t('wizard.skip')}
+            </Text>
             <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
           </BlurView>
         </TouchableOpacity>
@@ -187,24 +178,11 @@ const styles = StyleSheet.create({
   refinementRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: 18,
     paddingTop: 4,
     marginTop: -4,
     marginBottom: 4,
-  },
-  refinementText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: colors.sunsetOrange,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  refinementHint: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
-    fontStyle: 'italic',
   },
   editBtn: {
     width: 28,

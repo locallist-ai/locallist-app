@@ -1,5 +1,6 @@
 import { ImageSourcePropType, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import type { MaterialCommunityIcons } from '@expo/vector-icons';
 import type en from '../../lib/i18n/en';
 
 // ── i18n helper type ──
@@ -24,6 +25,10 @@ export interface StepOption {
   icon: ImageSourcePropType;
   labelKey: TKeys;
   emoji: string;
+  /** Mockup 2026-04-25: icono branded MCI que sustituye al emoji en el chip
+   *  cuando se renderiza vía ChoiceChip o InterestsStep. Si está ausente,
+   *  el chip cae al emoji unicode legacy. */
+  iconName?: keyof typeof MaterialCommunityIcons.glyphMap;
 }
 
 export interface WizardStepConfig {
@@ -41,33 +46,33 @@ export const CITIES: City[] = [
 // ── Step option data ──
 
 export const DURATION_OPTIONS: StepOption[] = [
-  { id: '1', icon: require('../../assets/images/icon_1day.png'), labelKey: 'wizard.duration1Day', emoji: '\u2600\uFE0F' },
-  { id: '2', icon: require('../../assets/images/icon_3days.png'), labelKey: 'wizard.duration2Days', emoji: '\u{1F338}' },
-  { id: '3', icon: require('../../assets/images/icon_3days.png'), labelKey: 'wizard.duration3Days', emoji: '\u{1F33C}' },
+  { id: '1', icon: require('../../assets/images/icon_1day.png'), labelKey: 'wizard.duration1Day', emoji: '\u2600\uFE0F', iconName: 'numeric-1-circle-outline' },
+  { id: '2', icon: require('../../assets/images/icon_3days.png'), labelKey: 'wizard.duration2Days', emoji: '\u{1F338}', iconName: 'numeric-2-circle-outline' },
+  { id: '3', icon: require('../../assets/images/icon_3days.png'), labelKey: 'wizard.duration3Days', emoji: '\u{1F33C}', iconName: 'numeric-3-circle-outline' },
 ];
 
 export const COMPANY_OPTIONS: StepOption[] = [
-  { id: 'solo', icon: require('../../assets/images/icon_solo.png'), labelKey: 'wizard.companySolo', emoji: '\u{1F9D1}' },
-  { id: 'couple', icon: require('../../assets/images/icon_couple.png'), labelKey: 'wizard.companyCouple', emoji: '\u2764\uFE0F' },
-  { id: 'family', icon: require('../../assets/images/icon_family.png'), labelKey: 'wizard.companyFamily', emoji: '\u{1F46A}' },
+  { id: 'solo', icon: require('../../assets/images/icon_solo.png'), labelKey: 'wizard.companySolo', emoji: '\u{1F9D1}', iconName: 'account' },
+  { id: 'couple', icon: require('../../assets/images/icon_couple.png'), labelKey: 'wizard.companyCouple', emoji: '\u2764\uFE0F', iconName: 'account-heart' },
+  { id: 'family', icon: require('../../assets/images/icon_family.png'), labelKey: 'wizard.companyFamily', emoji: '\u{1F46A}', iconName: 'account-group' },
 ];
 
 export const STYLE_OPTIONS: StepOption[] = [
-  { id: 'adventure', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.styleAdventure', emoji: '\u{1F9ED}' },
-  { id: 'relax', icon: require('../../assets/images/icon_relax.png'), labelKey: 'wizard.styleRelax', emoji: '\u{1F33F}' },
-  { id: 'cultural', icon: require('../../assets/images/icon_cultural.png'), labelKey: 'wizard.styleCultural', emoji: '\u{1F3A8}' },
+  { id: 'adventure', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.styleAdventure', emoji: '\u{1F9ED}', iconName: 'compass-outline' },
+  { id: 'relax', icon: require('../../assets/images/icon_relax.png'), labelKey: 'wizard.styleRelax', emoji: '\u{1F33F}', iconName: 'leaf' },
+  { id: 'cultural', icon: require('../../assets/images/icon_cultural.png'), labelKey: 'wizard.styleCultural', emoji: '\u{1F3A8}', iconName: 'palette-outline' },
 ];
 
 // Top-level interests (multi-select). Cuando el usuario tap una de estas, abre
 // un sheet de subcategorías para profundizar (sushi/italian dentro de food, etc).
 // El icon es legacy del StepOption type — ChoiceChip solo renderiza emoji.
 export const INTEREST_OPTIONS: StepOption[] = [
-  { id: 'food', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestFood', emoji: '\u{1F37D}\uFE0F' },
-  { id: 'outdoors', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestOutdoors', emoji: '\u{1F332}' },
-  { id: 'coffee', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestCoffee', emoji: '\u2615' },
-  { id: 'culture', icon: require('../../assets/images/icon_cultural.png'), labelKey: 'wizard.interestCulture', emoji: '\u{1F3A8}' },
-  { id: 'nightlife', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestNightlife', emoji: '\u{1F378}' },
-  { id: 'wellness', icon: require('../../assets/images/icon_relax.png'), labelKey: 'wizard.interestWellness', emoji: '\u{1F9D8}' },
+  { id: 'food', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestFood', emoji: '\u{1F37D}\uFE0F', iconName: 'silverware-fork-knife' },
+  { id: 'outdoors', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestOutdoors', emoji: '\u{1F332}', iconName: 'pine-tree' },
+  { id: 'coffee', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestCoffee', emoji: '\u2615', iconName: 'coffee' },
+  { id: 'culture', icon: require('../../assets/images/icon_cultural.png'), labelKey: 'wizard.interestCulture', emoji: '\u{1F3A8}', iconName: 'bank-outline' },
+  { id: 'nightlife', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestNightlife', emoji: '\u{1F378}', iconName: 'glass-cocktail' },
+  { id: 'wellness', icon: require('../../assets/images/icon_relax.png'), labelKey: 'wizard.interestWellness', emoji: '\u{1F9D8}', iconName: 'spa-outline' },
 ];
 
 export interface SubcategoryOption {
@@ -119,9 +124,9 @@ export const SUBCATEGORIES_BY_INTEREST: Record<string, SubcategoryOption[]> = {
 };
 
 export const BUDGET_OPTIONS: StepOption[] = [
-  { id: 'budget', icon: require('../../assets/images/icon_budget.png'), labelKey: 'wizard.budgetBudget', emoji: '\u{1F4B0}' },
-  { id: 'moderate', icon: require('../../assets/images/icon_moderate.png'), labelKey: 'wizard.budgetModerate', emoji: '\u{1F4B3}' },
-  { id: 'premium', icon: require('../../assets/images/icon_premium.png'), labelKey: 'wizard.budgetPremium', emoji: '\u{1F451}' },
+  { id: 'budget', icon: require('../../assets/images/icon_budget.png'), labelKey: 'wizard.budgetBudget', emoji: '\u{1F4B0}', iconName: 'cash' },
+  { id: 'moderate', icon: require('../../assets/images/icon_moderate.png'), labelKey: 'wizard.budgetModerate', emoji: '\u{1F4B3}', iconName: 'credit-card-outline' },
+  { id: 'premium', icon: require('../../assets/images/icon_premium.png'), labelKey: 'wizard.budgetPremium', emoji: '\u{1F451}', iconName: 'crown-outline' },
 ];
 
 // Pesos USD/día/persona asignados a cada tier preset. Pablo 2026-04-25:

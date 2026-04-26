@@ -14,10 +14,21 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.bgCard,
           borderTopColor: colors.borderColor,
+          paddingTop: 6,
         },
         tabBarActiveTintColor: colors.sunsetOrange,
         tabBarInactiveTintColor: colors.textSecondary,
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontFamily: fonts.bodySemiBold,
+          fontSize: 10,
+          letterSpacing: 0.6,
+          textTransform: 'uppercase',
+          marginTop: 2,
+        },
+        tabBarIconStyle: {
+          marginTop: 2,
+        },
         headerStyle: { backgroundColor: colors.bgMain },
         headerTintColor: colors.deepOcean,
         headerShadowVisible: false,

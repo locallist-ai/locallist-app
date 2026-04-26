@@ -127,6 +127,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
       >
         <OverviewSlot
           plan={plan}
+          stops={stops}
           totalStops={totalStops}
           message={message}
           heroPhotos={heroPhotos}
@@ -173,6 +174,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
 
 interface OverviewSlotProps {
   plan: Plan;
+  stops: PlanStop[];
   totalStops: number;
   message?: string | null;
   heroPhotos: string[];
@@ -185,6 +187,7 @@ interface OverviewSlotProps {
 
 const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
   plan,
+  stops,
   totalStops,
   message,
   heroPhotos,
@@ -196,6 +199,24 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
 }) => {
   const heroFallback = (plan.category ?? plan.type ?? 'Culture') as Category;
   const heroSubtitle = `${plan.city} · ${plan.durationDays} ${plan.durationDays === 1 ? 'day' : 'days'}`;
+
+  // Resumen "What's inside" — agrupa stops por día. Pablo 2026-04-26: "un
+  // breve resumen del plan completo" en la página principal del plan.
+  const daysSummary = useMemo(() => {
+    const byDay = new Map<number, PlanStop[]>();
+    for (const stop of stops) {
+      const dn = stop.dayNumber || 1;
+      const arr = byDay.get(dn) ?? [];
+      arr.push(stop);
+      byDay.set(dn, arr);
+    }
+    return Array.from(byDay.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([day, list]) => ({
+        day,
+        stops: list.slice().sort((a, b) => a.orderIndex - b.orderIndex),
+      }));
+  }, [stops]);
 
   return (
     <ScrollView
@@ -246,6 +267,41 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
               <Text style={styles.messageLabel}>AI Curator</Text>
             </View>
             <Text style={styles.messageText}>{message}</Text>
+          </View>
+        )}
+
+        {/* Plan summary "What's inside" — breakdown por día con stop names.
+          * Pablo 2026-04-26 quiere un resumen rápido del plan completo en la
+          * pantalla principal antes de hacer swipe a cada stop. */}
+        {daysSummary.length > 0 && (
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryHeader}>
+              <Ionicons name="list-outline" size={16} color={colors.sunsetOrange} />
+              <Text style={styles.summaryLabel}>What's inside</Text>
+            </View>
+            {daysSummary.map((d) => (
+              <View key={d.day} style={styles.summaryDayBlock}>
+                <Text style={styles.summaryDayTitle}>Day {d.day}</Text>
+                {d.stops.map((s, idx) => {
+                  const emoji = s.timeBlock ? TIME_BLOCK_EMOJI[s.timeBlock] ?? '·' : '·';
+                  const arrival = s.suggestedArrival ? ` · ${s.suggestedArrival}` : '';
+                  return (
+                    <View key={`${s.placeId}-${idx}`} style={styles.summaryRow}>
+                      <Text style={styles.summaryRowEmoji}>{emoji}</Text>
+                      <View style={styles.summaryRowText}>
+                        <Text style={styles.summaryRowName} numberOfLines={1}>
+                          {s.place?.name ?? 'Unknown'}
+                        </Text>
+                        <Text style={styles.summaryRowMeta} numberOfLines={1}>
+                          {s.place?.category ?? ''}
+                          {arrival}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
           </View>
         )}
 
@@ -544,6 +600,47 @@ const styles = StyleSheet.create({
   messageHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   messageLabel: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.sunsetOrange },
   messageText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.textMain },
+  summaryCard: {
+    backgroundColor: colors.bgCard,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+    gap: spacing.sm,
+  },
+  summaryHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  summaryLabel: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.sunsetOrange,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  summaryDayBlock: { gap: 6 },
+  summaryDayTitle: {
+    fontFamily: fonts.headingSemiBold,
+    fontSize: 16,
+    color: colors.deepOcean,
+    marginTop: spacing.xs,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  summaryRowEmoji: { fontSize: 16, width: 22, textAlign: 'center' },
+  summaryRowText: { flex: 1 },
+  summaryRowName: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 14,
+    color: colors.deepOcean,
+  },
+  summaryRowMeta: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
   ownerActions: {
     flexDirection: 'row',
     gap: spacing.sm,

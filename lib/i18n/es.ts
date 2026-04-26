@@ -4,8 +4,8 @@ export default {
   },
   tabs: {
     home: 'Inicio',
-    plans: 'Planes',
-    account: 'Cuenta',
+    plans: 'Experiencias',
+    account: 'Perfil',
   },
   home: {
     createPlan: 'Crear un Plan',
@@ -29,6 +29,7 @@ export default {
     buildMyPlan: 'Crear mi plan',
     errorDefault: 'Algo salió mal',
     errorInsufficientInput: 'Completa al menos 3 pasos del wizard antes de crear tu plan (ciudad, duración, grupo, estilo, presupuesto).',
+    errorRateLimit: 'Has llegado al límite de planes por ahora. Inténtalo de nuevo en unos minutos.',
     generating: 'Creando tu plan…',
     retry: 'Reintentar',
     stepInterestsTitle: "¿Qué tipo de\nlugares?",

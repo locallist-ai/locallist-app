@@ -54,6 +54,13 @@ export default function PlanDetailScreen() {
         setPlan(preview.plan);
         setStops(sortStopsFlat(preview.stops));
         setMessage(preview.message);
+        // El plan generado por el wizard YA está persistido en el backend
+        // (BuilderController lo guarda con createdById = current user). Pablo
+        // 2026-04-26: "cuando construimos un plan, debemos tener todas las
+        // opciones de edicion en el plan, no solo accediendo desde my plans".
+        // Setear createdById habilita los botones Edit/Delete en el overview.
+        const ownerId = (preview.plan as Plan & { createdById?: string }).createdById;
+        if (ownerId) setCreatedById(ownerId);
       } else {
         setError('No plan data available');
       }
@@ -131,8 +138,13 @@ export default function PlanDetailScreen() {
     router.push(`/follow/${id === 'preview' ? plan.id : id}`);
   };
 
+  // Resuelve el id real del plan: si la ruta es /plan/preview usamos el plan.id
+  // del backend (el plan ya está persistido al salir del wizard).
+  const effectivePlanId = id === 'preview' ? plan?.id ?? null : id ?? null;
+
   const handleEdit = () => {
-    router.push(`/plan/edit/${id}`);
+    if (!effectivePlanId) return;
+    router.push(`/plan/edit/${effectivePlanId}`);
   };
 
   const handleDelete = () => {
@@ -141,9 +153,9 @@ export default function PlanDetailScreen() {
   };
 
   const confirmDelete = async () => {
-    if (deleting) return;
+    if (deleting || !effectivePlanId) return;
     setDeleting(true);
-    const res = await api(`/plans/${id}`, { method: 'DELETE' });
+    const res = await api(`/plans/${effectivePlanId}`, { method: 'DELETE' });
     setDeleting(false);
     setDeleteVisible(false);
     if (res.status === 204 || (res.status >= 200 && res.status < 300)) {
@@ -175,8 +187,8 @@ export default function PlanDetailScreen() {
         isOwner={isOwner && id !== 'preview'}
         heroPhotos={heroPhotos}
         onFollow={handleFollow}
-        onEdit={id !== 'preview' ? handleEdit : undefined}
-        onDelete={id !== 'preview' && isOwner ? handleDelete : undefined}
+        onEdit={effectivePlanId ? handleEdit : undefined}
+        onDelete={effectivePlanId && isOwner ? handleDelete : undefined}
       />
 
       <ConfirmModal
