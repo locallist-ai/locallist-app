@@ -159,4 +159,10 @@ export default {
     shareLocalList: 'Share LocalList',
     shareMessage: "Check out LocalList - Your AI travel curator. Stop Researching. Start Traveling.\nhttps://locallist.ai",
   },
+  follow: {
+    dayCompleteTitle: 'Day {{day}} complete',
+    dayCompleteBody: 'Continue to Day {{nextDay}}?',
+    dayCompleteContinue: 'Continue',
+    dayCompleteStay: 'Stay here',
+  },
 } as const;

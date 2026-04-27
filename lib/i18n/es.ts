@@ -159,4 +159,10 @@ export default {
     shareLocalList: 'Compartir LocalList',
     shareMessage: "Descubre LocalList - Tu curador de viajes con IA. Deja de buscar. Empieza a viajar.\nhttps://locallist.ai",
   },
+  follow: {
+    dayCompleteTitle: 'Día {{day}} completado',
+    dayCompleteBody: '¿Continuar al día {{nextDay}}?',
+    dayCompleteContinue: 'Continuar',
+    dayCompleteStay: 'Quedarme aquí',
+  },
 } as const;

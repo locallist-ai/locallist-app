@@ -8,6 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,6 +41,7 @@ const mapToMapStop = (planStop: PlanStop): MapStop | null => {
 };
 
 export default function FollowModeScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
@@ -133,9 +135,37 @@ export default function FollowModeScreen() {
     Haptics.selectionAsync();
   };
 
+  // Audit follow-up D5 (2026-04-27): cuando el next stop está en otro día,
+  // pedimos confirmación antes de cruzar — la UI day-scoped (chip "Day N",
+  // dots por día, pins por día) hacía que el cruce silencioso confundiera al
+  // user. handleComplete sigue siendo el final del plan completo.
+  const advanceLinear = (nextIndex: number) => {
+    if (nextIndex >= allStops.length) {
+      handleComplete();
+      return;
+    }
+    const nextStop = allStops[nextIndex];
+    const nextDay = nextStop?.dayNumber ?? 1;
+    if (nextDay !== currentDay) {
+      Alert.alert(
+        t('follow.dayCompleteTitle', { day: currentDay }),
+        t('follow.dayCompleteBody', { nextDay }),
+        [
+          { text: t('follow.dayCompleteStay'), style: 'cancel' },
+          {
+            text: t('follow.dayCompleteContinue'),
+            onPress: () => setCurrentIndex(nextIndex),
+          },
+        ],
+      );
+      return;
+    }
+    setCurrentIndex(nextIndex);
+  };
+
   const handleNext = () => {
     if (currentIndex < allStops.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+      advanceLinear(currentIndex + 1);
     } else {
       handleComplete();
     }
@@ -147,7 +177,7 @@ export default function FollowModeScreen() {
 
   const handleSkip = () => {
     if (currentIndex < allStops.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+      advanceLinear(currentIndex + 1);
     } else {
       handleComplete();
     }
