@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,17 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
@@ -26,6 +34,16 @@ import type { PlanStop } from '../../lib/types';
 //  - onDelete: el padre confirma + persiste.
 // El sheet en sí solo dispara los handlers; toda la persistencia vive en
 // app/follow/[id].tsx para tener control sobre la API.
+//
+// Pablo 2026-04-27 evening: el sheet ahora es colapsable — tap en el handle
+// bar (o drag down) lo baja para revelar el mapa a pantalla completa. Tap
+// otra vez (o drag up) lo expande. Pause button removido por redundante
+// (era equivalente al chevron back de la pantalla).
+
+/** Cantidad de píxeles del sheet que quedan visibles cuando está colapsado. */
+const COLLAPSED_PEEK_HEIGHT = 56;
+/** Threshold de drag (% del recorrido) para commitear toggle al soltar. */
+const COMMIT_THRESHOLD = 0.35;
 
 interface FollowDaySheetProps {
   /** Todos los stops del plan, ya con dayNumber poblado. */
@@ -39,8 +57,6 @@ interface FollowDaySheetProps {
   /** Acciones por stop (las dispara el padre, persistencia + reload). */
   onReplaceStop?: (stop: PlanStop) => void;
   onDeleteStop?: (stop: PlanStop) => void;
-  /** Pausa la sesión (cierra Follow Mode pero plan sigue). */
-  onPause?: () => void;
   /** Marca el plan como completo. */
   onComplete?: () => void;
   /** ¿El usuario es owner? Solo el owner puede editar/borrar. */
@@ -54,7 +70,6 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
   onChangeDay,
   onReplaceStop,
   onDeleteStop,
-  onPause,
   onComplete,
   canEdit = false,
 }) => {
@@ -79,6 +94,79 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
     return Array.from(days).sort();
   }, [allStops]);
 
+  // Collapse state (Pablo 2026-04-27): translateY=0 expanded, =maxOffset collapsed.
+  const [collapsed, setCollapsed] = useState(false);
+  const sheetHeight = useSharedValue(0);
+  const translateY = useSharedValue(0);
+
+  const onLayoutSheet = (e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    if (h > 0 && sheetHeight.value !== h) {
+      sheetHeight.value = h;
+      // Si ya está colapsado, re-aplica el offset al nuevo height.
+      if (collapsed) translateY.value = h - COLLAPSED_PEEK_HEIGHT;
+    }
+  };
+
+  const setCollapsedJS = useCallback((next: boolean) => {
+    setCollapsed(next);
+    Haptics.selectionAsync();
+  }, []);
+
+  const toggleCollapse = useCallback(() => {
+    'worklet';
+    const max = sheetHeight.value - COLLAPSED_PEEK_HEIGHT;
+    const target = translateY.value > max / 2 ? 0 : max;
+    translateY.value = withSpring(target, { damping: 22, stiffness: 200 });
+    runOnJS(setCollapsedJS)(target !== 0);
+  }, [setCollapsedJS, sheetHeight, translateY]);
+
+  // Tap en el handle bar = toggle.
+  const tapGesture = useMemo(
+    () =>
+      Gesture.Tap().onEnd(() => {
+        'worklet';
+        toggleCollapse();
+      }),
+    [toggleCollapse],
+  );
+
+  // Pan en el handle bar = drag fino con commit por threshold/velocity.
+  const panGesture = useMemo(() => {
+    const startY = { value: 0 };
+    return Gesture.Pan()
+      .onStart(() => {
+        'worklet';
+        startY.value = translateY.value;
+      })
+      .onChange((e) => {
+        'worklet';
+        const max = sheetHeight.value - COLLAPSED_PEEK_HEIGHT;
+        const next = Math.max(0, Math.min(max, startY.value + e.translationY));
+        translateY.value = next;
+      })
+      .onEnd((e) => {
+        'worklet';
+        const max = sheetHeight.value - COLLAPSED_PEEK_HEIGHT;
+        // Commit por velocity rápida o por posición pasada el threshold.
+        const fastDown = e.velocityY > 800;
+        const fastUp = e.velocityY < -800;
+        const past = translateY.value > max * COMMIT_THRESHOLD;
+        const target = fastUp ? 0 : fastDown ? max : past ? max : 0;
+        translateY.value = withSpring(target, { damping: 22, stiffness: 200, velocity: e.velocityY });
+        runOnJS(setCollapsedJS)(target !== 0);
+      });
+  }, [setCollapsedJS, sheetHeight, translateY]);
+
+  const handleGesture = useMemo(
+    () => Gesture.Race(panGesture, tapGesture),
+    [panGesture, tapGesture],
+  );
+
+  const animatedSheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
   const handleEditMenu = (stop: PlanStop) => {
     if (!canEdit) return;
     Haptics.selectionAsync();
@@ -102,10 +190,15 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
   };
 
   return (
-    <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-      <View style={styles.handleBar}>
-        <View style={styles.handle} />
-      </View>
+    <Animated.View
+      style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }, animatedSheetStyle]}
+      onLayout={onLayoutSheet}
+    >
+      <GestureDetector gesture={handleGesture}>
+        <View style={styles.handleBar} accessibilityRole="button" accessibilityLabel={collapsed ? 'Expand stops list' : 'Collapse stops list to see map'}>
+          <View style={styles.handle} />
+        </View>
+      </GestureDetector>
 
       {/* Day switcher */}
       <View style={styles.daySwitcherRow}>
@@ -216,17 +309,9 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
         )}
       </ScrollView>
 
-      {/* Footer actions */}
+      {/* Footer action — solo Complete day. Pause removido por redundante (era
+          equivalente al chevron back de la pantalla — Pablo 2026-04-27). */}
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.footerBtn}
-          onPress={onPause}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-        >
-          <MaterialCommunityIcons name="pause" size={18} color={colors.electricBlue} />
-          <Text style={styles.footerBtnText}>Pause</Text>
-        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.footerBtn, styles.footerBtnPrimary]}
           onPress={onComplete}
@@ -237,7 +322,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
           <Text style={styles.footerBtnPrimaryText}>Complete day</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </Animated.View>
   );
 };
 
@@ -255,7 +340,7 @@ const styles = StyleSheet.create({
   },
   handleBar: {
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 14,
   },
   handle: {
     width: 48,
@@ -336,9 +421,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sunsetOrange,
     borderColor: colors.sunsetOrange,
   },
-  emojiText: {
-    fontSize: 18,
-  },
   connector: {
     flex: 1,
     width: 2,
@@ -394,7 +476,6 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: 'row',
-    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
@@ -408,15 +489,8 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 12,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.bgMain,
-  },
-  footerBtnText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 14,
-    color: colors.electricBlue,
   },
   footerBtnPrimary: {
-    flex: 1.4,
     backgroundColor: colors.sunsetOrange,
   },
   footerBtnPrimaryText: {
