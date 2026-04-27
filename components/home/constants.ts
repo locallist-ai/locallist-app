@@ -82,6 +82,8 @@ export interface SubcategoryOption {
   id: string;
   label: string;
   emoji: string;
+  /** Branded MCI glyph para el chip (paperWhite bubble + sunsetOrange icon). */
+  iconName?: keyof typeof MaterialCommunityIcons.glyphMap;
 }
 
 // Sub-categorías por interest top-level. Los `id` son tags lowercase que el
@@ -90,39 +92,39 @@ export interface SubcategoryOption {
 // derivada del audit del catálogo Miami real (45 places, 37 subcategorías).
 export const SUBCATEGORIES_BY_INTEREST: Record<string, SubcategoryOption[]> = {
   food: [
-    { id: 'sushi', label: 'Sushi', emoji: '\u{1F363}' },
-    { id: 'italian', label: 'Italian', emoji: '\u{1F35D}' },
-    { id: 'mexican', label: 'Mexican', emoji: '\u{1F32E}' },
-    { id: 'thai', label: 'Thai', emoji: '\u{1F35C}' },
-    { id: 'cuban', label: 'Cuban', emoji: '\u{1F1E8}\u{1F1FA}' },
-    { id: 'seafood', label: 'Seafood', emoji: '\u{1F990}' },
-    { id: 'asian', label: 'Asian', emoji: '\u{1F961}' },
+    { id: 'sushi', label: 'Sushi', emoji: '\u{1F363}', iconName: 'fish' },
+    { id: 'italian', label: 'Italian', emoji: '\u{1F35D}', iconName: 'pasta' },
+    { id: 'mexican', label: 'Mexican', emoji: '\u{1F32E}', iconName: 'taco' },
+    { id: 'thai', label: 'Thai', emoji: '\u{1F35C}', iconName: 'noodles' },
+    { id: 'cuban', label: 'Cuban', emoji: '\u{1F1E8}\u{1F1FA}', iconName: 'food-variant' },
+    { id: 'seafood', label: 'Seafood', emoji: '\u{1F990}', iconName: 'fish' },
+    { id: 'asian', label: 'Asian', emoji: '\u{1F961}', iconName: 'bowl-mix-outline' },
   ],
   outdoors: [
-    { id: 'beach', label: 'Beach', emoji: '\u{1F3D6}\uFE0F' },
-    { id: 'park', label: 'Parks', emoji: '\u{1F333}' },
-    { id: 'garden', label: 'Gardens', emoji: '\u{1F33A}' },
-    { id: 'trail', label: 'Trails', emoji: '\u{1F97E}' },
+    { id: 'beach', label: 'Beach', emoji: '\u{1F3D6}\uFE0F', iconName: 'beach' },
+    { id: 'park', label: 'Parks', emoji: '\u{1F333}', iconName: 'tree-outline' },
+    { id: 'garden', label: 'Gardens', emoji: '\u{1F33A}', iconName: 'flower-outline' },
+    { id: 'trail', label: 'Trails', emoji: '\u{1F97E}', iconName: 'hiking' },
   ],
   coffee: [
-    { id: 'specialty', label: 'Specialty', emoji: '\u2615' },
-    { id: 'bakery', label: 'Bakery', emoji: '\u{1F950}' },
-    { id: 'dessert', label: 'Dessert', emoji: '\u{1F370}' },
+    { id: 'specialty', label: 'Specialty', emoji: '\u2615', iconName: 'coffee-outline' },
+    { id: 'bakery', label: 'Bakery', emoji: '\u{1F950}', iconName: 'baguette' },
+    { id: 'dessert', label: 'Dessert', emoji: '\u{1F370}', iconName: 'cupcake' },
   ],
   culture: [
-    { id: 'museum', label: 'Museums', emoji: '\u{1F3DB}\uFE0F' },
-    { id: 'festival', label: 'Festivals', emoji: '\u{1F3AA}' },
-    { id: 'art', label: 'Art', emoji: '\u{1F3A8}' },
+    { id: 'museum', label: 'Museums', emoji: '\u{1F3DB}\uFE0F', iconName: 'bank-outline' },
+    { id: 'festival', label: 'Festivals', emoji: '\u{1F3AA}', iconName: 'party-popper' },
+    { id: 'art', label: 'Art', emoji: '\u{1F3A8}', iconName: 'palette-outline' },
   ],
   nightlife: [
-    { id: 'speakeasy', label: 'Speakeasy', emoji: '\u{1F943}' },
-    { id: 'wine', label: 'Wine bar', emoji: '\u{1F377}' },
-    { id: 'cocktails', label: 'Cocktails', emoji: '\u{1F378}' },
+    { id: 'speakeasy', label: 'Speakeasy', emoji: '\u{1F943}', iconName: 'glass-tulip' },
+    { id: 'wine', label: 'Wine bar', emoji: '\u{1F377}', iconName: 'glass-wine' },
+    { id: 'cocktails', label: 'Cocktails', emoji: '\u{1F378}', iconName: 'glass-cocktail' },
   ],
   wellness: [
-    { id: 'spa', label: 'Spa', emoji: '\u{1F9D6}' },
-    { id: 'pilates', label: 'Pilates', emoji: '\u{1F938}' },
-    { id: 'iv', label: 'IV therapy', emoji: '\u{1F489}' },
+    { id: 'spa', label: 'Spa', emoji: '\u{1F9D6}', iconName: 'spa-outline' },
+    { id: 'pilates', label: 'Pilates', emoji: '\u{1F938}', iconName: 'yoga' },
+    { id: 'iv', label: 'IV therapy', emoji: '\u{1F489}', iconName: 'needle' },
   ],
 };
 
@@ -168,26 +170,26 @@ export const INTERESTS_STEP_INDEX_IN_STEPS = 3;
 // Place.suitableFor / bestFor en el catálogo.
 export const COMPANY_SUBCATEGORIES: Record<string, SubcategoryOption[]> = {
   solo: [
-    { id: 'backpacker', label: 'Backpacker', emoji: '\u{1F392}' },
-    { id: 'digital-nomad', label: 'Digital nomad', emoji: '\u{1F4BB}' },
-    { id: 'business', label: 'Business', emoji: '\u{1F454}' },
-    { id: 'social', label: 'Social', emoji: '\u{1F4AC}' },
+    { id: 'backpacker', label: 'Backpacker', emoji: '\u{1F392}', iconName: 'bag-personal-outline' },
+    { id: 'digital-nomad', label: 'Digital nomad', emoji: '\u{1F4BB}', iconName: 'laptop' },
+    { id: 'business', label: 'Business', emoji: '\u{1F454}', iconName: 'briefcase-outline' },
+    { id: 'social', label: 'Social', emoji: '\u{1F4AC}', iconName: 'message-text-outline' },
   ],
   couple: [
-    { id: 'honeymoon', label: 'Honeymoon', emoji: '\u{1F48D}' },
-    { id: 'dating', label: 'Dating', emoji: '\u{1F378}' },
-    { id: 'anniversary', label: 'Anniversary', emoji: '\u{1F381}' },
+    { id: 'honeymoon', label: 'Honeymoon', emoji: '\u{1F48D}', iconName: 'ring' },
+    { id: 'dating', label: 'Dating', emoji: '\u{1F378}', iconName: 'heart-outline' },
+    { id: 'anniversary', label: 'Anniversary', emoji: '\u{1F381}', iconName: 'gift-outline' },
   ],
   family: [
-    { id: 'with-kids', label: 'With kids', emoji: '\u{1F9D2}' },
-    { id: 'with-teens', label: 'With teens', emoji: '\u{1F3AE}' },
-    { id: 'multi-gen', label: 'Multi-gen', emoji: '\u{1F46A}' },
+    { id: 'with-kids', label: 'With kids', emoji: '\u{1F9D2}', iconName: 'human-child' },
+    { id: 'with-teens', label: 'With teens', emoji: '\u{1F3AE}', iconName: 'gamepad-variant-outline' },
+    { id: 'multi-gen', label: 'Multi-gen', emoji: '\u{1F46A}', iconName: 'account-group-outline' },
   ],
   friends: [
-    { id: 'bachelor', label: 'Bachelor', emoji: '\u{1F37A}' },
-    { id: 'bachelorette', label: 'Bachelorette', emoji: '\u{1F478}' },
-    { id: 'group-trip', label: 'Group trip', emoji: '\u{1F46B}' },
-    { id: 'birthday', label: 'Birthday', emoji: '\u{1F389}' },
+    { id: 'bachelor', label: 'Bachelor', emoji: '\u{1F37A}', iconName: 'beer-outline' },
+    { id: 'bachelorette', label: 'Bachelorette', emoji: '\u{1F478}', iconName: 'crown-outline' },
+    { id: 'group-trip', label: 'Group trip', emoji: '\u{1F46B}', iconName: 'account-multiple-outline' },
+    { id: 'birthday', label: 'Birthday', emoji: '\u{1F389}', iconName: 'cake-variant-outline' },
   ],
 };
 
@@ -195,19 +197,19 @@ export const COMPANY_SUBCATEGORIES: Record<string, SubcategoryOption[]> = {
 // adventure/relax/cultural. Tags mapean a bestFor/bestTime en el catálogo.
 export const STYLE_SUBCATEGORIES: Record<string, SubcategoryOption[]> = {
   adventure: [
-    { id: 'urban', label: 'Urban explorer', emoji: '\u{1F306}' },
-    { id: 'outdoor', label: 'Outdoor', emoji: '\u{1F3D5}\uFE0F' },
-    { id: 'foodie', label: 'Foodie', emoji: '\u{1F371}' },
+    { id: 'urban', label: 'Urban explorer', emoji: '\u{1F306}', iconName: 'city-variant-outline' },
+    { id: 'outdoor', label: 'Outdoor', emoji: '\u{1F3D5}\uFE0F', iconName: 'tent' },
+    { id: 'foodie', label: 'Foodie', emoji: '\u{1F371}', iconName: 'silverware-fork-knife' },
   ],
   relax: [
-    { id: 'beach', label: 'Beach lounge', emoji: '\u{1F3D6}\uFE0F' },
-    { id: 'spa', label: 'Spa retreat', emoji: '\u{1F9D6}' },
-    { id: 'slow', label: 'Slow mornings', emoji: '\u{1F31E}' },
+    { id: 'beach', label: 'Beach lounge', emoji: '\u{1F3D6}\uFE0F', iconName: 'beach' },
+    { id: 'spa', label: 'Spa retreat', emoji: '\u{1F9D6}', iconName: 'spa-outline' },
+    { id: 'slow', label: 'Slow mornings', emoji: '\u{1F31E}', iconName: 'weather-sunset' },
   ],
   cultural: [
-    { id: 'museums', label: 'Museums', emoji: '\u{1F3DB}\uFE0F' },
-    { id: 'history', label: 'History', emoji: '\u{1F4DC}' },
-    { id: 'art', label: 'Local art', emoji: '\u{1F3A8}' },
+    { id: 'museums', label: 'Museums', emoji: '\u{1F3DB}\uFE0F', iconName: 'bank-outline' },
+    { id: 'history', label: 'History', emoji: '\u{1F4DC}', iconName: 'book-open-page-variant-outline' },
+    { id: 'art', label: 'Local art', emoji: '\u{1F3A8}', iconName: 'palette-outline' },
   ],
 };
 

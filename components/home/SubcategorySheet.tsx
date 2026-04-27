@@ -9,7 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -100,7 +100,17 @@ export const SubcategorySheet: React.FC<SubcategorySheetProps> = ({
                       accessibilityState={{ selected: isSelected }}
                       accessibilityLabel={opt.label}
                     >
-                      <Text style={styles.chipEmoji}>{opt.emoji}</Text>
+                      {opt.iconName ? (
+                        <View style={[styles.chipIconBubble, isSelected && styles.chipIconBubbleSelected]}>
+                          <MaterialCommunityIcons
+                            name={opt.iconName}
+                            size={16}
+                            color={isSelected ? '#FFFFFF' : colors.sunsetOrange}
+                          />
+                        </View>
+                      ) : (
+                        <Text style={styles.chipEmoji}>{opt.emoji}</Text>
+                      )}
                       <Text style={[styles.chipLabel, isSelected && styles.chipLabelSelected]}>
                         {opt.label}
                       </Text>
@@ -221,6 +231,20 @@ const styles = StyleSheet.create({
   },
   chipEmoji: {
     fontSize: 18,
+  },
+  chipIconBubble: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.paperWhite,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipIconBubbleSelected: {
+    backgroundColor: colors.sunsetOrange,
+    borderColor: colors.sunsetOrange,
   },
   chipLabel: {
     fontFamily: fonts.bodySemiBold,

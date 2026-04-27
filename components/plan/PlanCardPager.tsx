@@ -26,7 +26,7 @@ import { PhotoMosaic } from '../ui/PhotoMosaic';
 import { CategoryBadge } from '../ui/CategoryBadge';
 import { ProgressDots } from '../ui/design-system';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { TIME_BLOCK_EMOJI } from '../../lib/timeBlocks';
+import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import type { Plan, PlanStop } from '../../lib/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -62,8 +62,29 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   const lastHaptic = useRef(0);
   const hintPulse = useSharedValue(0);
 
-  const slotCount = 1 + stops.length;
+  // Pablo 2026-04-27: si el plan es multi-día, los stops se filtran por día
+  // activo (igual que Follow Mode). Día por defecto = 1.
+  const allDays = useMemo(() => {
+    const set = new Set<number>();
+    stops.forEach((s) => set.add(s.dayNumber || 1));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [stops]);
+  const [currentDay, setCurrentDay] = useState<number>(allDays[0] ?? 1);
+  // Si los días cambian (re-fetch), reajustar currentDay si quedó fuera.
+  useEffect(() => {
+    if (allDays.length > 0 && !allDays.includes(currentDay)) {
+      setCurrentDay(allDays[0]);
+    }
+  }, [allDays, currentDay]);
+
+  const stopsForDay = useMemo(
+    () => stops.filter((s) => (s.dayNumber || 1) === currentDay),
+    [stops, currentDay],
+  );
+
+  const slotCount = 1 + stopsForDay.length;
   const hasMoreSlides = slotCount > 1;
+  const isMultiDay = allDays.length > 1;
 
   useEffect(() => {
     if (!hasMoreSlides) return;
@@ -106,8 +127,21 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
 
   const slideLabel = useMemo(() => {
     if (slide === 0) return 'Overview';
-    return `Stop ${slide} of ${stops.length}`;
-  }, [slide, stops.length]);
+    const total = stopsForDay.length;
+    const dayLabel = isMultiDay ? `Day ${currentDay} · ` : '';
+    return `${dayLabel}Stop ${slide} of ${total}`;
+  }, [slide, stopsForDay.length, currentDay, isMultiDay]);
+
+  const handleDayChange = (day: number) => {
+    Haptics.selectionAsync();
+    if (day !== currentDay) setCurrentDay(day);
+    // Pablo 2026-04-27: tap en el día desde "What's inside" lleva al primer
+    // stop de ese día, no al overview. UX: el usuario escogió un día → quiere
+    // verlo.
+    setSlide(1);
+    // Animated true para que sea visible la transición.
+    scrollRef.current?.scrollTo({ x: SCREEN_WIDTH, animated: true });
+  };
 
   const hintAnimStyle = useAnimatedStyle(() => ({
     opacity: 0.55 + hintPulse.value * 0.45,
@@ -136,13 +170,16 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
           onFollow={onFollow}
           onEdit={onEdit}
           onDelete={onDelete}
+          currentDay={currentDay}
+          allDays={allDays}
+          onDayChange={handleDayChange}
         />
-        {stops.map((stop, idx) => (
+        {stopsForDay.map((stop, idx) => (
           <StopSlot
             key={`${stop.placeId}-${idx}`}
             stop={stop}
             index={idx}
-            total={stops.length}
+            total={stopsForDay.length}
           />
         ))}
       </ScrollView>
@@ -183,6 +220,9 @@ interface OverviewSlotProps {
   onFollow: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  currentDay: number;
+  allDays: number[];
+  onDayChange: (day: number) => void;
 }
 
 const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
@@ -196,6 +236,9 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
   onFollow,
   onEdit,
   onDelete,
+  currentDay,
+  allDays,
+  onDayChange,
 }) => {
   const heroFallback = (plan.category ?? plan.type ?? 'Culture') as Category;
   const heroSubtitle = `${plan.city} · ${plan.durationDays} ${plan.durationDays === 1 ? 'day' : 'days'}`;
@@ -271,23 +314,60 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
         )}
 
         {/* Plan summary "What's inside" — breakdown por día con stop names.
-          * Pablo 2026-04-26 quiere un resumen rápido del plan completo en la
-          * pantalla principal antes de hacer swipe a cada stop. */}
+          * Pablo 2026-04-26: resumen rápido del plan en la pantalla principal.
+          * Pablo 2026-04-27: en multi-día, los chips de día viven aquí (no
+          * flotando arriba) — tap selecciona el día y lleva al primer stop. */}
         {daysSummary.length > 0 && (
           <View style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
               <Ionicons name="list-outline" size={16} color={colors.sunsetOrange} />
               <Text style={styles.summaryLabel}>What's inside</Text>
             </View>
+
+            {allDays.length > 1 && (
+              <View style={styles.summaryDayChips}>
+                {allDays.map((d) => {
+                  const active = d === currentDay;
+                  return (
+                    <TouchableOpacity
+                      key={d}
+                      onPress={() => onDayChange(d)}
+                      activeOpacity={0.85}
+                      style={[styles.summaryDayChip, active && styles.summaryDayChipActive]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={`Day ${d}`}
+                    >
+                      <Text style={[styles.summaryDayChipText, active && styles.summaryDayChipTextActive]}>
+                        Day {d}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
             {daysSummary.map((d) => (
-              <View key={d.day} style={styles.summaryDayBlock}>
-                <Text style={styles.summaryDayTitle}>Day {d.day}</Text>
+              <TouchableOpacity
+                key={d.day}
+                onPress={() => onDayChange(d.day)}
+                activeOpacity={0.85}
+                style={styles.summaryDayBlock}
+                accessibilityRole="button"
+                accessibilityLabel={`View Day ${d.day}`}
+              >
+                <View style={styles.summaryDayHeaderRow}>
+                  <Text style={styles.summaryDayTitle}>Day {d.day}</Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.sunsetOrange} />
+                </View>
                 {d.stops.map((s, idx) => {
-                  const emoji = s.timeBlock ? TIME_BLOCK_EMOJI[s.timeBlock] ?? '·' : '·';
+                  const rowIcon = s.timeBlock ? TIME_BLOCK_ICON[s.timeBlock] ?? DEFAULT_STOP_ICON : DEFAULT_STOP_ICON;
                   const arrival = s.suggestedArrival ? ` · ${s.suggestedArrival}` : '';
                   return (
                     <View key={`${s.placeId}-${idx}`} style={styles.summaryRow}>
-                      <Text style={styles.summaryRowEmoji}>{emoji}</Text>
+                      <View style={styles.summaryRowBubble}>
+                        <MaterialCommunityIcons name={rowIcon} size={14} color={colors.sunsetOrange} />
+                      </View>
                       <View style={styles.summaryRowText}>
                         <Text style={styles.summaryRowName} numberOfLines={1}>
                           {s.place?.name ?? 'Unknown'}
@@ -300,7 +380,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
                     </View>
                   );
                 })}
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -373,7 +453,7 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) =>
   const photos = place?.photos ?? [];
   const activePhoto = photos[photoIdx];
   const fallbackCategory = (place?.category ?? 'Culture') as Category;
-  const timeEmoji = stop.timeBlock ? TIME_BLOCK_EMOJI[stop.timeBlock] ?? null : null;
+  const timeIcon = stop.timeBlock ? TIME_BLOCK_ICON[stop.timeBlock] ?? null : null;
   const why = place?.whyThisPlace ?? '';
 
   const chipTokens = useMemo(() => {
@@ -397,9 +477,11 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) =>
           height={260}
           blurBackdrop
         />
-        {timeEmoji && (
+        {timeIcon && (
           <View style={styles.timeOverlay}>
-            <Text style={styles.timeOverlayEmoji}>{timeEmoji}</Text>
+            <View style={styles.timeOverlayBubble}>
+              <MaterialCommunityIcons name={timeIcon} size={12} color={colors.sunsetOrange} />
+            </View>
             {stop.suggestedArrival && (
               <Text style={styles.timeOverlayText}>{stop.suggestedArrival}</Text>
             )}
@@ -509,6 +591,38 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flex: 1,
+  },
+  summaryDayChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 4,
+    marginTop: 2,
+  },
+  summaryDayChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(15, 23, 42, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.10)',
+  },
+  summaryDayChipActive: {
+    backgroundColor: colors.sunsetOrange,
+    borderColor: colors.sunsetOrange,
+  },
+  summaryDayChipText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.deepOcean,
+  },
+  summaryDayChipTextActive: {
+    color: '#FFFFFF',
+  },
+  summaryDayHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   slot: {
     width: SCREEN_WIDTH,
@@ -629,7 +743,16 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 4,
   },
-  summaryRowEmoji: { fontSize: 16, width: 22, textAlign: 'center' },
+  summaryRowBubble: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.paperWhite,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   summaryRowText: { flex: 1 },
   summaryRowName: {
     fontFamily: fonts.bodySemiBold,
@@ -691,7 +814,16 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: borderRadius.full,
   },
-  timeOverlayEmoji: { fontSize: 14 },
+  timeOverlayBubble: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.paperWhite,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   timeOverlayText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.deepOcean },
   stopCounterOverlay: {
     position: 'absolute',

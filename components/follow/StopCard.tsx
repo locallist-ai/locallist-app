@@ -8,7 +8,7 @@ import {
 import { PhotoHero, type Category } from '../ui/PhotoHero';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { TIME_BLOCK_EMOJI, DEFAULT_STOP_EMOJI } from '../../lib/timeBlocks';
+import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 
 interface Stop {
   id: string;
@@ -55,7 +55,7 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
   const photoUrl = stop.photos?.[0]?.url;
   const categoryColor = CATEGORY_COLOR[stop.category ?? 'Culture'] ?? '#0f172a';
 
-  const timeEmoji = stop.timeBlock ? TIME_BLOCK_EMOJI[stop.timeBlock] ?? DEFAULT_STOP_EMOJI : null;
+  const timeIcon = stop.timeBlock ? TIME_BLOCK_ICON[stop.timeBlock] ?? DEFAULT_STOP_ICON : null;
   const travel = stop.travelFromPrevious;
   const why = stop.whyThisPlace ?? '';
 
@@ -75,11 +75,13 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
       />
 
       <View style={styles.content}>
-        {(timeEmoji || stop.suggestedArrival) && (
+        {(timeIcon || stop.suggestedArrival) && (
           <View style={styles.topMetaRow}>
-            {timeEmoji && (
+            {timeIcon && (
               <View style={styles.timePill}>
-                <Text style={styles.timeEmoji}>{timeEmoji}</Text>
+                <View style={styles.timeIconBubble}>
+                  <MaterialCommunityIcons name={timeIcon} size={12} color={colors.sunsetOrange} />
+                </View>
                 {stop.suggestedArrival && (
                   <Text style={styles.timePillText}>{stop.suggestedArrival}</Text>
                 )}
@@ -181,7 +183,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: borderRadius.full,
   },
-  timeEmoji: { fontSize: 14 },
+  timeIconBubble: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.paperWhite,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   timePillText: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 12,

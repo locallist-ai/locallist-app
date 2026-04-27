@@ -11,7 +11,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { TIME_BLOCK_EMOJI, DEFAULT_STOP_EMOJI } from '../../lib/timeBlocks';
+import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import type { PlanStop } from '../../lib/types';
 
 // Follow Mode day list — Pablo 2026-04-26: "show day 1: -coffee or breakfast,
@@ -145,9 +145,9 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
       >
         {dayItems.map(({ stop, linearIndex }, idx) => {
           const isActive = linearIndex === currentIndex;
-          const emoji = stop.timeBlock
-            ? TIME_BLOCK_EMOJI[stop.timeBlock] ?? DEFAULT_STOP_EMOJI
-            : DEFAULT_STOP_EMOJI;
+          const iconName = stop.timeBlock
+            ? TIME_BLOCK_ICON[stop.timeBlock] ?? DEFAULT_STOP_ICON
+            : DEFAULT_STOP_ICON;
           const arrival = stop.suggestedArrival ?? '';
           const isLast = idx === dayItems.length - 1;
           return (
@@ -163,7 +163,11 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
               {/* Time-block + connector */}
               <View style={styles.timeCol}>
                 <View style={[styles.emojiBubble, isActive && styles.emojiBubbleActive]}>
-                  <Text style={styles.emojiText}>{emoji}</Text>
+                  <MaterialCommunityIcons
+                    name={iconName}
+                    size={18}
+                    color={isActive ? '#FFFFFF' : colors.sunsetOrange}
+                  />
                 </View>
                 {!isLast && <View style={styles.connector} />}
               </View>
