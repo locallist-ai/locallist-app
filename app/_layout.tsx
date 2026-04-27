@@ -5,6 +5,7 @@ import { View, Text, StyleSheet, Animated as RNAnimated, Platform, TouchableOpac
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { colors } from '../lib/theme';
@@ -129,18 +130,20 @@ function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <AuthProvider>
-      <SafeAreaProvider>
-        <StatusBar style="dark" />
-        {showSplash ? (
-          <View style={{ flex: 1 }} onLayout={onLayoutReady}>
-            <AppSplash onFinish={() => setShowSplash(false)} />
-          </View>
-        ) : (
-          <AuthGate />
-        )}
-      </SafeAreaProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <SafeAreaProvider>
+          <StatusBar style="dark" />
+          {showSplash ? (
+            <View style={{ flex: 1 }} onLayout={onLayoutReady}>
+              <AppSplash onFinish={() => setShowSplash(false)} />
+            </View>
+          ) : (
+            <AuthGate />
+          )}
+        </SafeAreaProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
 

@@ -193,11 +193,7 @@ export default function FollowModeScreen() {
     ]);
   };
 
-  const handlePause = () => {
-    router.back();
-  };
-
-  // Reload stops desde backend tras editar (mantiene currentIndex en el mismo
+// Reload stops desde backend tras editar (mantiene currentIndex en el mismo
   // place si existe, o cae al primer stop disponible).
   const reloadStops = async () => {
     const res = await api<PlanDetailResponse>(`/plans/${id}`);
@@ -391,7 +387,6 @@ export default function FollowModeScreen() {
           onChangeDay={handleChangeDay}
           onReplaceStop={handleReplaceStop}
           onDeleteStop={handleDeleteStop}
-          onPause={handlePause}
           onComplete={handleComplete}
           canEdit={isOwner}
         />
