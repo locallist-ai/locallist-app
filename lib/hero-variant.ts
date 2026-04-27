@@ -6,6 +6,19 @@ import * as SecureStore from './safe-store';
 // Veo video loop (Fase C). El store usa expo-secure-store por consistencia
 // con el resto de prefs (auth tokens) y un pub/sub in-memory para
 // sincronizar suscriptores en multiples pantallas.
+//
+// EXIT CRITERIA — audit follow-up 2026-04-27 (D6):
+// Esta flag retira cuando se cumpla CUALQUIERA de:
+//   1. Pablo elige una variant ganadora (probable photo o veo) tras
+//      probar el Veo asset real (task #58 in-progress).
+//   2. Pasan 14 días sin uso de las variants no-default (audit log de
+//      `setVariant` calls — ver Account → Dev Tools).
+//   3. La app se libera a usuarios reales (sale de TestFlight) — no queremos
+//      el toggle dev-only en producción.
+//
+// Cuando se retire: borrar este archivo + components/home/HeroSkiaBg.tsx
+// (si la elección no es 'skia') + components/home/HeroVideoBg.tsx (si la
+// elección no es 'veo') + el toggle en Account → Dev Tools.
 
 export type HeroVariant = 'photo' | 'skia' | 'veo';
 
