@@ -98,6 +98,10 @@ export default {
     selectionConfirmBody: 'Esto borra permanentemente los planes seleccionados y sus paradas. No se puede deshacer.',
     selectionConfirmDeleting: 'Eliminando…',
     selectionConfirmDelete: 'Eliminar',
+    selectionPartialFailureTitle_one: 'No se pudo eliminar {{count}} plan',
+    selectionPartialFailureTitle_other: 'No se pudieron eliminar {{count}} planes',
+    selectionPartialFailureBody: 'Siguen seleccionados. Vuelve a intentarlo o cancela para conservarlos.',
+    selectionPartialFailureOk: 'OK',
   },
   destination: {
     title: '¿A dónde\nvamos?',

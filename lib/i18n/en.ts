@@ -98,6 +98,10 @@ export default {
     selectionConfirmBody: 'This permanently removes the selected plans and their stops. This cannot be undone.',
     selectionConfirmDeleting: 'Deleting…',
     selectionConfirmDelete: 'Delete',
+    selectionPartialFailureTitle_one: '{{count}} plan could not be deleted',
+    selectionPartialFailureTitle_other: '{{count}} plans could not be deleted',
+    selectionPartialFailureBody: 'They are still selected. Try again or cancel to keep them.',
+    selectionPartialFailureOk: 'OK',
   },
   destination: {
     title: 'Where are\nwe going?',

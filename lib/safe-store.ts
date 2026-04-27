@@ -11,24 +11,39 @@ import * as SecureStore from 'expo-secure-store';
 // En dev se pierden tokens al cerrar la app (re-login cada vez). En prod
 // (TestFlight/App Store) EAS Build sí configura las entitlements y SecureStore
 // funciona normal — el fallback nunca se activa.
+//
+// Hardening 2026-04-27 (audit follow-up D3): el probe ahora se memoiza como
+// una Promise única + timeout 500ms. Antes, 3 modules (api.ts, i18n, hero-
+// variant) hacían cold-start simultáneo y cada uno disparaba su propio probe
+// (3 keychain writes para la misma key). En device con keychain locked podía
+// stallar el splash. Con Promise compartida, se hace una sola roundtrip.
 
 const fallback = new Map<string, string>();
 
-let secureStoreAvailable: boolean | null = null;
+const PROBE_KEY = '__safe_store_probe__';
+const PROBE_TIMEOUT_MS = 500;
 
-const probeSecureStore = async (): Promise<boolean> => {
-  if (secureStoreAvailable !== null) return secureStoreAvailable;
-  try {
-    // Probe minimal: write+read+delete. Si tira, marcamos unavailable.
-    const probeKey = '__safe_store_probe__';
-    await SecureStore.setItemAsync(probeKey, '1');
-    await SecureStore.getItemAsync(probeKey);
-    await SecureStore.deleteItemAsync(probeKey);
-    secureStoreAvailable = true;
-  } catch {
-    secureStoreAvailable = false;
-  }
-  return secureStoreAvailable;
+let probePromise: Promise<boolean> | null = null;
+
+const probeSecureStore = (): Promise<boolean> => {
+  if (probePromise) return probePromise;
+  probePromise = (async () => {
+    const probe = (async () => {
+      try {
+        await SecureStore.setItemAsync(PROBE_KEY, '1');
+        await SecureStore.getItemAsync(PROBE_KEY);
+        await SecureStore.deleteItemAsync(PROBE_KEY);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    const timeout = new Promise<boolean>((resolve) =>
+      setTimeout(() => resolve(false), PROBE_TIMEOUT_MS),
+    );
+    return Promise.race([probe, timeout]);
+  })();
+  return probePromise;
 };
 
 export async function getItemAsync(key: string): Promise<string | null> {
@@ -63,3 +78,10 @@ export async function deleteItemAsync(key: string): Promise<void> {
     }
   }
 }
+
+// Solo para tests — restablece la memoization de probe + el fallback.
+// NO exportar en producción ni llamar fuera de tests.
+export const __resetForTests = (): void => {
+  probePromise = null;
+  fallback.clear();
+};

@@ -38,6 +38,16 @@ export default function CustomBuilderScreen() {
   const [creatingCity, setCreatingCity] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastQueryRef = useRef<string>('');
+  // Audit follow-up D2 (2026-04-27): guard contra setState tras unmount —
+  // cold-start search puede tardar ~1s; navegar fuera durante typing causaba
+  // updates en componente desmontado.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Debounced search en cada cambio de city. 250ms parece un punto dulce
   // entre responsivo y no spamear el backend.
@@ -51,11 +61,14 @@ export default function CustomBuilderScreen() {
     }
     debounceRef.current = setTimeout(async () => {
       lastQueryRef.current = trimmed;
+      if (!isMountedRef.current) return;
       setSearching(true);
       const res = await api<{ cities: CityDto[] }>(
         `/cities/search?q=${encodeURIComponent(trimmed)}`,
       );
-      // Si el query cambió mientras llegaba la respuesta, ignora.
+      // Si el query cambió mientras llegaba la respuesta, o el componente se
+      // desmontó, ignora — no setState fuera de cycle.
+      if (!isMountedRef.current) return;
       if (lastQueryRef.current !== trimmed) return;
       setSearching(false);
       if (res.data) setSuggestions(res.data.cities ?? []);
@@ -90,6 +103,7 @@ export default function CustomBuilderScreen() {
       method: 'POST',
       body: { name: trimmedCity },
     });
+    if (!isMountedRef.current) return;
     setCreatingCity(false);
     if (res.data) {
       setCity(res.data.name);

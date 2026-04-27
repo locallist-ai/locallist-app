@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   useWindowDimensions,
   Image,
+  Alert,
 } from 'react-native';
 import { router, useNavigation, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
+import { runBulkWithConcurrency } from '../../lib/bulk-ops';
 import { useAuth } from '../../lib/auth';
 import { getCached, setCache, isFresh } from '../../lib/api-cache';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
@@ -83,8 +85,20 @@ export default function PlansScreen() {
   const [bulkDeleteVisible, setBulkDeleteVisible] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  // Audit follow-up D1 (2026-04-27): mount guard contra setState tras unmount
+  // durante bulk delete (Promise.all de N requests + refresh). User puede tab
+  // away mientras DELETE está in-flight.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const refreshMyPlans = useCallback(async () => {
     const res = await api<{ plans: Plan[] }>('/plans/mine');
+    if (!isMountedRef.current) return;
     if (res.data) setMyPlans(res.data.plans ?? []);
   }, []);
 
@@ -118,21 +132,38 @@ export default function PlansScreen() {
     if (bulkDeleting) return;
     setBulkDeleting(true);
     const ids = Array.from(selectedIds);
-    // Loop concurrente — backend tiene rate limit global pero N=2-10 es OK.
-    const results = await Promise.all(
-      ids.map((id) => api(`/plans/${id}`, { method: 'DELETE' })),
+    // Audit follow-up D1: cap concurrencia a 3 (rate-limit global del backend
+    // es 100/min/IP — un Promise.all sin cap con 10+ planes puede squeeze al
+    // resto de tráfico del cliente). Lógica extraída a runBulkWithConcurrency
+    // para que sea testable sin React.
+    const { failed: failedIds } = await runBulkWithConcurrency(
+      ids,
+      async (id) => {
+        const res = await api(`/plans/${id}`, { method: 'DELETE' });
+        return res.status >= 200 && res.status < 300;
+      },
+      3,
     );
-    const failed = results.filter((r) => r.status < 200 || r.status >= 300).length;
+    if (!isMountedRef.current) return;
     setBulkDeleting(false);
     setBulkDeleteVisible(false);
+    const failed = failedIds.length;
     if (failed > 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      // Mantén failed seleccionados para que el user pueda retry. Limpia los
+      // que sí salieron del selection set.
+      setSelectedIds(new Set(failedIds));
+      Alert.alert(
+        t('plans.selectionPartialFailureTitle', { count: failed }),
+        t('plans.selectionPartialFailureBody'),
+        [{ text: t('plans.selectionPartialFailureOk'), style: 'default' }],
+      );
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      exitSelection();
     }
-    exitSelection();
     await refreshMyPlans();
-  }, [bulkDeleting, selectedIds, exitSelection, refreshMyPlans]);
+  }, [bulkDeleting, selectedIds, exitSelection, refreshMyPlans, t]);
 
   // Fetch user's plans when tab is focused
   useFocusEffect(
