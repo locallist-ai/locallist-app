@@ -8,9 +8,9 @@ import {
   RefreshControl,
   ScrollView,
   useWindowDimensions,
-  Image,
   Alert,
 } from 'react-native';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { router, useNavigation, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -56,20 +56,27 @@ function sortPlans(list: Plan[]): Plan[] {
 
 type PlansMode = 'chooser' | 'curated' | 'mine';
 
-// Bg layer compartido — misma estética que el wizard (HomeV2). Imagen de hero
-// fija + dark overlay para legibilidad de texto blanco encima. Pablo 2026-04-25:
-// "la página de my plans debe seguir la estética de las páginas del wizard,
-// debemos crear una imagen de fondo también para ella."
-const PlansHeroBg: React.FC<{ width: number; height: number }> = ({ width, height }) => (
-  <>
-    <Image
-      source={require('../../assets/images/hero-bg.jpg')}
-      style={[{ position: 'absolute', top: -100, left: -100, width: width + 200, height: height + 300 }]}
-      resizeMode="cover"
-    />
-    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.45)' }} />
-  </>
-);
+const HERO_VIDEO_SOURCE = require('../../assets/video/hero-loop.mp4');
+
+const PlansHeroBg: React.FC = () => {
+  const player = useVideoPlayer(HERO_VIDEO_SOURCE, (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
+  return (
+    <>
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        nativeControls={false}
+        pointerEvents="none"
+      />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.45)' }]} pointerEvents="none" />
+    </>
+  );
+};
 
 export default function PlansScreen() {
   const { t } = useTranslation();
@@ -280,7 +287,7 @@ export default function PlansScreen() {
     ];
     return (
       <View style={s.root}>
-        <PlansHeroBg width={screenWidth} height={screenHeight} />
+        <PlansHeroBg />
         <ScrollView
           contentContainerStyle={[s.chooserContainer, { paddingTop: insets.top + spacing.lg }]}
           showsVerticalScrollIndicator={false}
@@ -335,7 +342,7 @@ export default function PlansScreen() {
     };
     return (
       <View style={s.root}>
-        <PlansHeroBg width={screenWidth} height={screenHeight} />
+        <PlansHeroBg />
         <TouchableOpacity
           onPress={() => (selectionMode ? exitSelection() : setMode('chooser'))}
           style={[s.floatingClose, { top: insets.top + spacing.xs }]}
@@ -470,7 +477,7 @@ export default function PlansScreen() {
 
   return (
     <View style={s.root}>
-      <PlansHeroBg width={screenWidth} height={screenHeight} />
+      <PlansHeroBg />
       <TouchableOpacity
         onPress={() => setMode('chooser')}
         style={[s.floatingClose, { top: insets.top + spacing.xs }]}
