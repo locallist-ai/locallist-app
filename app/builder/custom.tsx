@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
+import { api } from '../../lib/api';
+import type { CityDto } from '../../lib/types';
 
 const DURATION_OPTIONS = [1, 2, 3] as const;
 
@@ -26,7 +29,94 @@ export default function CustomBuilderScreen() {
   const [city, setCity] = useState('Miami');
   const [days, setDays] = useState(2);
 
-  const canCreate = name.trim().length > 0 && city.trim().length > 0;
+  // Autocomplete state — Pablo 2026-04-27. Suggestions vivos al teclear; si
+  // no hay match exacto, mostramos opción "Add 'X' as a new city" que dispara
+  // POST /cities y queda registrada en la DB.
+  const [suggestions, setSuggestions] = useState<CityDto[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [creatingCity, setCreatingCity] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastQueryRef = useRef<string>('');
+
+  // Debounced search en cada cambio de city. 250ms parece un punto dulce
+  // entre responsivo y no spamear el backend.
+  useEffect(() => {
+    const trimmed = city.trim();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (trimmed.length < 2) {
+      setSuggestions([]);
+      setSearching(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      lastQueryRef.current = trimmed;
+      setSearching(true);
+      const res = await api<{ cities: CityDto[] }>(
+        `/cities/search?q=${encodeURIComponent(trimmed)}`,
+      );
+      // Si el query cambió mientras llegaba la respuesta, ignora.
+      if (lastQueryRef.current !== trimmed) return;
+      setSearching(false);
+      if (res.data) setSuggestions(res.data.cities ?? []);
+      else setSuggestions([]);
+    }, 250);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [city]);
+
+  const trimmedCity = city.trim();
+  const hasExactMatch = suggestions.some(
+    (c) => c.name.toLowerCase() === trimmedCity.toLowerCase(),
+  );
+  const showAddOption =
+    showSuggestions
+    && trimmedCity.length >= 2
+    && !hasExactMatch
+    && !searching;
+
+  const handleSelectSuggestion = (c: CityDto) => {
+    setCity(c.name);
+    setShowSuggestions(false);
+    Haptics.selectionAsync();
+  };
+
+  const handleAddCustomCity = async () => {
+    if (creatingCity) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCreatingCity(true);
+    const res = await api<CityDto>('/cities', {
+      method: 'POST',
+      body: { name: trimmedCity },
+    });
+    setCreatingCity(false);
+    if (res.data) {
+      setCity(res.data.name);
+      setShowSuggestions(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  // Validación de city name. Pablo 2026-04-27: si la ciudad no está en
+  // nuestro catálogo, se crea como nueva location. Reglas:
+  //   - 2 a 60 caracteres.
+  //   - Letras (incluye acentos), espacios, hyphens, apóstrofes, puntos.
+  //   - No solo dígitos ni símbolos.
+  // \p{L} = unicode letter (e.g. á, ñ, ü, etc.).
+  const cityValidation = (() => {
+    const trimmed = city.trim();
+    if (trimmed.length === 0) return { ok: false, error: null }; // vacío = no error visible aún
+    if (trimmed.length < 2) return { ok: false, error: 'City name must be at least 2 characters' };
+    if (trimmed.length > 60) return { ok: false, error: 'City name is too long (max 60)' };
+    if (!/^[\p{L}][\p{L}\s'\-.]*$/u.test(trimmed)) {
+      return { ok: false, error: 'City name has invalid characters. Use letters, spaces, hyphens or apostrophes.' };
+    }
+    return { ok: true, error: null };
+  })();
+
+  const cityError = cityValidation.error;
+  const canCreate = name.trim().length > 0 && cityValidation.ok;
 
   const handleCreate = () => {
     if (!canCreate) return;
@@ -96,17 +186,69 @@ export default function CustomBuilderScreen() {
             {/* City */}
             <View style={s.field}>
               <Text style={s.label}>City</Text>
-              <View style={s.inputWithIcon}>
+              <View style={[s.inputWithIcon, !!cityError && s.inputWithIconError]}>
                 <Ionicons name="location-outline" size={18} color={colors.sunsetOrange} style={s.inputIcon} />
                 <TextInput
                   style={s.inputInner}
                   placeholder="e.g. Miami"
                   placeholderTextColor={colors.textSecondary + '80'}
                   value={city}
-                  onChangeText={setCity}
-                  maxLength={50}
+                  onChangeText={(t) => {
+                    setCity(t);
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  maxLength={60}
+                  autoCapitalize="words"
+                  autoCorrect={false}
                 />
+                {searching && (
+                  <ActivityIndicator size="small" color={colors.sunsetOrange} style={{ marginRight: spacing.md }} />
+                )}
               </View>
+
+              {/* Autocomplete dropdown */}
+              {showSuggestions && (suggestions.length > 0 || showAddOption) && (
+                <View style={s.suggestionsList}>
+                  {suggestions.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      onPress={() => handleSelectSuggestion(c)}
+                      activeOpacity={0.7}
+                      style={s.suggestionRow}
+                    >
+                      <Ionicons name="location-outline" size={16} color={colors.sunsetOrange} />
+                      <Text style={s.suggestionText}>{c.name}</Text>
+                      {c.country && <Text style={s.suggestionMeta}>· {c.country}</Text>}
+                    </TouchableOpacity>
+                  ))}
+                  {showAddOption && (
+                    <TouchableOpacity
+                      onPress={handleAddCustomCity}
+                      activeOpacity={0.85}
+                      style={[s.suggestionRow, s.suggestionRowAdd]}
+                      disabled={creatingCity || !!cityError}
+                    >
+                      {creatingCity ? (
+                        <ActivityIndicator size="small" color={colors.sunsetOrange} />
+                      ) : (
+                        <Ionicons name="add-circle-outline" size={18} color={colors.sunsetOrange} />
+                      )}
+                      <Text style={s.suggestionAddText} numberOfLines={1}>
+                        Add "{trimmedCity}" as a new city
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {cityError ? (
+                <Text style={s.fieldError}>{cityError}</Text>
+              ) : (
+                <Text style={s.fieldHint}>
+                  If your city isn't in our catalog yet, we'll add it as a new location.
+                </Text>
+              )}
             </View>
 
             {/* Duration */}
@@ -241,6 +383,12 @@ const s = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.bgMain,
     borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  inputWithIconError: {
+    borderColor: colors.error,
+    backgroundColor: colors.error + '0D', // ~5% alpha
   },
   inputIcon: {
     marginLeft: spacing.md,
@@ -252,6 +400,58 @@ const s = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 16,
     color: colors.textMain,
+  },
+  fieldError: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.error,
+    marginTop: 6,
+    paddingHorizontal: spacing.xs,
+  },
+  fieldHint: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 6,
+    paddingHorizontal: spacing.xs,
+    lineHeight: 16,
+  },
+  suggestionsList: {
+    marginTop: 4,
+    backgroundColor: colors.bgCard,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+    overflow: 'hidden',
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderColor,
+  },
+  suggestionRowAdd: {
+    backgroundColor: colors.sunsetOrange + '10',
+    borderBottomWidth: 0,
+  },
+  suggestionText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 14,
+    color: colors.deepOcean,
+  },
+  suggestionMeta: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  suggestionAddText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 14,
+    color: colors.sunsetOrange,
+    flex: 1,
   },
   durationRow: {
     flexDirection: 'row',

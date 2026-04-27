@@ -101,3 +101,10 @@ export type CreatePlanRequest = {
   type?: string;
   durationDays: number;
 };
+
+export type CityDto = {
+  id: string;
+  name: string;
+  country?: string | null;
+  source: 'seed' | 'user';
+};
