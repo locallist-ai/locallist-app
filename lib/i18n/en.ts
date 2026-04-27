@@ -60,6 +60,7 @@ export default {
     companySolo: 'Solo',
     companyCouple: 'Couple',
     companyFamily: 'Family',
+    companyFriends: 'Friends',
     styleAdventure: 'Adventure',
     styleRelax: 'Relax',
     styleCultural: 'Cultural',

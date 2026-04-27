@@ -17,7 +17,9 @@ export default function TabsLayout() {
           paddingTop: 6,
         },
         tabBarActiveTintColor: colors.sunsetOrange,
-        tabBarInactiveTintColor: colors.textSecondary,
+        // Pablo 2026-04-27: tabs en mismo color paleta wizard. Inactive ahora
+        // es sunsetOrange muted (40% alpha) en vez de gris textSecondary.
+        tabBarInactiveTintColor: colors.sunsetOrange + '66',
         tabBarShowLabel: true,
         tabBarLabelStyle: {
           fontFamily: fonts.bodySemiBold,

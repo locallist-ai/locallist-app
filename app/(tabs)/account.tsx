@@ -279,7 +279,34 @@ export default function AccountScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Dev Tools — only in development + @locallist.ai admins */}
+        {/* Wizard hero variant — visible para todos los testers (Pablo
+          * 2026-04-27). A/B testing del background del wizard. */}
+        <Animated.View entering={FadeInDown.duration(400).delay(250)}>
+          <View style={s.devHeader}>
+            <Ionicons name="image-outline" size={14} color={colors.sunsetOrange} />
+            <Text style={s.devHeaderText}>Wizard background</Text>
+          </View>
+          <View style={[s.section, { flexDirection: 'row', gap: 8, padding: 8 }]}>
+            {(['photo', 'skia', 'veo'] as HeroVariant[]).map((v) => {
+              const active = heroVariant === v;
+              const label = v === 'photo' ? 'Photo' : v === 'skia' ? 'Animated' : 'Cinematic';
+              return (
+                <TouchableOpacity
+                  key={v}
+                  activeOpacity={0.7}
+                  onPress={() => setHeroVariant(v)}
+                  style={[s.variantChip, active && s.variantChipActive]}
+                >
+                  <Text style={[s.variantChipText, active && s.variantChipTextActive]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Animated.View>
+
+        {/* Dev Tools — solo en development + @locallist.ai admins */}
         {__DEV__ && isAdmin && (
           <Animated.View entering={FadeInDown.duration(400).delay(300)}>
             <View style={s.devHeader}>
@@ -316,33 +343,6 @@ export default function AccountScreen() {
                 <Text style={s.rowText}>Reset to real tier</Text>
                 <Text style={s.rowValue}>{user?.tier ?? 'free'}</Text>
               </TouchableOpacity>
-            </View>
-
-            {/* Hero variant selector — Pablo 2026-04-25, A/B entre 3 fondos. */}
-            <View style={s.devHeader}>
-              <Ionicons name="image-outline" size={14} color={colors.sunsetOrange} />
-              <Text style={s.devHeaderText}>Wizard hero variant</Text>
-            </View>
-            <View style={[s.section, { flexDirection: 'row', gap: 8, padding: 8 }]}>
-              {(['photo', 'skia', 'veo'] as HeroVariant[]).map((v) => {
-                const active = heroVariant === v;
-                const label = v === 'photo' ? 'Photo' : v === 'skia' ? 'Skia' : 'Veo';
-                return (
-                  <TouchableOpacity
-                    key={v}
-                    activeOpacity={0.7}
-                    onPress={() => setHeroVariant(v)}
-                    style={[
-                      s.variantChip,
-                      active && s.variantChipActive,
-                    ]}
-                  >
-                    <Text style={[s.variantChipText, active && s.variantChipTextActive]}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
             </View>
           </Animated.View>
         )}

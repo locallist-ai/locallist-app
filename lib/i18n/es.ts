@@ -60,6 +60,7 @@ export default {
     companySolo: 'Solo/a',
     companyCouple: 'Pareja',
     companyFamily: 'Familia',
+    companyFriends: 'Amigos',
     styleAdventure: 'Aventura',
     styleRelax: 'Relax',
     styleCultural: 'Cultural',

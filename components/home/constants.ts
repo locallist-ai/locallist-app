@@ -18,6 +18,8 @@ export interface City {
   name: string;
   emoji: string;
   color: string;
+  /** Branded MCI icon (Pablo 2026-04-27: sustituye al emoji de la palmera). */
+  iconName?: keyof typeof MaterialCommunityIcons.glyphMap;
 }
 
 export interface StepOption {
@@ -40,7 +42,7 @@ export interface WizardStepConfig {
 // ── City data ──
 
 export const CITIES: City[] = [
-  { name: 'Miami', emoji: '\u{1F334}', color: '#f97316' },
+  { name: 'Miami', emoji: '\u{1F334}', color: '#f97316', iconName: 'palm-tree' },
 ];
 
 // ── Step option data ──
@@ -55,6 +57,7 @@ export const COMPANY_OPTIONS: StepOption[] = [
   { id: 'solo', icon: require('../../assets/images/icon_solo.png'), labelKey: 'wizard.companySolo', emoji: '\u{1F9D1}', iconName: 'account' },
   { id: 'couple', icon: require('../../assets/images/icon_couple.png'), labelKey: 'wizard.companyCouple', emoji: '\u2764\uFE0F', iconName: 'account-heart' },
   { id: 'family', icon: require('../../assets/images/icon_family.png'), labelKey: 'wizard.companyFamily', emoji: '\u{1F46A}', iconName: 'account-group' },
+  { id: 'friends', icon: require('../../assets/images/icon_solo.png'), labelKey: 'wizard.companyFriends', emoji: '\u{1F46B}', iconName: 'account-multiple' },
 ];
 
 export const STYLE_OPTIONS: StepOption[] = [
@@ -179,6 +182,12 @@ export const COMPANY_SUBCATEGORIES: Record<string, SubcategoryOption[]> = {
     { id: 'with-kids', label: 'With kids', emoji: '\u{1F9D2}' },
     { id: 'with-teens', label: 'With teens', emoji: '\u{1F3AE}' },
     { id: 'multi-gen', label: 'Multi-gen', emoji: '\u{1F46A}' },
+  ],
+  friends: [
+    { id: 'bachelor', label: 'Bachelor', emoji: '\u{1F37A}' },
+    { id: 'bachelorette', label: 'Bachelorette', emoji: '\u{1F478}' },
+    { id: 'group-trip', label: 'Group trip', emoji: '\u{1F46B}' },
+    { id: 'birthday', label: 'Birthday', emoji: '\u{1F389}' },
   ],
 };
 

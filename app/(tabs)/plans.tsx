@@ -618,8 +618,8 @@ const s = StyleSheet.create({
     borderColor: GLASS_BORDER,
   },
   chipActive: {
-    backgroundColor: colors.electricBlue,
-    borderColor: colors.electricBlue,
+    backgroundColor: colors.sunsetOrange,
+    borderColor: colors.sunsetOrange,
   },
   chipText: {
     fontFamily: fonts.bodySemiBold,

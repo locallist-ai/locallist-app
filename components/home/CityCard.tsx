@@ -10,7 +10,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, fonts } from '../../lib/theme';
 import type { City } from './constants';
 
@@ -74,7 +74,17 @@ export const CityCard: React.FC<CityCardProps> = React.memo(({ city, index, sele
             <BlurView intensity={60} tint="light" style={styles.blur}>
               <View style={styles.row}>
                 <View style={styles.nameRow}>
-                  <Text style={styles.emoji}>{city.emoji}</Text>
+                  {city.iconName ? (
+                    <View style={styles.iconBubble}>
+                      <MaterialCommunityIcons
+                        name={city.iconName}
+                        size={28}
+                        color={colors.sunsetOrange}
+                      />
+                    </View>
+                  ) : (
+                    <Text style={styles.emoji}>{city.emoji}</Text>
+                  )}
                   <Text style={styles.name}>{city.name}</Text>
                 </View>
                 <View style={styles.arrowCircle}>
@@ -127,6 +137,16 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 36,
+  },
+  iconBubble: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(242, 239, 233, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
   },
   name: {
     fontFamily: fonts.headingBold,
