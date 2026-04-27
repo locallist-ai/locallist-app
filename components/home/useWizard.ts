@@ -233,15 +233,17 @@ export const useWizard = (): UseWizardResult => {
 
     // Client-side validation — espejo de ValidateMinimumInput del backend (PR #48 api-net).
     // Evita roundtrip innecesario al backend cuando sabemos que va a devolver 400.
-    // Regla: ≥3 de 5 señales wizard {city, days, groupType, style, budget}. El
-    // nuevo step "interests" no se cuenta todavía porque el backend no los
-    // procesa aún — al activar matching backend, sumarlo al threshold.
+    // Regla: ≥3 de 6 señales wizard {city, days, groupType, style, budget, interests}.
+    // Audit follow-up D4 (2026-04-27): interests cuenta como señal — el backend
+    // ya procesa Categories + Subcategories como soft-signals (peso 0.10/0.05,
+    // ver pattern_soft_signal_matching).
     const hasCity = !!city;
     const hasDays = !!selections[0];
     const hasGroupType = !!selections[1];
     const hasPreferences = !!selections[2];
     const hasBudget = !!selections[4];
-    const wizardSignals = [hasCity, hasDays, hasGroupType, hasPreferences, hasBudget]
+    const hasInterests = interests.length > 0;
+    const wizardSignals = [hasCity, hasDays, hasGroupType, hasPreferences, hasBudget, hasInterests]
       .filter(Boolean).length;
     if (wizardSignals < 3) {
       hapticImpact(ImpactFeedbackStyle.Heavy);
