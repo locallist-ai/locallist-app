@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getLocales } from 'expo-localization';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../safe-store';
 import { Platform } from 'react-native';
 import en from './en';
 import es from './es';

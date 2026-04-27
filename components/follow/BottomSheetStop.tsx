@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Text,
   ViewStyle,
+  Dimensions,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -14,6 +15,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StopCard } from './StopCard';
 import { colors, fonts, borderRadius, spacing } from '../../lib/theme';
@@ -30,6 +32,8 @@ export interface Stop {
   priceRange?: string;
   googleRating?: number | null;
   googleReviewCount?: number | null;
+  timeBlock?: string;
+  suggestedArrival?: string;
   travelFromPrevious?: {
     distance_km: number;
     duration_min: number;
@@ -37,15 +41,8 @@ export interface Stop {
   } | null;
 }
 
-interface Plan {
-  category?: string;
-}
-
 interface BottomSheetStopProps {
   stop: Stop;
-  plan?: Plan;
-  index?: number;
-  totalStops?: number;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
   onPause?: () => void;
@@ -55,14 +52,14 @@ interface BottomSheetStopProps {
   style?: ViewStyle;
 }
 
-const SWIPE_THRESHOLD = 50;
-const SHEET_HEIGHT = 300;
+const SWIPE_THRESHOLD = 60;
+const EXPAND_THRESHOLD = 40;
+const COLLAPSED_HEIGHT = 360;
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const EXPANDED_HEIGHT = Math.round(SCREEN_HEIGHT * 0.78);
 
 export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
   stop,
-  plan,
-  index = 0,
-  totalStops = 1,
   onSwipeLeft,
   onSwipeRight,
   onPause,
@@ -71,24 +68,28 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
   isPaused = false,
   style,
 }) => {
-  const translateY = useSharedValue(SHEET_HEIGHT);
+  const insets = useSafeAreaInsets();
   const translateX = useSharedValue(0);
   const startX = useSharedValue(0);
+  const sheetHeight = useSharedValue(COLLAPSED_HEIGHT);
+  const startHeight = useSharedValue(COLLAPSED_HEIGHT);
+  const entrance = useSharedValue(COLLAPSED_HEIGHT);
 
-  // Spring animation on mount
   useEffect(() => {
-    translateY.value = withSpring(0, {
-      damping: 12,
+    entrance.value = withSpring(0, {
+      damping: 14,
       mass: 1,
+      stiffness: 130,
       overshootClamping: false,
     });
-  }, [stop.id, translateY]);
+  }, [stop.id, entrance]);
 
-  // Gesture handler for swipes
   const callSwipeLeft = () => { if (onSwipeLeft) onSwipeLeft(); };
   const callSwipeRight = () => { if (onSwipeRight) onSwipeRight(); };
 
-  const panGesture = Gesture.Pan()
+  const horizontalPan = Gesture.Pan()
+    .activeOffsetX([-12, 12])
+    .failOffsetY([-20, 20])
     .onStart(() => {
       startX.value = translateX.value;
     })
@@ -96,27 +97,53 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
       translateX.value = startX.value + event.translationX;
     })
     .onEnd((event) => {
-      // Swipe left (next)
       if (event.translationX < -SWIPE_THRESHOLD) {
-        translateX.value = withSpring(-400, { damping: 10 });
+        translateX.value = withSpring(-400, { damping: 15, mass: 1, stiffness: 120 });
         runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
         runOnJS(callSwipeLeft)();
-      }
-      // Swipe right (previous)
-      else if (event.translationX > SWIPE_THRESHOLD) {
-        translateX.value = withSpring(400, { damping: 10 });
+      } else if (event.translationX > SWIPE_THRESHOLD) {
+        translateX.value = withSpring(400, { damping: 15, mass: 1, stiffness: 120 });
         runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
         runOnJS(callSwipeRight)();
-      }
-      // No swipe, reset
-      else {
-        translateX.value = withSpring(0, { damping: 12 });
+      } else {
+        translateX.value = withSpring(0, { damping: 15, mass: 1, stiffness: 120 });
       }
     });
 
+  const verticalPan = Gesture.Pan()
+    .activeOffsetY([-12, 12])
+    .failOffsetX([-20, 20])
+    .onStart(() => {
+      startHeight.value = sheetHeight.value;
+    })
+    .onUpdate((event) => {
+      const next = startHeight.value - event.translationY;
+      sheetHeight.value = Math.max(COLLAPSED_HEIGHT, Math.min(EXPANDED_HEIGHT, next));
+    })
+    .onEnd(() => {
+      const isCurrentlyExpanded = sheetHeight.value > (COLLAPSED_HEIGHT + EXPANDED_HEIGHT) / 2;
+      sheetHeight.value = withSpring(
+        isCurrentlyExpanded ? EXPANDED_HEIGHT : COLLAPSED_HEIGHT,
+        { damping: 16, mass: 1, stiffness: 140 },
+      );
+      runOnJS(Haptics.selectionAsync)();
+    });
+
+  const composed = Gesture.Race(horizontalPan, verticalPan);
+
+  const toggleExpanded = () => {
+    const expanded = sheetHeight.value > (COLLAPSED_HEIGHT + EXPANDED_HEIGHT) / 2;
+    sheetHeight.value = withSpring(
+      expanded ? COLLAPSED_HEIGHT : EXPANDED_HEIGHT,
+      { damping: 16, mass: 1, stiffness: 140 },
+    );
+    Haptics.selectionAsync();
+  };
+
   const animatedStyle = useAnimatedStyle(() => ({
+    height: sheetHeight.value,
     transform: [
-      { translateY: translateY.value },
+      { translateY: entrance.value },
       { translateX: translateX.value },
     ],
   }));
@@ -137,23 +164,30 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
   };
 
   return (
-    <GestureHandlerRootView style={styles.root}>
-      <GestureDetector gesture={panGesture}>
+    <GestureHandlerRootView style={styles.root} pointerEvents="box-none">
+      <GestureDetector gesture={composed}>
         <Animated.View style={[styles.container, animatedStyle, style]}>
-          {/* Handle bar */}
-          <View style={styles.handleBar}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={toggleExpanded}
+            style={styles.handleBar}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle sheet expansion"
+          >
             <View style={styles.handle} />
+          </TouchableOpacity>
+
+          <View style={styles.cardWrap}>
+            <StopCard stop={stop} />
           </View>
 
-          {/* Stop card content */}
-          <StopCard stop={stop} plan={plan} index={index} totalStops={totalStops} />
-
-          {/* Bottom action bar */}
-          <View style={styles.actionBar}>
+          <View style={[styles.actionBar, { paddingBottom: Math.max(spacing.md, insets.bottom) }]}>
             <TouchableOpacity
               style={styles.button}
               onPress={handlePause}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={isPaused ? 'Resume' : 'Pause'}
             >
               <MaterialCommunityIcons
                 name={isPaused ? 'play' : 'pause'}
@@ -167,6 +201,8 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
               style={styles.button}
               onPress={handleSkip}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Skip"
             >
               <MaterialCommunityIcons name="skip-forward" size={20} color={colors.sunsetOrange} />
               <Text style={styles.buttonText}>Skip</Text>
@@ -176,6 +212,8 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
               activeOpacity={0.8}
               onPress={handleNext}
               style={{ flex: 1.2 }}
+              accessibilityRole="button"
+              accessibilityLabel="Next"
             >
               <LinearGradient
                 colors={[colors.electricBlue, '#2563eb']}
@@ -200,13 +238,16 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   container: {
-    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: colors.bgCard,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.12,
@@ -216,14 +257,17 @@ const styles = StyleSheet.create({
   },
   handleBar: {
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.bgMain,
+    paddingVertical: 10,
+    backgroundColor: colors.bgCard,
   },
   handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: 48,
+    height: 5,
+    borderRadius: 3,
     backgroundColor: colors.borderColor,
+  },
+  cardWrap: {
+    flex: 1,
   },
   actionBar: {
     flexDirection: 'row',

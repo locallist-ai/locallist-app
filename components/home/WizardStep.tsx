@@ -61,13 +61,14 @@ export const WizardStep: React.FC<WizardStepProps> = ({
         ))}
       </View>
 
-      {/* Skip button */}
+      {/* Continue / Skip button — Pablo 2026-04-26: el avance es manual.
+        * Cambia a "Continue" cuando hay selección, "Skip" si no. */}
       <View style={[styles.skipWrapper, { paddingBottom: insets.bottom + 20 }]}>
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={onSkip}
           style={styles.skipButton}
-          accessibilityLabel={t('wizard.skip')}
+          accessibilityLabel={selectedId ? t('wizard.interestContinue') : t('wizard.skip')}
           accessibilityRole="button"
         >
           <BlurView
@@ -76,7 +77,7 @@ export const WizardStep: React.FC<WizardStepProps> = ({
             style={styles.skipBlur}
           >
             <Text style={styles.skipText}>
-              {t('wizard.skip')}
+              {selectedId ? t('wizard.interestContinue') : t('wizard.skip')}
             </Text>
             <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
           </BlurView>

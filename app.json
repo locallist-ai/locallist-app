@@ -85,7 +85,7 @@
         "NSPrivacyTracking": false,
         "NSPrivacyTrackingDomains": []
       },
-      "buildNumber": "10"
+      "buildNumber": "12"
     },
     "android": {
       "package": "app.locallist.android",
@@ -127,7 +127,8 @@
           "organization": "locallist",
           "project": "locallist-app"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "extra": {
       "eas": {

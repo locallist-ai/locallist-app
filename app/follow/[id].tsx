@@ -8,46 +8,25 @@ import {
   Alert,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { PlanMap } from '../../components/map/PlanMap';
-import { BottomSheetStop, type Stop } from '../../components/follow/BottomSheetStop';
+import { FollowDaySheet } from '../../components/follow/FollowDaySheet';
+import { ProgressDots } from '../../components/ui/design-system';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { PlaceSearchModal } from '../../components/plan-editor/PlaceSearchModal';
 import { useOfflineTiles } from '../../components/map/useOfflineTiles';
-import type { PlanStop, PlanDetailResponse } from '../../lib/types';
+import type { PlanStop, PlanDetailResponse, Place, UpdateStopsRequest } from '../../lib/types';
 import type { MapStop } from '../../components/map/PlanMap';
 
 type FollowSession = { id: string; planId: string; status: string };
 
-/** Map PlanStop to the Stop shape expected by BottomSheetStop */
-const mapToStop = (planStop: PlanStop): Stop => ({
-  id: planStop.placeId,
-  name: planStop.place?.name ?? 'Unknown place',
-  category: planStop.place?.category,
-  neighborhood: planStop.place?.neighborhood ?? undefined,
-  photos: planStop.place?.photos?.map((url) => ({ url })),
-  whyThisPlace: planStop.place?.whyThisPlace,
-  duration: planStop.suggestedDurationMin ?? undefined,
-  priceRange: planStop.place?.priceRange ?? undefined,
-  googleRating: planStop.place?.googleRating ?? null,
-  googleReviewCount: planStop.place?.googleReviewCount ?? null,
-  travelFromPrevious: planStop.travelFromPrevious ?? null,
-});
-
-/** Map PlanStop to the MapStop shape expected by PlanMap.
- *  Returns null when lat/lng are missing or unparseable — the caller filters
- *  these out so we never render a pin at (0,0) (Gulf of Guinea) for a place
- *  with incomplete data. */
 const mapToMapStop = (planStop: PlanStop): MapStop | null => {
   const lat = parseFloat(planStop.place?.latitude ?? '');
   const lng = parseFloat(planStop.place?.longitude ?? '');
@@ -62,60 +41,60 @@ const mapToMapStop = (planStop: PlanStop): MapStop | null => {
 };
 
 export default function FollowModeScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [session, setSession] = useState<FollowSession | null>(null);
   const [allStops, setAllStops] = useState<(PlanStop & { id?: string })[]>([]);
   const [planName, setPlanName] = useState('');
+  const [planCity, setPlanCity] = useState('');
+  const [planCreatedById, setPlanCreatedById] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Animated progress bar width (0..1)
-  const progressAnim = useSharedValue(0);
+  // Edit state
+  const [stopBeingEdited, setStopBeingEdited] = useState<PlanStop | null>(null);
+  const [stopToDelete, setStopToDelete] = useState<PlanStop | null>(null);
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
-  // Convert PlanStops to MapStop[] for PlanMap (memoised).
-  // Stops without valid coords are dropped from the map but remain in
-  // BottomSheetStop so the user still sees the info card.
+  const isOwner = !!(user && planCreatedById && user.id === planCreatedById);
+
+  // Pablo 2026-04-26: Follow Mode debe mostrar UN solo día a la vez en el
+  // top bar y mapa — antes los progress dots, el counter, y los pins del
+  // mapa sumaban TODOS los stops del plan, lo que confunde en multi-día.
+  const currentStopRef = allStops[currentIndex];
+  const currentDay = currentStopRef?.dayNumber ?? 1;
+  const dayStops = useMemo(
+    () => allStops.filter((s) => s.dayNumber === currentDay),
+    [allStops, currentDay],
+  );
+  const dayCurrentIndex = useMemo(() => {
+    const idx = dayStops.findIndex(
+      (s) => s.placeId === currentStopRef?.placeId && s.orderIndex === currentStopRef?.orderIndex,
+    );
+    return idx >= 0 ? idx : 0;
+  }, [dayStops, currentStopRef]);
+
+  // Pins del mapa: solo del día activo.
   const mapStops = useMemo<MapStop[]>(
-    () => allStops.map(mapToMapStop).filter((s): s is MapStop => s !== null),
-    [allStops],
-  );
-
-  // Current stop mapped for BottomSheetStop (memoised)
-  const currentStop = useMemo(
-    () => (allStops.length > 0 ? mapToStop(allStops[currentIndex]) : null),
-    [allStops, currentIndex],
-  );
-
-  // Offline tiles
-  const offlineTileStops = useMemo(
     () =>
-      mapStops.map((s) => ({
-        latitude: s.latitude,
-        longitude: s.longitude,
-      })),
+      allStops
+        .filter((s) => s.dayNumber === currentDay)
+        .map(mapToMapStop)
+        .filter((s): s is MapStop => s !== null),
+    [allStops, currentDay],
+  );
+
+  const offlineTileStops = useMemo(
+    () => mapStops.map((s) => ({ latitude: s.latitude, longitude: s.longitude })),
     [mapStops],
   );
   const { tileUrl, isDownloading, hasCache } = useOfflineTiles(offlineTileStops);
 
-  // ─── Animate progress bar when currentIndex or total changes ───
-  useEffect(() => {
-    if (allStops.length === 0) return;
-    const target = (currentIndex + 1) / allStops.length;
-    progressAnim.value = withTiming(target, {
-      duration: 400,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [currentIndex, allStops.length, progressAnim]);
-
-  const progressBarStyle = useAnimatedStyle(() => ({
-    width: `${progressAnim.value * 100}%`,
-  }));
-
-  // ─── Auth guard + load plan ───
   useEffect(() => {
     if (!isAuthenticated) {
       router.replace('/login');
@@ -125,7 +104,6 @@ export default function FollowModeScreen() {
   }, [id, isAuthenticated]);
 
   const startSession = async () => {
-    // Fetch plan details
     const planRes = await api<PlanDetailResponse>(`/plans/${id}`);
     if (!planRes.data) {
       setError(planRes.error ?? 'Failed to load plan');
@@ -134,12 +112,13 @@ export default function FollowModeScreen() {
     }
 
     setPlanName(planRes.data.name);
+    setPlanCity(planRes.data.city ?? '');
+    setPlanCreatedById(planRes.data.createdById ?? null);
     const stops = planRes.data.days
       .sort((a, b) => a.dayNumber - b.dayNumber)
       .flatMap((d) => d.stops.sort((a, b) => a.orderIndex - b.orderIndex));
     setAllStops(stops);
 
-    // Start follow session
     const sessionRes = await api<FollowSession>('/follow/start', {
       method: 'POST',
       body: { planId: id },
@@ -147,37 +126,65 @@ export default function FollowModeScreen() {
     if (sessionRes.data) {
       setSession(sessionRes.data);
     }
-    // Non-blocking: session creation failing shouldn't block the UI
     setLoading(false);
   };
 
-  // ─── Navigation handlers ───
+  const goTo = (nextIndex: number) => {
+    if (nextIndex < 0 || nextIndex >= allStops.length) return;
+    setCurrentIndex(nextIndex);
+    Haptics.selectionAsync();
+  };
+
+  // Audit follow-up D5 (2026-04-27): cuando el next stop está en otro día,
+  // pedimos confirmación antes de cruzar — la UI day-scoped (chip "Day N",
+  // dots por día, pins por día) hacía que el cruce silencioso confundiera al
+  // user. handleComplete sigue siendo el final del plan completo.
+  const advanceLinear = (nextIndex: number) => {
+    if (nextIndex >= allStops.length) {
+      handleComplete();
+      return;
+    }
+    const nextStop = allStops[nextIndex];
+    const nextDay = nextStop?.dayNumber ?? 1;
+    if (nextDay !== currentDay) {
+      Alert.alert(
+        t('follow.dayCompleteTitle', { day: currentDay }),
+        t('follow.dayCompleteBody', { nextDay }),
+        [
+          { text: t('follow.dayCompleteStay'), style: 'cancel' },
+          {
+            text: t('follow.dayCompleteContinue'),
+            onPress: () => setCurrentIndex(nextIndex),
+          },
+        ],
+      );
+      return;
+    }
+    setCurrentIndex(nextIndex);
+  };
+
   const handleNext = () => {
     if (currentIndex < allStops.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+      advanceLinear(currentIndex + 1);
     } else {
       handleComplete();
     }
   };
 
   const handlePrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
+    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
   };
 
   const handleSkip = () => {
     if (currentIndex < allStops.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+      advanceLinear(currentIndex + 1);
     } else {
       handleComplete();
     }
   };
 
   const handleComplete = async () => {
-    // Haptic feedback for completion
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
     if (session) {
       await api(`/follow/${session.id}/complete`, { method: 'PATCH' });
     }
@@ -190,7 +197,113 @@ export default function FollowModeScreen() {
     router.back();
   };
 
-  // ─── Loading state ───
+  // Reload stops desde backend tras editar (mantiene currentIndex en el mismo
+  // place si existe, o cae al primer stop disponible).
+  const reloadStops = async () => {
+    const res = await api<PlanDetailResponse>(`/plans/${id}`);
+    if (res.data) {
+      const reloaded = res.data.days
+        .sort((a, b) => a.dayNumber - b.dayNumber)
+        .flatMap((d) => d.stops.sort((a, b) => a.orderIndex - b.orderIndex));
+      setAllStops(reloaded);
+      // Reajustar currentIndex si el stop activo desapareció.
+      const currentPlaceId = allStops[currentIndex]?.placeId;
+      const newIdx = reloaded.findIndex((s) => s.placeId === currentPlaceId);
+      if (newIdx >= 0) {
+        setCurrentIndex(newIdx);
+      } else if (reloaded.length > 0) {
+        setCurrentIndex(Math.min(currentIndex, reloaded.length - 1));
+      } else {
+        setCurrentIndex(0);
+      }
+    }
+  };
+
+  // Construye el body para PUT /plans/{id}/stops a partir del state actual,
+  // aplicando una transformación opcional sobre el array de stops.
+  const persistStops = async (
+    transform: (stops: PlanStop[]) => Array<{ placeId: string; dayNumber: number; orderIndex: number; timeBlock: string | null; suggestedDurationMin: number | null }>,
+  ): Promise<boolean> => {
+    setSavingEdit(true);
+    const next = transform(allStops);
+    const body: UpdateStopsRequest = { stops: next };
+    const res = await api(`/plans/${id}/stops`, { method: 'PUT', body });
+    setSavingEdit(false);
+    if (res.status >= 200 && res.status < 300) {
+      await reloadStops();
+      return true;
+    }
+    Alert.alert('Update failed', res.error ?? 'Could not save the change.');
+    return false;
+  };
+
+  const handleReplaceStop = (stop: PlanStop) => {
+    setStopBeingEdited(stop);
+    setSearchVisible(true);
+  };
+
+  const handlePlaceSelectedForReplace = async (place: Place) => {
+    setSearchVisible(false);
+    if (!stopBeingEdited) return;
+    const target = stopBeingEdited;
+    setStopBeingEdited(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await persistStops((stops) =>
+      stops.map((s) => ({
+        placeId: s.placeId === target.placeId && s.dayNumber === target.dayNumber && s.orderIndex === target.orderIndex
+          ? place.id
+          : s.placeId,
+        dayNumber: s.dayNumber,
+        orderIndex: s.orderIndex,
+        timeBlock: s.timeBlock,
+        suggestedDurationMin: s.suggestedDurationMin ?? null,
+      })),
+    );
+  };
+
+  const handleDeleteStop = (stop: PlanStop) => {
+    setStopToDelete(stop);
+  };
+
+  const confirmDeleteStop = async () => {
+    if (!stopToDelete) return;
+    const target = stopToDelete;
+    setStopToDelete(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    await persistStops((stops) => {
+      // Filtrar el stop target + reindexar orderIndex dentro de su día.
+      const filtered = stops.filter(
+        (s) => !(s.placeId === target.placeId && s.dayNumber === target.dayNumber && s.orderIndex === target.orderIndex),
+      );
+      const byDay = new Map<number, PlanStop[]>();
+      for (const s of filtered) {
+        const arr = byDay.get(s.dayNumber) ?? [];
+        arr.push(s);
+        byDay.set(s.dayNumber, arr);
+      }
+      const result: Array<{ placeId: string; dayNumber: number; orderIndex: number; timeBlock: string | null; suggestedDurationMin: number | null }> = [];
+      for (const [day, list] of byDay) {
+        list
+          .sort((a, b) => a.orderIndex - b.orderIndex)
+          .forEach((s, i) => {
+            result.push({
+              placeId: s.placeId,
+              dayNumber: day,
+              orderIndex: i,
+              timeBlock: s.timeBlock,
+              suggestedDurationMin: s.suggestedDurationMin ?? null,
+            });
+          });
+      }
+      return result;
+    });
+  };
+
+  const handleChangeDay = (day: number) => {
+    const firstOfDay = allStops.findIndex((s) => s.dayNumber === day);
+    if (firstOfDay >= 0) setCurrentIndex(firstOfDay);
+  };
+
   if (loading) {
     return (
       <View style={s.center}>
@@ -200,7 +313,6 @@ export default function FollowModeScreen() {
     );
   }
 
-  // ─── Error state ───
   if (error || allStops.length === 0) {
     return (
       <View style={s.center}>
@@ -213,80 +325,102 @@ export default function FollowModeScreen() {
     );
   }
 
-  // Pin tap del mapa mueve el currentIndex. El mapStops está filtrado (stops sin
-  // lat/lng quedan fuera del mapa), así que resolvemos por id contra allStops.
   const handlePinPress = (mapIndex: number) => {
     const tapped = mapStops[mapIndex];
     if (!tapped) return;
-    const targetIndex = allStops.findIndex((s) => s.placeId === tapped.id);
+    const targetIndex = allStops.findIndex((st) => st.placeId === tapped.id);
     if (targetIndex >= 0 && targetIndex !== currentIndex) {
-      setCurrentIndex(targetIndex);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      goTo(targetIndex);
     }
   };
 
-  // ─── Main layout: full-screen map + overlays ───
+  const activeMapPinIndex = Math.max(
+    0,
+    mapStops.findIndex(
+      (st) => allStops[currentIndex] && st.id === allStops[currentIndex].placeId,
+    ),
+  );
+
   return (
     <View style={s.root}>
-      {/* Full-screen map background */}
       <PlanMap
         stops={mapStops}
-        activePinIndex={Math.max(
-          0,
-          mapStops.findIndex(
-            (s) => allStops[currentIndex] && s.id === allStops[currentIndex].placeId,
-          ),
-        )}
+        activePinIndex={activeMapPinIndex}
         onPinPress={handlePinPress}
         style={s.map}
       />
 
-      {/* Transparent top bar overlay */}
-      <BlurView intensity={70} tint="light" style={[s.topBarOverlay, { paddingTop: insets.top + spacing.xs }]}>
+      <BlurView
+        intensity={70}
+        tint="light"
+        style={[s.topBarOverlay, { paddingTop: insets.top + spacing.xs }]}
+      >
         <View style={s.topBarRow}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={s.closeButton}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Close Follow Mode"
           >
             <Ionicons name="close" size={24} color={colors.deepOcean} />
           </TouchableOpacity>
 
-          <Text style={s.topTitle} numberOfLines={1}>
-            {planName}
-          </Text>
+          <Text style={s.topTitle} numberOfLines={1}>{planName}</Text>
 
           <Text style={s.stopCounter}>
-            Stop {currentIndex + 1}/{allStops.length}
+            {dayCurrentIndex + 1}/{dayStops.length}
           </Text>
         </View>
 
-        {/* Animated progress bar */}
-        <View style={s.progressBg}>
-          <Animated.View style={[s.progressFill, progressBarStyle]} />
+        <View style={s.dotsRow}>
+          <ProgressDots
+            total={Math.max(dayStops.length, 1)}
+            current={dayCurrentIndex}
+            size="sm"
+            colorPending="rgba(15, 23, 42, 0.18)"
+          />
         </View>
       </BlurView>
 
-      {/* Bottom sheet stop overlay */}
-      <View style={[s.bottomSheetWrap, { paddingBottom: insets.bottom }]}>
-        {currentStop && (
-          <BottomSheetStop
-            stop={currentStop}
-            index={currentIndex}
-            totalStops={allStops.length}
-            onSwipeLeft={handleNext}
-            onSwipeRight={handlePrev}
-            onPause={handlePause}
-            onSkip={handleSkip}
-            onNext={handleNext}
-          />
-        )}
+      <View style={s.dayListWrap} pointerEvents="box-none">
+        <FollowDaySheet
+          allStops={allStops}
+          currentIndex={currentIndex}
+          onSelect={goTo}
+          onChangeDay={handleChangeDay}
+          onReplaceStop={handleReplaceStop}
+          onDeleteStop={handleDeleteStop}
+          onPause={handlePause}
+          onComplete={handleComplete}
+          canEdit={isOwner}
+        />
       </View>
-    </View >
+
+      <PlaceSearchModal
+        visible={searchVisible}
+        city={planCity || 'Miami'}
+        onSelect={handlePlaceSelectedForReplace}
+        onClose={() => {
+          setSearchVisible(false);
+          setStopBeingEdited(null);
+        }}
+      />
+
+      <ConfirmModal
+        visible={!!stopToDelete}
+        icon="trash-outline"
+        iconColor={colors.error}
+        title="Delete this stop?"
+        body={`This removes "${stopToDelete?.place?.name ?? 'this stop'}" from your plan permanently.`}
+        confirmLabel={savingEdit ? 'Deleting…' : 'Delete'}
+        confirmDestructive
+        onCancel={() => setStopToDelete(null)}
+        onConfirm={confirmDeleteStop}
+      />
+    </View>
   );
 }
-
-const BOTTOM_SHEET_HEIGHT = 350;
 
 const s = StyleSheet.create({
   root: {
@@ -325,13 +459,9 @@ const s = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
   },
-
-  // Full-screen map
   map: {
     ...StyleSheet.absoluteFillObject,
   },
-
-  // Top bar overlay (positioned absolutely over the map)
   topBarOverlay: {
     position: 'absolute',
     top: 0,
@@ -353,49 +483,38 @@ const s = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   topTitle: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 16,
+    fontFamily: fonts.headingSemiBold,
+    fontSize: 18,
     color: colors.deepOcean,
     flex: 1,
     textAlign: 'center',
     marginHorizontal: spacing.sm,
   },
   stopCounter: {
-    fontFamily: fonts.bodyMedium,
+    fontFamily: fonts.bodySemiBold,
     fontSize: 13,
     color: colors.textSecondary,
-    minWidth: 60,
+    minWidth: 48,
     textAlign: 'right',
   },
-
-  // Animated progress bar
-  progressBg: {
-    height: 4,
-    backgroundColor: colors.borderColor,
-    borderRadius: 2,
-    overflow: 'hidden',
+  dotsRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
   },
-  progressFill: {
-    height: 4,
-    backgroundColor: colors.electricBlue,
-    borderRadius: 2,
-  },
-
-  // Bottom sheet wrapper
-  bottomSheetWrap: {
+  // Day list sheet — ocupa la mitad inferior de la pantalla (~60% para
+  // dejar el mapa visible arriba). El sheet es scrollable internamente.
+  dayListWrap: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    height: BOTTOM_SHEET_HEIGHT,
+    bottom: 0,
+    height: '62%',
     zIndex: 10,
-  },
-  bottomSheet: {
-    flex: 1,
   },
 });

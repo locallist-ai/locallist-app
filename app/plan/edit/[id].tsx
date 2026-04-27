@@ -62,9 +62,22 @@ export default function PlanEditScreen() {
     }
   }, [save]);
 
-  // Configure native header with Save button
+  // Configure native header with explicit back button + Save.
+  // El back nativo del Stack puede no renderizar correctamente cuando la pantalla
+  // padre (plan/[id]) tiene headerShown:false — iOS no encuentra título previo
+  // para el back-label. Override headerLeft para garantizar nav fiable.
   useEffect(() => {
     navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={s.headerBackBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="chevron-back" size={26} color={colors.deepOcean} />
+        </TouchableOpacity>
+      ),
       headerRight: () => (
         <TouchableOpacity
           onPress={handleSave}
@@ -271,6 +284,13 @@ const s = StyleSheet.create({
     fontFamily: fonts.bodySemiBold,
     fontSize: 14,
     color: '#FFFFFF',
+  },
+
+  // Header back button (overrides native chevron for reliability)
+  headerBackBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: spacing.xs,
   },
 
   // Save button (in native header)

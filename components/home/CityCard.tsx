@@ -10,7 +10,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, fonts } from '../../lib/theme';
 import type { City } from './constants';
 
@@ -19,12 +19,13 @@ import type { City } from './constants';
 interface CityCardProps {
   city: City;
   index: number;
+  selected?: boolean;
   onSelect: (name: string) => void;
 }
 
 // ── Component ──
 
-export const CityCard: React.FC<CityCardProps> = React.memo(({ city, index, onSelect }) => {
+export const CityCard: React.FC<CityCardProps> = React.memo(({ city, index, selected = false, onSelect }) => {
   const pulse = useSharedValue(1);
   const glowOpacity = useSharedValue(0.4);
 
@@ -69,15 +70,25 @@ export const CityCard: React.FC<CityCardProps> = React.memo(({ city, index, onSe
           accessibilityLabel={city.name}
           accessibilityRole="button"
         >
-          <Animated.View style={[styles.card, borderStyle]}>
+          <Animated.View style={[styles.card, selected && styles.cardSelected, borderStyle]}>
             <BlurView intensity={60} tint="light" style={styles.blur}>
               <View style={styles.row}>
                 <View style={styles.nameRow}>
-                  <Text style={styles.emoji}>{city.emoji}</Text>
+                  {city.iconName ? (
+                    <View style={styles.iconBubble}>
+                      <MaterialCommunityIcons
+                        name={city.iconName}
+                        size={28}
+                        color={colors.sunsetOrange}
+                      />
+                    </View>
+                  ) : (
+                    <Text style={styles.emoji}>{city.emoji}</Text>
+                  )}
                   <Text style={styles.name}>{city.name}</Text>
                 </View>
                 <View style={styles.arrowCircle}>
-                  <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
+                  <Ionicons name={selected ? 'checkmark' : 'arrow-forward'} size={22} color="#FFFFFF" />
                 </View>
               </View>
             </BlurView>
@@ -105,6 +116,11 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 8,
   },
+  cardSelected: {
+    borderWidth: 2,
+    shadowOpacity: 0.5,
+    shadowRadius: 22,
+  },
   blur: {
     paddingHorizontal: 24,
     paddingVertical: 20,
@@ -121,6 +137,16 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 36,
+  },
+  iconBubble: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(242, 239, 233, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
   },
   name: {
     fontFamily: fonts.headingBold,

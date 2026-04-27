@@ -14,10 +14,23 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.bgCard,
           borderTopColor: colors.borderColor,
+          paddingTop: 6,
         },
         tabBarActiveTintColor: colors.sunsetOrange,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarShowLabel: false,
+        // Pablo 2026-04-27: tabs en mismo color paleta wizard. Inactive ahora
+        // es sunsetOrange muted (40% alpha) en vez de gris textSecondary.
+        tabBarInactiveTintColor: colors.sunsetOrange + '66',
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontFamily: fonts.bodySemiBold,
+          fontSize: 10,
+          letterSpacing: 0.6,
+          textTransform: 'uppercase',
+          marginTop: 2,
+        },
+        tabBarIconStyle: {
+          marginTop: 2,
+        },
         headerStyle: { backgroundColor: colors.bgMain },
         headerTintColor: colors.deepOcean,
         headerShadowVisible: false,

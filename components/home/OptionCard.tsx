@@ -19,6 +19,7 @@ export const OptionCard: React.FC<OptionCardProps> = React.memo(({ option, index
   return (
     <ChoiceChip
       emoji={option.emoji}
+      iconName={option.iconName}
       label={t(option.labelKey)}
       selected={selected}
       onPress={onSelect}
