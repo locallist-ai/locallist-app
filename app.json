@@ -85,7 +85,7 @@
         "NSPrivacyTracking": false,
         "NSPrivacyTrackingDomains": []
       },
-      "buildNumber": "12"
+      "buildNumber": "13"
     },
     "android": {
       "package": "app.locallist.android",
