@@ -69,7 +69,7 @@ export default {
     budgetPremium: 'Premium',
   },
   plans: {
-    chooserTitle: 'Tu próximo\nplan',
+    chooserTitle: 'Tu próximo plan',
     chooserSubtitle: '¿Cómo quieres empezar?',
     exploreCurated: 'Explora planes curados',
     exploreCuratedSub: 'Seleccionados por locales que conocen lo mejor',
