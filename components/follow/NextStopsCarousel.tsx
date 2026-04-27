@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, fonts } from '../../lib/theme';
-import { TIME_BLOCK_EMOJI, DEFAULT_STOP_EMOJI } from '../../lib/timeBlocks';
+import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 
 // Carousel horizontal de próximos stops tras el actual. Aparece entre la top
 // bar y el bottom sheet en Follow Mode para que el usuario mantenga visibilidad
@@ -46,7 +46,7 @@ export const NextStopsCarousel: React.FC<NextStopsCarouselProps> = ({
       {visible.map((stop, i) => {
         const absoluteIndex = windowStart + i;
         const isCurrent = absoluteIndex === currentIndex;
-        const emoji = stop.timeBlock ? TIME_BLOCK_EMOJI[stop.timeBlock] ?? DEFAULT_STOP_EMOJI : DEFAULT_STOP_EMOJI;
+        const iconName = stop.timeBlock ? TIME_BLOCK_ICON[stop.timeBlock] ?? DEFAULT_STOP_ICON : DEFAULT_STOP_ICON;
         return (
           <TouchableOpacity
             key={stop.id}
@@ -58,7 +58,11 @@ export const NextStopsCarousel: React.FC<NextStopsCarouselProps> = ({
             accessibilityState={{ selected: isCurrent }}
           >
             <View style={[styles.avatar, isCurrent && styles.avatarCurrent]}>
-              <Text style={styles.emoji}>{emoji}</Text>
+              <MaterialCommunityIcons
+                name={iconName}
+                size={16}
+                color={isCurrent ? '#FFFFFF' : colors.sunsetOrange}
+              />
             </View>
             <Text style={[styles.name, isCurrent && styles.nameCurrent]} numberOfLines={1}>
               {stop.name}
@@ -111,15 +115,15 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: 'rgba(242, 239, 233, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarCurrent: {
-    backgroundColor: colors.sunsetOrange + '25',
-  },
-  emoji: {
-    fontSize: 16,
+    backgroundColor: colors.sunsetOrange,
+    borderColor: colors.sunsetOrange,
   },
   name: {
     fontFamily: fonts.bodySemiBold,
