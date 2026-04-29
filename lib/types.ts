@@ -13,8 +13,8 @@ export type Place = {
   bestTime: string | null;
   priceRange: string | null;
   photos: string[] | null;
-  latitude: string | null;
-  longitude: string | null;
+  latitude: number | null;
+  longitude: number | null;
   googleRating: number | null;
   googleReviewCount: number | null;
   source: string;
@@ -54,11 +54,6 @@ export type BuilderResponse = {
   plan: Plan;
   stops: PlanStop[];
   message: string;
-  usage: {
-    tier: string;
-    remaining: number | null;
-    limit: number | null;
-  };
 };
 
 export type AuthUser = {

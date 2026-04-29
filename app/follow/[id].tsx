@@ -28,9 +28,9 @@ import type { MapStop } from '../../components/map/PlanMap';
 type FollowSession = { id: string; planId: string; status: string };
 
 const mapToMapStop = (planStop: PlanStop): MapStop | null => {
-  const lat = parseFloat(planStop.place?.latitude ?? '');
-  const lng = parseFloat(planStop.place?.longitude ?? '');
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const lat = planStop.place?.latitude;
+  const lng = planStop.place?.longitude;
+  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   return {
     id: planStop.placeId,
     name: planStop.place?.name ?? 'Unknown',
