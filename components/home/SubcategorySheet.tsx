@@ -254,12 +254,11 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   actions: {
-    flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
     marginTop: 18,
   },
   doneBtn: {
-    flex: 1,
+    width: '50%',
     paddingVertical: 14,
     borderRadius: 22,
     alignItems: 'center',
