@@ -76,7 +76,7 @@ export default function LoginScreen() {
 
     const idToken = googleResponse.params.id_token;
     if (!idToken) {
-      setError('Google Sign In failed — no token received');
+      setError('Google Sign In failed: no token received');
       setLoading(null);
       return;
     }
@@ -150,7 +150,7 @@ export default function LoginScreen() {
     setLoading('google');
 
     if (!googleRequest) {
-      setError('Google Sign In is not ready yet — try again in a moment');
+      setError('Google Sign In is not ready yet, try again in a moment');
       setLoading(null);
       return;
     }
