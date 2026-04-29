@@ -263,7 +263,6 @@ export default function PlansScreen() {
         title: t('plans.buildYourOwn'),
         sub: t('plans.buildYourOwnSub'),
         onPress: () => router.push('/builder/custom'),
-        badge: 'Plus',
       },
       {
         icon: 'movie-open-outline',
