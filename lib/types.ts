@@ -90,13 +90,6 @@ export type UpdateStopsRequest = {
   stops: StopInput[];
 };
 
-export type CreatePlanRequest = {
-  name: string;
-  city: string;
-  type?: string;
-  durationDays: number;
-};
-
 export type CityDto = {
   id: string;
   name: string;

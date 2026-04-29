@@ -37,13 +37,3 @@ export function isFresh(key: string, maxAgeMs = DEFAULT_MAX_AGE_MS): boolean {
   return Date.now() - entry.timestamp < maxAgeMs;
 }
 
-/**
- * Clear a specific cache key or the entire cache.
- */
-export function clearCache(key?: string): void {
-  if (key) {
-    cache.delete(key);
-  } else {
-    cache.clear();
-  }
-}
