@@ -63,7 +63,6 @@ export const SubcategorySheet: React.FC<SubcategorySheetProps> = ({
     }
   };
 
-  const handleAny = () => onConfirm([]);
   const handleDone = () => onConfirm(selected);
 
   const title = useMemo(
@@ -135,16 +134,6 @@ export const SubcategorySheet: React.FC<SubcategorySheetProps> = ({
               </ScrollView>
 
               <View style={styles.actions}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={handleAny}
-                  style={styles.skipBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('wizard.interestSkipAny')}
-                >
-                  <Text style={styles.skipText}>{t('wizard.interestSkipAny')}</Text>
-                </TouchableOpacity>
-
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={handleDone}
@@ -269,23 +258,8 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 18,
   },
-  skipBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(15, 23, 42, 0.12)',
-  },
-  skipText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 15,
-    color: colors.deepOcean,
-  },
   doneBtn: {
-    flex: 1.4,
+    flex: 1,
     paddingVertical: 14,
     borderRadius: 22,
     alignItems: 'center',
