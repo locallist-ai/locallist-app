@@ -243,23 +243,14 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
   const heroFallback = (plan.category ?? plan.type ?? 'Culture') as Category;
   const heroSubtitle = `${plan.city} · ${plan.durationDays} ${plan.durationDays === 1 ? 'day' : 'days'}`;
 
-  // Resumen "What's inside" — agrupa stops por día. Pablo 2026-04-26: "un
-  // breve resumen del plan completo" en la página principal del plan.
-  const daysSummary = useMemo(() => {
-    const byDay = new Map<number, PlanStop[]>();
-    for (const stop of stops) {
-      const dn = stop.dayNumber || 1;
-      const arr = byDay.get(dn) ?? [];
-      arr.push(stop);
-      byDay.set(dn, arr);
-    }
-    return Array.from(byDay.entries())
-      .sort(([a], [b]) => a - b)
-      .map(([day, list]) => ({
-        day,
-        stops: list.slice().sort((a, b) => a.orderIndex - b.orderIndex),
-      }));
-  }, [stops]);
+  const stopsForCurrentDay = useMemo(
+    () =>
+      stops
+        .filter((s) => (s.dayNumber || 1) === currentDay)
+        .slice()
+        .sort((a, b) => a.orderIndex - b.orderIndex),
+    [stops, currentDay],
+  );
 
   return (
     <ScrollView
@@ -317,7 +308,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
           * Pablo 2026-04-26: resumen rápido del plan en la pantalla principal.
           * Pablo 2026-04-27: en multi-día, los chips de día viven aquí (no
           * flotando arriba) — tap selecciona el día y lleva al primer stop. */}
-        {daysSummary.length > 0 && (
+        {stopsForCurrentDay.length > 0 && (
           <View style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
               <Ionicons name="list-outline" size={16} color={colors.sunsetOrange} />
@@ -347,41 +338,26 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
               </View>
             )}
 
-            {daysSummary.map((d) => (
-              <TouchableOpacity
-                key={d.day}
-                onPress={() => onDayChange(d.day)}
-                activeOpacity={0.85}
-                style={styles.summaryDayBlock}
-                accessibilityRole="button"
-                accessibilityLabel={`View Day ${d.day}`}
-              >
-                <View style={styles.summaryDayHeaderRow}>
-                  <Text style={styles.summaryDayTitle}>Day {d.day}</Text>
-                  <Ionicons name="chevron-forward" size={16} color={colors.sunsetOrange} />
+            {stopsForCurrentDay.map((s, idx) => {
+              const rowIcon = s.timeBlock ? TIME_BLOCK_ICON[s.timeBlock] ?? DEFAULT_STOP_ICON : DEFAULT_STOP_ICON;
+              const arrival = s.suggestedArrival ? ` · ${s.suggestedArrival}` : '';
+              return (
+                <View key={`${s.placeId}-${idx}`} style={styles.summaryRow}>
+                  <View style={styles.summaryRowBubble}>
+                    <MaterialCommunityIcons name={rowIcon} size={14} color={colors.sunsetOrange} />
+                  </View>
+                  <View style={styles.summaryRowText}>
+                    <Text style={styles.summaryRowName} numberOfLines={1}>
+                      {s.place?.name ?? 'Unknown'}
+                    </Text>
+                    <Text style={styles.summaryRowMeta} numberOfLines={1}>
+                      {s.place?.category ?? ''}
+                      {arrival}
+                    </Text>
+                  </View>
                 </View>
-                {d.stops.map((s, idx) => {
-                  const rowIcon = s.timeBlock ? TIME_BLOCK_ICON[s.timeBlock] ?? DEFAULT_STOP_ICON : DEFAULT_STOP_ICON;
-                  const arrival = s.suggestedArrival ? ` · ${s.suggestedArrival}` : '';
-                  return (
-                    <View key={`${s.placeId}-${idx}`} style={styles.summaryRow}>
-                      <View style={styles.summaryRowBubble}>
-                        <MaterialCommunityIcons name={rowIcon} size={14} color={colors.sunsetOrange} />
-                      </View>
-                      <View style={styles.summaryRowText}>
-                        <Text style={styles.summaryRowName} numberOfLines={1}>
-                          {s.place?.name ?? 'Unknown'}
-                        </Text>
-                        <Text style={styles.summaryRowMeta} numberOfLines={1}>
-                          {s.place?.category ?? ''}
-                          {arrival}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
         )}
 
@@ -619,11 +595,6 @@ const styles = StyleSheet.create({
   summaryDayChipTextActive: {
     color: '#FFFFFF',
   },
-  summaryDayHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   slot: {
     width: SCREEN_WIDTH,
     backgroundColor: colors.bgCard,
@@ -729,13 +700,6 @@ const styles = StyleSheet.create({
     color: colors.sunsetOrange,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-  },
-  summaryDayBlock: { gap: 6 },
-  summaryDayTitle: {
-    fontFamily: fonts.headingSemiBold,
-    fontSize: 16,
-    color: colors.deepOcean,
-    marginTop: spacing.xs,
   },
   summaryRow: {
     flexDirection: 'row',
