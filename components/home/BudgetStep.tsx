@@ -1,5 +1,15 @@
 import React, { useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  StyleSheet,
+} from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,6 +69,11 @@ export const BudgetStep: React.FC<BudgetStepProps> = ({
   const ctaLabel = hasValue ? t('wizard.interestContinue') : t('wizard.skip');
 
   return (
+    <KeyboardAvoidingView
+      style={styles.keyboardAvoid}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
     <View style={styles.container}>
       <EditorialTitle
         text={t('wizard.stepBudgetAmountTitle')}
@@ -86,6 +101,8 @@ export const BudgetStep: React.FC<BudgetStepProps> = ({
             placeholder="0"
             placeholderTextColor="rgba(255,255,255,0.35)"
             maxLength={4}
+            returnKeyType="done"
+            onSubmitEditing={Keyboard.dismiss}
             style={styles.input}
             accessibilityLabel={t('wizard.stepBudgetAmountTitle')}
           />
@@ -146,10 +163,15 @@ export const BudgetStep: React.FC<BudgetStepProps> = ({
         </TouchableOpacity>
       </View>
     </View>
+    </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
+  keyboardAvoid: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
