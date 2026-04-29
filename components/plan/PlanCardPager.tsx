@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
   Dimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
@@ -12,6 +13,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
+  FadeInDown,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -27,7 +29,11 @@ import { CategoryBadge } from '../ui/CategoryBadge';
 import { ProgressDots } from '../ui/design-system';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
+import { DaySection } from '../plan-editor/DaySection';
+import { MoveToDay } from '../plan-editor/MoveToDay';
+import { PlaceSearchModal } from '../plan-editor/PlaceSearchModal';
 import type { Plan, PlanStop } from '../../lib/types';
+import type { DayGroup } from '../../lib/use-plan-editor';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -38,10 +44,18 @@ interface PlanCardPagerProps {
   message?: string | null;
   isAuthenticated: boolean;
   isOwner: boolean;
+  isNew?: boolean;
   heroPhotos: string[];
   onFollow: () => void;
-  onEdit?: () => void;
   onDelete?: () => void;
+  onBack?: () => void;
+  editorDays?: DayGroup[];
+  editorIsDirty?: boolean;
+  editorIsSaving?: boolean;
+  onEditorDispatch?: (action: any) => void;
+  onEditorSave?: () => Promise<void>;
+  totalDays?: number;
+  safeAreaTop?: number;
 }
 
 export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
@@ -51,10 +65,18 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   message,
   isAuthenticated,
   isOwner,
+  isNew = false,
   heroPhotos,
   onFollow,
-  onEdit,
   onDelete,
+  onBack,
+  editorDays = [],
+  editorIsDirty = false,
+  editorIsSaving = false,
+  onEditorDispatch,
+  onEditorSave,
+  totalDays,
+  safeAreaTop = 0,
 }) => {
   const [slide, setSlide] = useState(0);
   const [hintVisible, setHintVisible] = useState(true);
@@ -62,32 +84,29 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   const lastHaptic = useRef(0);
   const hintPulse = useSharedValue(0);
 
-  // Pablo 2026-04-27: si el plan es multi-día, los stops se filtran por día
-  // activo (igual que Follow Mode). Día por defecto = 1.
+  // For non-owner read-only view: day chip filter
   const allDays = useMemo(() => {
     const set = new Set<number>();
     stops.forEach((s) => set.add(s.dayNumber || 1));
     return Array.from(set).sort((a, b) => a - b);
   }, [stops]);
   const [currentDay, setCurrentDay] = useState<number>(allDays[0] ?? 1);
-  // Si los días cambian (re-fetch), reajustar currentDay si quedó fuera.
   useEffect(() => {
     if (allDays.length > 0 && !allDays.includes(currentDay)) {
       setCurrentDay(allDays[0]);
     }
   }, [allDays, currentDay]);
 
-  const stopsForDay = useMemo(
-    () => stops.filter((s) => (s.dayNumber || 1) === currentDay),
-    [stops, currentDay],
-  );
+  // Modals hoisted here so they render above the horizontal pager
+  const [moveState, setMoveState] = useState({ visible: false, fromDay: 0, stopIndex: 0 });
+  const [addState, setAddState] = useState({ visible: false, dayNumber: 1 });
 
-  const slotCount = 1 + stopsForDay.length;
+  const slotCount = 1 + stops.length;
   const hasMoreSlides = slotCount > 1;
-  const isMultiDay = allDays.length > 1;
+  const isMultiDay = stops.some((s) => s.dayNumber !== stops[0]?.dayNumber);
 
   useEffect(() => {
-    if (!hasMoreSlides) return;
+    if (!hasMoreSlides || isOwner) return;
     const bounceTimer = setTimeout(() => {
       scrollRef.current?.scrollTo({ x: 56, animated: true });
       const back = setTimeout(() => {
@@ -107,7 +126,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
       clearTimeout(bounceTimer);
       cancelAnimation(hintPulse);
     };
-  }, [hasMoreSlides, hintPulse]);
+  }, [hasMoreSlides, isOwner, hintPulse]);
 
   const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const x = e.nativeEvent.contentOffset.x;
@@ -127,20 +146,34 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
 
   const slideLabel = useMemo(() => {
     if (slide === 0) return 'Overview';
-    const total = stopsForDay.length;
-    const dayLabel = isMultiDay ? `Day ${currentDay} · ` : '';
+    const stop = stops[slide - 1];
+    if (!stop) return '';
+    const total = stops.length;
+    const dayLabel = isMultiDay ? `Day ${stop.dayNumber} · ` : '';
     return `${dayLabel}Stop ${slide} of ${total}`;
-  }, [slide, stopsForDay.length, currentDay, isMultiDay]);
+  }, [slide, stops, isMultiDay]);
 
   const handleDayChange = (day: number) => {
     Haptics.selectionAsync();
     if (day !== currentDay) setCurrentDay(day);
-    // Pablo 2026-04-27: tap en el día desde "What's inside" lleva al primer
-    // stop de ese día, no al overview. UX: el usuario escogió un día → quiere
-    // verlo.
-    setSlide(1);
-    // Animated true para que sea visible la transición.
-    scrollRef.current?.scrollTo({ x: SCREEN_WIDTH, animated: true });
+  };
+
+  // Scroll to a stop slide by its global index in `stops`.
+  const handleScrollToStop = (globalStopIndex: number) => {
+    const targetSlide = globalStopIndex + 1; // slide 0 = overview
+    Haptics.selectionAsync();
+    setSlide(targetSlide);
+    scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * targetSlide, animated: true });
+  };
+
+  const handleBackPress = () => {
+    if (slide > 0) {
+      Haptics.selectionAsync();
+      setSlide(0);
+      scrollRef.current?.scrollTo({ x: 0, animated: true });
+      return;
+    }
+    onBack?.();
   };
 
   const hintAnimStyle = useAnimatedStyle(() => ({
@@ -148,12 +181,15 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
     transform: [{ translateX: hintPulse.value * 6 }],
   }));
 
+  const effectiveTotalDays = totalDays ?? plan.durationDays ?? Math.max(...editorDays.map((d) => d.dayNumber), 1);
+
   return (
     <View style={styles.root}>
       <ScrollView
         ref={scrollRef}
         horizontal
         pagingEnabled
+        scrollEnabled={!isOwner}
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onMomentumScrollEnd}
         scrollEventThrottle={16}
@@ -167,19 +203,27 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
           heroPhotos={heroPhotos}
           isAuthenticated={isAuthenticated}
           isOwner={isOwner}
+          isNew={isNew}
           onFollow={onFollow}
-          onEdit={onEdit}
           onDelete={onDelete}
+          editorDays={editorDays}
+          editorIsDirty={editorIsDirty}
+          editorIsSaving={editorIsSaving}
+          onEditorDispatch={onEditorDispatch}
+          onEditorSave={onEditorSave}
+          onRequestMove={(fromDay, stopIndex) => setMoveState({ visible: true, fromDay, stopIndex })}
+          onRequestAdd={(dayNumber) => setAddState({ visible: true, dayNumber })}
+          onScrollToStop={handleScrollToStop}
           currentDay={currentDay}
           allDays={allDays}
           onDayChange={handleDayChange}
         />
-        {stopsForDay.map((stop, idx) => (
+        {stops.map((stop, idx) => (
           <StopSlot
             key={`${stop.placeId}-${idx}`}
             stop={stop}
             index={idx}
-            total={stopsForDay.length}
+            total={stops.length}
           />
         ))}
       </ScrollView>
@@ -195,7 +239,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
           <Text style={styles.slideLabel}>{slideLabel}</Text>
         </View>
 
-        {hintVisible && hasMoreSlides && slide === 0 && (
+        {hintVisible && hasMoreSlides && slide === 0 && !isOwner && (
           <Animated.View pointerEvents="none" style={[styles.swipeHint, hintAnimStyle]}>
             <Text style={styles.swipeHintText}>Swipe</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.sunsetOrange} />
@@ -203,6 +247,44 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
           </Animated.View>
         )}
       </View>
+
+      {onBack && (
+        <TouchableOpacity
+          style={[styles.backPill, { top: safeAreaTop + spacing.xs }]}
+          onPress={handleBackPress}
+          accessibilityRole="button"
+          accessibilityLabel={slide > 0 ? 'Back to overview' : 'Go back'}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.deepOcean} />
+        </TouchableOpacity>
+      )}
+
+      {/* Modals rendered above the pager */}
+      <MoveToDay
+        visible={moveState.visible}
+        currentDay={moveState.fromDay}
+        totalDays={effectiveTotalDays}
+        onSelect={(toDay) => {
+          onEditorDispatch?.({
+            type: 'MOVE_TO_DAY',
+            fromDay: moveState.fromDay,
+            stopIndex: moveState.stopIndex,
+            toDay,
+          });
+          setMoveState({ ...moveState, visible: false });
+        }}
+        onClose={() => setMoveState({ ...moveState, visible: false })}
+      />
+      <PlaceSearchModal
+        visible={addState.visible}
+        city={plan.city}
+        onSelect={(place) => {
+          onEditorDispatch?.({ type: 'ADD_STOP', dayNumber: addState.dayNumber, place });
+          setAddState({ ...addState, visible: false });
+        }}
+        onClose={() => setAddState({ ...addState, visible: false })}
+      />
     </View>
   );
 };
@@ -217,9 +299,18 @@ interface OverviewSlotProps {
   heroPhotos: string[];
   isAuthenticated: boolean;
   isOwner: boolean;
+  isNew: boolean;
   onFollow: () => void;
-  onEdit?: () => void;
   onDelete?: () => void;
+  editorDays: DayGroup[];
+  editorIsDirty: boolean;
+  editorIsSaving: boolean;
+  onEditorDispatch?: (action: any) => void;
+  onEditorSave?: () => Promise<void>;
+  onRequestMove: (fromDay: number, stopIndex: number) => void;
+  onRequestAdd: (dayNumber: number) => void;
+  onScrollToStop: (globalStopIndex: number) => void;
+  // read-only (non-owner)
   currentDay: number;
   allDays: number[];
   onDayChange: (day: number) => void;
@@ -233,9 +324,17 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
   heroPhotos,
   isAuthenticated,
   isOwner,
+  isNew,
   onFollow,
-  onEdit,
   onDelete,
+  editorDays,
+  editorIsDirty,
+  editorIsSaving,
+  onEditorDispatch,
+  onEditorSave,
+  onRequestMove,
+  onRequestAdd,
+  onScrollToStop,
   currentDay,
   allDays,
   onDayChange,
@@ -251,6 +350,8 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
         .sort((a, b) => a.orderIndex - b.orderIndex),
     [stops, currentDay],
   );
+
+  const dispatch = onEditorDispatch ?? (() => {});
 
   return (
     <ScrollView
@@ -304,78 +405,133 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
           </View>
         )}
 
-        {/* Plan summary "What's inside" — breakdown por día con stop names.
-          * Pablo 2026-04-26: resumen rápido del plan en la pantalla principal.
-          * Pablo 2026-04-27: en multi-día, los chips de día viven aquí (no
-          * flotando arriba) — tap selecciona el día y lleva al primer stop. */}
-        {stopsForCurrentDay.length > 0 && (
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryHeader}>
-              <Ionicons name="list-outline" size={16} color={colors.sunsetOrange} />
-              <Text style={styles.summaryLabel}>What's inside</Text>
-            </View>
-
-            {allDays.length > 1 && (
-              <View style={styles.summaryDayChips}>
-                {allDays.map((d) => {
-                  const active = d === currentDay;
-                  return (
-                    <TouchableOpacity
-                      key={d}
-                      onPress={() => onDayChange(d)}
-                      activeOpacity={0.85}
-                      style={[styles.summaryDayChip, active && styles.summaryDayChipActive]}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      accessibilityLabel={`Day ${d}`}
-                    >
-                      <Text style={[styles.summaryDayChipText, active && styles.summaryDayChipTextActive]}>
-                        Day {d}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-
-            {stopsForCurrentDay.map((s, idx) => {
-              const rowIcon = s.timeBlock ? TIME_BLOCK_ICON[s.timeBlock] ?? DEFAULT_STOP_ICON : DEFAULT_STOP_ICON;
-              const arrival = s.suggestedArrival ? ` · ${s.suggestedArrival}` : '';
-              return (
-                <View key={`${s.placeId}-${idx}`} style={styles.summaryRow}>
-                  <View style={styles.summaryRowBubble}>
-                    <MaterialCommunityIcons name={rowIcon} size={14} color={colors.sunsetOrange} />
-                  </View>
-                  <View style={styles.summaryRowText}>
-                    <Text style={styles.summaryRowName} numberOfLines={1}>
-                      {s.place?.name ?? 'Unknown'}
-                    </Text>
-                    <Text style={styles.summaryRowMeta} numberOfLines={1}>
-                      {s.place?.category ?? ''}
-                      {arrival}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
+        {/* What's inside */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryHeader}>
+            <Ionicons name="list-outline" size={16} color={colors.sunsetOrange} />
+            <Text style={styles.summaryLabel}>{"What's inside"}</Text>
           </View>
-        )}
 
-        {isOwner && (onEdit || onDelete) && (
+          {isOwner ? (
+            /* ── Owner: inline editor ── */
+            <>
+              {totalStops === 0 && (
+                <Animated.View entering={FadeInDown.duration(400).springify().damping(16)} style={styles.editorEmpty}>
+                  <View style={styles.editorEmptyIcon}>
+                    <Ionicons name="compass-outline" size={32} color={colors.sunsetOrange} />
+                  </View>
+                  <Text style={styles.editorEmptyTitle}>No stops yet</Text>
+                  <Text style={styles.editorEmptyBody}>
+                    {'Tap "+ Add a stop" on any day to start building your itinerary.'}
+                  </Text>
+                </Animated.View>
+              )}
+              <View style={styles.editorDays}>
+                {editorDays.reduce<{ offset: number; nodes: React.ReactNode[] }>(
+                  (acc, day, dayIdx) => {
+                    const dayOffset = acc.offset;
+                    acc.nodes.push(
+                      <Animated.View
+                        key={day.dayNumber}
+                        entering={FadeInDown.delay(dayIdx * 60).duration(350).springify().damping(16)}
+                      >
+                        <DaySection
+                          dayNumber={day.dayNumber}
+                          stops={day.stops}
+                          onReorder={(from, to) =>
+                            dispatch({ type: 'REORDER', dayNumber: day.dayNumber, from, to })
+                          }
+                          onDeleteStop={(stopIndex) =>
+                            dispatch({ type: 'DELETE_STOP', dayNumber: day.dayNumber, stopIndex })
+                          }
+                          onMoveStop={editorDays.length > 1 ? (stopIndex) => onRequestMove(day.dayNumber, stopIndex) : undefined}
+                          onAddPress={() => onRequestAdd(day.dayNumber)}
+                          onStopPress={(localIdx) => onScrollToStop(dayOffset + localIdx)}
+                        />
+                      </Animated.View>
+                    );
+                    acc.offset += day.stops.length;
+                    return acc;
+                  },
+                  { offset: 0, nodes: [] },
+                ).nodes}
+              </View>
+            </>
+          ) : (
+            /* ── Non-owner: read-only summary ── */
+            <>
+              {allDays.length > 1 && (
+                <View style={styles.summaryDayChips}>
+                  {allDays.map((d) => {
+                    const active = d === currentDay;
+                    return (
+                      <TouchableOpacity
+                        key={d}
+                        onPress={() => onDayChange(d)}
+                        activeOpacity={0.85}
+                        style={[styles.summaryDayChip, active && styles.summaryDayChipActive]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        accessibilityLabel={`Day ${d}`}
+                      >
+                        <Text style={[styles.summaryDayChipText, active && styles.summaryDayChipTextActive]}>
+                          Day {d}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+              {stopsForCurrentDay.map((s, idx) => {
+                const rowIcon = s.timeBlock ? TIME_BLOCK_ICON[s.timeBlock] ?? DEFAULT_STOP_ICON : DEFAULT_STOP_ICON;
+                const arrival = s.suggestedArrival ? ` · ${s.suggestedArrival}` : '';
+                return (
+                  <View key={`${s.placeId}-${idx}`} style={styles.summaryRow}>
+                    <View style={styles.summaryRowBubble}>
+                      <MaterialCommunityIcons name={rowIcon} size={14} color={colors.sunsetOrange} />
+                    </View>
+                    <View style={styles.summaryRowText}>
+                      <Text style={styles.summaryRowName} numberOfLines={1}>
+                        {s.place?.name ?? 'Unknown'}
+                      </Text>
+                      <Text style={styles.summaryRowMeta} numberOfLines={1}>
+                        {s.place?.category ?? ''}
+                        {arrival}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </>
+          )}
+        </View>
+
+        {/* Owner actions: Save + Delete */}
+        {isOwner && (
           <View style={styles.ownerActions}>
-            {onEdit && (
-              <TouchableOpacity
-                style={[styles.editBtn, styles.ownerActionBtn]}
-                onPress={onEdit}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Edit this plan"
-              >
-                <Ionicons name="create-outline" size={16} color={colors.sunsetOrange} />
-                <Text style={styles.editBtnText}>Edit</Text>
-              </TouchableOpacity>
-            )}
-            {onDelete && (
+            <TouchableOpacity
+              style={[
+                styles.saveBtn,
+                styles.ownerActionBtn,
+                ((!editorIsDirty && !isNew) || editorIsSaving) && styles.saveBtnDisabled,
+              ]}
+              disabled={(!editorIsDirty && !isNew) || editorIsSaving}
+              onPress={onEditorSave}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={isNew ? 'Create plan' : 'Save changes'}
+            >
+              {editorIsSaving ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.saveBtnText}>{isNew ? 'Create plan' : 'Save changes'}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {!isNew && onDelete && (
               <TouchableOpacity
                 style={[styles.deleteBtn, styles.ownerActionBtn]}
                 onPress={onDelete}
@@ -390,25 +546,35 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
           </View>
         )}
 
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={onFollow}
-          style={styles.ctaWrap}
-          accessibilityRole="button"
-          accessibilityLabel={isAuthenticated ? 'Follow this plan' : 'Sign in to follow'}
-        >
-          <LinearGradient
-            colors={[colors.electricBlue, '#2563eb']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.cta}
+        {editorIsDirty && (
+          <View style={styles.dirtyBadge}>
+            <Ionicons name="alert-circle" size={14} color={colors.sunsetOrange} />
+            <Text style={styles.dirtyBadgeText}>Unsaved changes</Text>
+          </View>
+        )}
+
+        {/* Follow CTA — hidden for new unsaved plans */}
+        {!isNew && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={onFollow}
+            style={styles.ctaWrap}
+            accessibilityRole="button"
+            accessibilityLabel={isAuthenticated ? 'Follow this plan' : 'Sign in to follow'}
           >
-            <Ionicons name="navigate-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.ctaText}>
-              {isAuthenticated ? 'Start Follow Mode' : 'Sign in to follow'}
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={[colors.electricBlue, '#2563eb']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.cta}
+            >
+              <Ionicons name="navigate-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.ctaText}>
+                {isAuthenticated ? 'Start Follow Mode' : 'Sign in to follow'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
       </View>
     </ScrollView>
   );
@@ -601,7 +767,7 @@ const styles = StyleSheet.create({
   },
   slotContent: {
     flexGrow: 1,
-    paddingBottom: 110, // space for footer
+    paddingBottom: 110,
     backgroundColor: colors.bgCard,
   },
   body: {
@@ -728,6 +894,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
   },
+
+  /* Editor inline */
+  editorDays: {
+    gap: spacing.xs,
+  },
+  editorEmpty: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    gap: spacing.xs,
+  },
+  editorEmptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.sunsetOrange + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  editorEmptyTitle: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: colors.deepOcean,
+  },
+  editorEmptyBody: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 240,
+  },
+
+  /* Owner actions */
   ownerActions: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -735,22 +936,43 @@ const styles = StyleSheet.create({
   ownerActionBtn: {
     flex: 1,
   },
-  editBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 10,
-    borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.sunsetOrange + '40',
-    backgroundColor: colors.sunsetOrange + '08',
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.sunsetOrange,
   },
-  editBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.sunsetOrange },
+  saveBtnDisabled: {
+    opacity: 0.4,
+  },
+  saveBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
   deleteBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 10,
+    gap: 6, paddingVertical: 11,
     borderRadius: borderRadius.md, borderWidth: 1,
     borderColor: colors.error + '40',
     backgroundColor: colors.error + '08',
   },
   deleteBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.error },
+  dirtyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  dirtyBadgeText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: colors.sunsetOrange,
+  },
   ctaWrap: { marginTop: spacing.xs },
   cta: {
     flexDirection: 'row',
@@ -929,5 +1151,21 @@ const styles = StyleSheet.create({
   swipeHintSecondChevron: {
     marginLeft: -10,
     opacity: 0.6,
+  },
+  backPill: {
+    position: 'absolute',
+    left: spacing.md,
+    zIndex: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
 });

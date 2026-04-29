@@ -19,12 +19,13 @@ const CATEGORY_GRADIENTS: Record<Category, [string, string]> = {
 
 type Props = {
   stop: PlanStop & { id?: string };
-  onMovePress: () => void;
+  onMovePress?: () => void;
   drag: () => void;
   isActive: boolean;
+  onPress?: () => void;
 };
 
-export function EditableStopCard({ stop, onMovePress, drag, isActive }: Props) {
+export function EditableStopCard({ stop, onMovePress, drag, isActive, onPress }: Props) {
   const place = stop.place;
   const photoUrl = place?.photos?.[0] ?? null;
   const category = (place?.category ?? 'Culture') as Category;
@@ -43,44 +44,53 @@ export function EditableStopCard({ stop, onMovePress, drag, isActive }: Props) {
         <Ionicons name="reorder-three" size={22} color={colors.textSecondary} />
       </TouchableOpacity>
 
-      {/* Photo thumbnail */}
-      <View style={s.thumbnail}>
-        {photoUrl ? (
-          <Image source={{ uri: photoUrl }} style={s.thumbnailImg} contentFit="cover" />
-        ) : (
-          <LinearGradient colors={gradient} style={s.thumbnailImg} />
-        )}
-      </View>
-
-      {/* Content */}
-      <View style={s.content}>
-        <Text style={s.name} numberOfLines={1}>
-          {place?.name ?? 'Unknown place'}
-        </Text>
-        <View style={s.metaRow}>
-          {place?.category && (
-            <View style={s.categoryChip}>
-              <Text style={s.categoryText}>{place.category}</Text>
-            </View>
-          )}
-          {stop.suggestedDurationMin != null && (
-            <View style={s.durationChip}>
-              <Ionicons name="time-outline" size={11} color={colors.electricBlue} />
-              <Text style={s.durationText}>~{stop.suggestedDurationMin}m</Text>
-            </View>
+      {/* Tappable area: photo + content → navigates to stop slide */}
+      <TouchableOpacity
+        style={s.tappable}
+        onPress={onPress}
+        activeOpacity={onPress ? 0.7 : 1}
+        accessibilityRole={onPress ? 'button' : 'none'}
+        accessibilityLabel={onPress ? `View ${place?.name ?? 'stop'} details` : undefined}
+      >
+        <View style={s.thumbnail}>
+          {photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={s.thumbnailImg} contentFit="cover" />
+          ) : (
+            <LinearGradient colors={gradient} style={s.thumbnailImg} />
           )}
         </View>
-      </View>
 
-      {/* Move to day button */}
-      <TouchableOpacity
-        onPress={onMovePress}
-        style={s.moveBtn}
-        accessibilityLabel="Move to another day"
-        accessibilityRole="button"
-      >
-        <Ionicons name="swap-horizontal-outline" size={18} color={colors.textSecondary} />
+        <View style={s.content}>
+          <Text style={s.name} numberOfLines={1}>
+            {place?.name ?? 'Unknown place'}
+          </Text>
+          <View style={s.metaRow}>
+            {place?.category && (
+              <View style={s.categoryChip}>
+                <Text style={s.categoryText}>{place.category}</Text>
+              </View>
+            )}
+            {stop.suggestedDurationMin != null && (
+              <View style={s.durationChip}>
+                <Ionicons name="time-outline" size={11} color={colors.electricBlue} />
+                <Text style={s.durationText}>~{stop.suggestedDurationMin}m</Text>
+              </View>
+            )}
+          </View>
+        </View>
       </TouchableOpacity>
+
+      {/* Move to day button — only shown for multi-day plans */}
+      {onMovePress && (
+        <TouchableOpacity
+          onPress={onMovePress}
+          style={s.moveBtn}
+          accessibilityLabel="Move to another day"
+          accessibilityRole="button"
+        >
+          <Ionicons name="swap-horizontal-outline" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -93,6 +103,8 @@ const s = StyleSheet.create({
     borderRadius: borderRadius.md,
     padding: spacing.sm,
     gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
   },
   cardActive: {
     elevation: 8,
@@ -108,14 +120,21 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   thumbnail: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.sm,
+    width: 72,
+    height: 72,
+    borderRadius: borderRadius.md,
     overflow: 'hidden',
+    backgroundColor: colors.bgMain,
   },
   thumbnailImg: {
     width: '100%',
     height: '100%',
+  },
+  tappable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.sm,
   },
   content: {
     flex: 1,
@@ -123,7 +142,7 @@ const s = StyleSheet.create({
   },
   name: {
     fontFamily: fonts.bodySemiBold,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.deepOcean,
   },
   metaRow: {

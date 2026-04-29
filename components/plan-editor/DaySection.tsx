@@ -16,8 +16,9 @@ type Props = {
   stops: (PlanStop & { id?: string })[];
   onReorder: (from: number, to: number) => void;
   onDeleteStop: (stopIndex: number) => void;
-  onMoveStop: (stopIndex: number) => void;
+  onMoveStop?: (stopIndex: number) => void;
   onAddPress: () => void;
+  onStopPress?: (stopIndex: number) => void;
 };
 
 export function DaySection({
@@ -27,6 +28,7 @@ export function DaySection({
   onDeleteStop,
   onMoveStop,
   onAddPress,
+  onStopPress,
 }: Props) {
   const renderItem = ({ item, drag, isActive, getIndex }: RenderItemParams<PlanStop & { id?: string }>) => {
     const index = getIndex() ?? 0;
@@ -35,9 +37,10 @@ export function DaySection({
         <SwipeableStopCard
           stop={item}
           onDelete={() => onDeleteStop(index)}
-          onMovePress={() => onMoveStop(index)}
+          onMovePress={onMoveStop ? () => onMoveStop(index) : undefined}
           drag={drag}
           isActive={isActive}
+          onPress={onStopPress ? () => onStopPress(index) : undefined}
         />
       </ScaleDecorator>
     );

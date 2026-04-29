@@ -10,12 +10,13 @@ import type { PlanStop } from '../../lib/types';
 type Props = {
   stop: PlanStop & { id?: string };
   onDelete: () => void;
-  onMovePress: () => void;
+  onMovePress?: () => void;
   drag: () => void;
   isActive: boolean;
+  onPress?: () => void;
 };
 
-export function SwipeableStopCard({ stop, onDelete, onMovePress, drag, isActive }: Props) {
+export function SwipeableStopCard({ stop, onDelete, onMovePress, drag, isActive, onPress }: Props) {
   const swipeableRef = useRef<Swipeable>(null);
 
   const renderRightActions = (
@@ -60,6 +61,7 @@ export function SwipeableStopCard({ stop, onDelete, onMovePress, drag, isActive 
           onMovePress={onMovePress}
           drag={drag}
           isActive={isActive}
+          onPress={onPress}
         />
       </Swipeable>
     </View>

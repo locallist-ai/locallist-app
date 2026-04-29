@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useEffect, useState } from 'react';
+import { useReducer, useCallback, useEffect, useState, useRef } from 'react';
 import { api } from './api';
 import type { Place, PlanStop, PlanDetailResponse, StopInput } from './types';
 
@@ -34,6 +34,16 @@ function recalcOrderIndices(days: DayGroup[]): DayGroup[] {
     ...day,
     stops: day.stops.map((stop, idx) => ({ ...stop, orderIndex: idx })),
   }));
+}
+
+function padDaysTo(durationDays: number, apiDays: DayGroup[]): DayGroup[] {
+  const total = durationDays ?? 1;
+  const days: DayGroup[] = [];
+  for (let i = 1; i <= total; i++) {
+    const existing = apiDays.find((d) => d.dayNumber === i);
+    days.push(existing ?? { dayNumber: i, stops: [] });
+  }
+  return days;
 }
 
 function reducer(state: State, action: Action): State {
@@ -135,7 +145,13 @@ type NewPlanConfig = {
   durationDays: number;
 };
 
-export function usePlanEditor(planId: string, newPlanConfig?: NewPlanConfig) {
+type UsePlanEditorOpts = {
+  newPlanConfig?: NewPlanConfig;
+  initialData?: PlanDetailResponse;
+};
+
+export function usePlanEditor(planId: string, opts: UsePlanEditorOpts = {}) {
+  const { newPlanConfig, initialData } = opts;
   const isNew = planId === 'new';
 
   const [state, dispatch] = useReducer(reducer, {
@@ -149,8 +165,12 @@ export function usePlanEditor(planId: string, newPlanConfig?: NewPlanConfig) {
   const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize: fetch existing plan or create local empty plan
+  // Tracks which planId has already been initialized to prevent re-init on re-renders.
+  const initializedFor = useRef<string | null>(null);
+
   useEffect(() => {
+    if (planId === '__idle__') return;
+
     if (isNew && newPlanConfig) {
       const totalDays = newPlanConfig.durationDays;
       const days: DayGroup[] = Array.from({ length: totalDays }, (_, i) => ({
@@ -172,6 +192,21 @@ export function usePlanEditor(planId: string, newPlanConfig?: NewPlanConfig) {
       return;
     }
 
+    // Use pre-fetched data from parent to avoid a duplicate network call.
+    if (initialData && initializedFor.current !== planId) {
+      setPlan(initialData);
+      const apiDays = initialData.days.map((d) => ({
+        dayNumber: d.dayNumber,
+        stops: d.stops.slice().sort((a, b) => a.orderIndex - b.orderIndex),
+      }));
+      dispatch({ type: 'INIT', days: padDaysTo(initialData.durationDays ?? 1, apiDays) });
+      initializedFor.current = planId;
+      setLoading(false);
+      return;
+    }
+
+    if (initialData) return; // already initialized for this planId
+
     let cancelled = false;
     (async () => {
       const res = await api<PlanDetailResponse>(`/plans/${planId}`);
@@ -182,22 +217,17 @@ export function usePlanEditor(planId: string, newPlanConfig?: NewPlanConfig) {
           dayNumber: d.dayNumber,
           stops: d.stops.sort((a, b) => a.orderIndex - b.orderIndex),
         }));
-        const totalDays = res.data.durationDays ?? 1;
-        const days: DayGroup[] = [];
-        for (let i = 1; i <= totalDays; i++) {
-          const existing = apiDays.find((d) => d.dayNumber === i);
-          days.push(existing ?? { dayNumber: i, stops: [] });
-        }
-        dispatch({ type: 'INIT', days });
+        dispatch({ type: 'INIT', days: padDaysTo(res.data.durationDays ?? 1, apiDays) });
+        initializedFor.current = planId;
       } else {
         setError(res.error ?? 'Failed to load plan');
       }
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [planId, isNew]);
+  }, [planId, isNew, initialData, newPlanConfig]);
 
-  const save = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+  const save = useCallback(async (): Promise<{ success: boolean; error?: string; planId?: string }> => {
     dispatch({ type: 'SET_SAVING', value: true });
 
     const stops: StopInput[] = state.days.flatMap((day) =>
@@ -246,7 +276,7 @@ export function usePlanEditor(planId: string, newPlanConfig?: NewPlanConfig) {
       }
 
       dispatch({ type: 'MARK_SAVED' });
-      return { success: true };
+      return { success: true, planId: newId };
     }
 
     // Existing plan: update stops
@@ -258,7 +288,7 @@ export function usePlanEditor(planId: string, newPlanConfig?: NewPlanConfig) {
 
     if (res.data) {
       dispatch({ type: 'MARK_SAVED' });
-      return { success: true };
+      return { success: true, planId: targetId };
     } else {
       dispatch({ type: 'SET_SAVING', value: false });
       return { success: false, error: res.error ?? 'Failed to save changes' };
