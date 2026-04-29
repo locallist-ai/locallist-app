@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StopCard } from './StopCard';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, borderRadius, spacing } from '../../lib/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -68,6 +69,7 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
   isPaused = false,
   style,
 }) => {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const translateX = useSharedValue(0);
   const startX = useSharedValue(0);
@@ -187,14 +189,14 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
               onPress={handlePause}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel={isPaused ? 'Resume' : 'Pause'}
+              accessibilityLabel={isPaused ? t('follow.resume') : t('follow.pause')}
             >
               <MaterialCommunityIcons
                 name={isPaused ? 'play' : 'pause'}
                 size={20}
                 color={colors.electricBlue}
               />
-              <Text style={styles.buttonText}>{isPaused ? 'Resume' : 'Pause'}</Text>
+              <Text style={styles.buttonText}>{isPaused ? t('follow.resume') : t('follow.pause')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -202,10 +204,10 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
               onPress={handleSkip}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Skip"
+              accessibilityLabel={t('follow.skip')}
             >
               <MaterialCommunityIcons name="skip-forward" size={20} color={colors.sunsetOrange} />
-              <Text style={styles.buttonText}>Skip</Text>
+              <Text style={styles.buttonText}>{t('follow.skip')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

@@ -188,8 +188,8 @@ export default function FollowModeScreen() {
     if (session) {
       await api(`/follow/${session.id}/complete`, { method: 'PATCH' });
     }
-    Alert.alert('Trip Complete!', 'You finished the plan. Enjoy your trip!', [
-      { text: 'Done', onPress: () => router.back() },
+    Alert.alert(t('follow.tripCompleteTitle'), t('follow.tripCompleteBody'), [
+      { text: t('follow.done'), onPress: () => router.back() },
     ]);
   };
 
@@ -229,7 +229,7 @@ export default function FollowModeScreen() {
       await reloadStops();
       return true;
     }
-    Alert.alert('Update failed', res.error ?? 'Could not save the change.');
+    Alert.alert(t('follow.updateFailedTitle'), res.error ?? t('follow.updateFailedBody'));
     return false;
   };
 
@@ -304,7 +304,7 @@ export default function FollowModeScreen() {
     return (
       <View style={s.center}>
         <ActivityIndicator size="large" color={colors.electricBlue} />
-        <Text style={s.loadingText}>Starting Follow Mode...</Text>
+        <Text style={s.loadingText}>{t('follow.loading')}</Text>
       </View>
     );
   }
@@ -313,9 +313,9 @@ export default function FollowModeScreen() {
     return (
       <View style={s.center}>
         <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
-        <Text style={s.errorText}>{error ?? 'No stops in this plan'}</Text>
+        <Text style={s.errorText}>{error ?? t('follow.noStops')}</Text>
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-          <Text style={s.backBtnText}>Go back</Text>
+          <Text style={s.backBtnText}>{t('plan.goBack')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -357,7 +357,7 @@ export default function FollowModeScreen() {
             style={s.closeButton}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Close Follow Mode"
+            accessibilityLabel={t('follow.closeMode')}
           >
             <Ionicons name="close" size={24} color={colors.deepOcean} />
           </TouchableOpacity>
@@ -406,9 +406,9 @@ export default function FollowModeScreen() {
         visible={!!stopToDelete}
         icon="trash-outline"
         iconColor={colors.error}
-        title="Delete this stop?"
-        body={`This removes "${stopToDelete?.place?.name ?? 'this stop'}" from your plan permanently.`}
-        confirmLabel={savingEdit ? 'Deleting…' : 'Delete'}
+        title={t('follow.deleteStopTitle')}
+        body={t('follow.deleteStopBody', { name: stopToDelete?.place?.name ?? '' })}
+        confirmLabel={savingEdit ? t('plan.deleting') : t('common.delete')}
         confirmDestructive
         onCancel={() => setStopToDelete(null)}
         onConfirm={confirmDeleteStop}

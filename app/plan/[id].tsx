@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
@@ -50,6 +51,7 @@ function groupStopsByDay(stops: PlanStop[], durationDays: number) {
 }
 
 export default function PlanDetailScreen() {
+  const { t } = useTranslation();
   const { id, planName, planCity, planDays } = useLocalSearchParams<{
     id: string;
     planName?: string;
@@ -244,7 +246,7 @@ export default function PlanDetailScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } else {
-      Alert.alert('Delete failed', res.error ?? 'Could not delete this plan. Please try again.');
+      Alert.alert(t('plan.deleteFailedTitle'), res.error ?? t('plan.deleteFailedBody'));
     }
   };
 
@@ -260,9 +262,9 @@ export default function PlanDetailScreen() {
     return (
       <View style={s.center}>
         <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
-        <Text style={s.errorText}>{error ?? 'Plan not found'}</Text>
+        <Text style={s.errorText}>{error ?? t('plan.notFound')}</Text>
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()} accessibilityRole="button">
-          <Text style={s.backBtnText}>Go back</Text>
+          <Text style={s.backBtnText}>{t('plan.goBack')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -296,10 +298,10 @@ export default function PlanDetailScreen() {
         visible={discardVisible}
         icon="warning-outline"
         iconColor={colors.sunsetOrange}
-        title="Unsaved Changes"
-        body="You have unsaved changes. Are you sure you want to leave without saving?"
-        cancelLabel="Keep Editing"
-        confirmLabel="Discard"
+        title={t('plan.unsavedChangesTitle')}
+        body={t('plan.unsavedChangesBody')}
+        cancelLabel={t('plan.keepEditing')}
+        confirmLabel={t('plan.discard')}
         confirmDestructive
         onCancel={() => {
           setDiscardVisible(false);
@@ -317,9 +319,9 @@ export default function PlanDetailScreen() {
         visible={!!saveError}
         icon="alert-circle-outline"
         iconColor={colors.error}
-        title="Save Failed"
+        title={t('plan.saveFailedTitle')}
         body={saveError ?? ''}
-        confirmLabel="OK"
+        confirmLabel={t('common.ok')}
         onCancel={() => setSaveError(null)}
         onConfirm={() => setSaveError(null)}
       />
@@ -329,9 +331,9 @@ export default function PlanDetailScreen() {
         visible={deleteVisible}
         icon="trash-outline"
         iconColor={colors.error}
-        title="Delete this plan?"
-        body="This will permanently remove the plan, its stops, and any follow sessions tied to it. This action cannot be undone."
-        confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+        title={t('plan.deleteThisTitle')}
+        body={t('plan.deleteThisBody')}
+        confirmLabel={deleting ? t('plan.deleting') : t('common.delete')}
         confirmDestructive
         onCancel={() => {
           if (!deleting) setDeleteVisible(false);

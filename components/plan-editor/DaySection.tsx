@@ -7,6 +7,7 @@ import DraggableFlatList, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { SwipeableStopCard } from './SwipeableStopCard';
 import type { PlanStop } from '../../lib/types';
@@ -30,6 +31,7 @@ export function DaySection({
   onAddPress,
   onStopPress,
 }: Props) {
+  const { t } = useTranslation();
   const renderItem = ({ item, drag, isActive, getIndex }: RenderItemParams<PlanStop & { id?: string }>) => {
     const index = getIndex() ?? 0;
     return (
@@ -88,7 +90,7 @@ export function DaySection({
         accessibilityRole="button"
       >
         <Ionicons name="add-circle-outline" size={18} color={colors.sunsetOrange} />
-        <Text style={s.addText}>Add a stop</Text>
+        <Text style={s.addText}>{t('plan.addStop')}</Text>
       </TouchableOpacity>
     </View>
   );

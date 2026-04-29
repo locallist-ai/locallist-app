@@ -13,6 +13,7 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import type { Place } from '../../lib/types';
@@ -36,6 +37,7 @@ type Props = {
 };
 
 export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [results, setResults] = useState<Place[]>([]);
@@ -200,7 +202,7 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
         ) : results.length === 0 && searched ? (
           <View style={s.center}>
             <Ionicons name="search-outline" size={40} color={colors.textSecondary} />
-            <Text style={s.emptyText}>No places found</Text>
+            <Text style={s.emptyText}>{t('plan.noPlacesFound')}</Text>
           </View>
         ) : (
           <FlatList

@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../lib/theme';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -26,16 +27,16 @@ type AuthStep = 'choose' | 'credentials';
 type CredentialsMode = 'login' | 'register';
 type AuthMode = 'signin' | 'signup';
 
-// Password requirements
-const PASSWORD_RULES = [
-  { text: 'At least 8 characters', check: (p: string) => p.length >= 8 },
-  { text: 'Uppercase letter (A-Z)', check: (p: string) => /[A-Z]/.test(p) },
-  { text: 'Lowercase letter (a-z)', check: (p: string) => /[a-z]/.test(p) },
-  { text: 'Number (0-9)', check: (p: string) => /[0-9]/.test(p) },
-  { text: 'Special character (!@#$%)', check: (p: string) => /[^A-Za-z0-9]/.test(p) },
+const PASSWORD_CHECKS: Array<{ key: 'auth.passwordRuleLength' | 'auth.passwordRuleUpper' | 'auth.passwordRuleLower' | 'auth.passwordRuleDigit' | 'auth.passwordRuleSpecial'; check: (p: string) => boolean }> = [
+  { key: 'auth.passwordRuleLength', check: (p: string) => p.length >= 8 },
+  { key: 'auth.passwordRuleUpper', check: (p: string) => /[A-Z]/.test(p) },
+  { key: 'auth.passwordRuleLower', check: (p: string) => /[a-z]/.test(p) },
+  { key: 'auth.passwordRuleDigit', check: (p: string) => /[0-9]/.test(p) },
+  { key: 'auth.passwordRuleSpecial', check: (p: string) => /[^A-Za-z0-9]/.test(p) },
 ];
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const { login } = useAuth();
   const [step, setStep] = useState<AuthStep>('choose');
   const [authMode, setAuthMode] = useState<AuthMode>('signin');
@@ -236,7 +237,7 @@ export default function LoginScreen() {
 
   // Calculate password strength (for register mode only)
   const passwordStrength = credentialsMode === 'register'
-    ? PASSWORD_RULES.filter(r => r.check(password)).length
+    ? PASSWORD_CHECKS.filter(r => r.check(password)).length
     : 0;
 
   // ─── Main login screen ────────────────────────────
@@ -469,7 +470,7 @@ export default function LoginScreen() {
                 paddingHorizontal: spacing.md,
                 paddingVertical: 14,
               }}
-              placeholder="your@email.com"
+              placeholder={t('auth.emailPlaceholder')}
               placeholderTextColor={colors.textSecondary}
               value={email}
               onChangeText={setEmail}
@@ -493,7 +494,7 @@ export default function LoginScreen() {
                 paddingHorizontal: spacing.md,
                 paddingVertical: 14,
               }}
-              placeholder="Password"
+              placeholder={t('auth.passwordPlaceholder')}
               placeholderTextColor={colors.textSecondary}
               value={password}
               onChangeText={setPassword}
@@ -517,7 +518,7 @@ export default function LoginScreen() {
                   paddingHorizontal: spacing.md,
                   paddingVertical: 14,
                 }}
-                placeholder="Your name (optional)"
+                placeholder={t('auth.namePlaceholder')}
                 placeholderTextColor={colors.textSecondary}
                 value={name}
                 onChangeText={setName}
@@ -529,7 +530,7 @@ export default function LoginScreen() {
             {/* Password Requirements (register only) */}
             {credentialsMode === 'register' && password && (
               <View style={{ backgroundColor: colors.bgCard, borderRadius: borderRadius.md, padding: spacing.md, gap: spacing.sm }}>
-                {PASSWORD_RULES.map((rule, idx) => {
+                {PASSWORD_CHECKS.map((rule, idx) => {
                   const isMet = rule.check(password);
                   return (
                     <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
@@ -545,7 +546,7 @@ export default function LoginScreen() {
                           color: isMet ? colors.textMain : colors.textSecondary,
                         }}
                       >
-                        {rule.text}
+                        {t(rule.key)}
                       </Text>
                     </View>
                   );

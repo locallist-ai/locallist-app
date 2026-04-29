@@ -8,6 +8,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 
 type Props = {
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export function MoveToDay({ visible, currentDay, totalDays, onSelect, onClose }: Props) {
+  const { t } = useTranslation();
   const days = Array.from({ length: totalDays }, (_, i) => i + 1).filter(
     (d) => d !== currentDay,
   );
@@ -30,7 +32,7 @@ export function MoveToDay({ visible, currentDay, totalDays, onSelect, onClose }:
           <TouchableWithoutFeedback>
             <View style={s.sheet}>
               <View style={s.header}>
-                <Text style={s.title}>Move to Day</Text>
+                <Text style={s.title}>{t('plan.moveToDay')}</Text>
                 <TouchableOpacity onPress={onClose} accessibilityRole="button">
                   <Ionicons name="close" size={22} color={colors.textSecondary} />
                 </TouchableOpacity>

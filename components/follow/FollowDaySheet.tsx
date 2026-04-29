@@ -18,6 +18,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import type { PlanStop } from '../../lib/types';
@@ -73,6 +74,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
   onComplete,
   canEdit = false,
 }) => {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const currentStop = allStops[currentIndex];
   const currentDay = currentStop?.dayNumber ?? 1;
@@ -304,7 +306,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
 
         {dayItems.length === 0 && (
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>No stops in this day yet.</Text>
+            <Text style={styles.emptyText}>{t('follow.noStopsToday')}</Text>
           </View>
         )}
       </ScrollView>
@@ -319,7 +321,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
           accessibilityRole="button"
         >
           <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-          <Text style={styles.footerBtnPrimaryText}>Complete day</Text>
+          <Text style={styles.footerBtnPrimaryText}>{t('follow.completeDay')}</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>

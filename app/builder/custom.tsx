@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +24,7 @@ import type { CityDto } from '../../lib/types';
 const DURATION_OPTIONS = [1, 2, 3] as const;
 
 export default function CustomBuilderScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const [name, setName] = useState('');
@@ -175,10 +177,8 @@ export default function CustomBuilderScreen() {
           <View style={s.titleIcon}>
             <MaterialCommunityIcons name="map-marker-outline" size={28} color={colors.sunsetOrange} />
           </View>
-          <Text style={s.title}>Build Your Plan</Text>
-          <Text style={s.subtitle}>
-            Name it, pick a city, and start adding your favorite places.
-          </Text>
+          <Text style={s.title}>{t('builder.title')}</Text>
+          <Text style={s.subtitle}>{t('builder.subtitle')}</Text>
         </Animated.View>
 
         {/* Form card */}
@@ -186,7 +186,7 @@ export default function CustomBuilderScreen() {
           <View style={s.formCard}>
             {/* Plan name */}
             <View style={s.field}>
-              <Text style={s.label}>Plan name</Text>
+              <Text style={s.label}>{t('builder.planNameLabel')}</Text>
               <TextInput
                 ref={nameInputRef}
                 style={[s.input, !!nameError && s.inputError]}
@@ -200,14 +200,14 @@ export default function CustomBuilderScreen() {
 
             {/* City */}
             <View style={s.field}>
-              <Text style={s.label}>City</Text>
+              <Text style={s.label}>{t('builder.cityLabel')}</Text>
               <View style={[s.inputWithIcon, !!(cityError || cityUnconfirmedError) && s.inputWithIconError]}>
                 <View style={s.inputIconBubble}>
                   <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.sunsetOrange} />
                 </View>
                 <TextInput
                   style={s.inputInner}
-                  placeholder="e.g. Miami"
+                  placeholder={t('builder.cityPlaceholder')}
                   placeholderTextColor={colors.textSecondary + '80'}
                   value={city}
                   onChangeText={(t) => {
@@ -254,7 +254,7 @@ export default function CustomBuilderScreen() {
                         <Ionicons name="add-circle-outline" size={18} color={colors.sunsetOrange} />
                       )}
                       <Text style={s.suggestionAddText} numberOfLines={1}>
-                        {`Add "${trimmedCity}" as a new city`}
+                        {t('builder.addCustomCity', { city: trimmedCity })}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -268,15 +268,13 @@ export default function CustomBuilderScreen() {
               ) : cityAddError ? (
                 <Text style={s.fieldError}>{cityAddError}</Text>
               ) : (
-                <Text style={s.fieldHint}>
-                  {"If your city isn't in our catalog yet, we'll add it as a new location."}
-                </Text>
+                <Text style={s.fieldHint}>{t('builder.cityHint')}</Text>
               )}
             </View>
 
             {/* Duration */}
             <View style={s.field}>
-              <Text style={s.label}>Duration</Text>
+              <Text style={s.label}>{t('builder.durationLabel')}</Text>
               <View style={s.durationRow}>
                 {DURATION_OPTIONS.map((d) => (
                   <TouchableOpacity
@@ -289,7 +287,7 @@ export default function CustomBuilderScreen() {
                     activeOpacity={0.7}
                   >
                     <Text style={[s.durationText, days === d && s.durationTextActive]}>
-                      {d} {d === 1 ? 'day' : 'days'}
+                      {t('builder.day', { count: d })}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -313,7 +311,7 @@ export default function CustomBuilderScreen() {
               style={s.createBtn}
             >
               <Ionicons name="sparkles" size={20} color="#FFFFFF" />
-              <Text style={s.createBtnText}>Start Building</Text>
+              <Text style={s.createBtnText}>{t('builder.startBuilding')}</Text>
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>

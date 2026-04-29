@@ -1,4 +1,5 @@
 import '../lib/i18n';
+import i18n from '../lib/i18n';
 import { initSentry, Sentry } from '../lib/sentry';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Animated as RNAnimated, Platform, TouchableOpacity } from 'react-native';
@@ -226,10 +227,10 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
   return (
     <View style={errorStyles.container}>
       <Text style={errorStyles.emoji}>😵</Text>
-      <Text style={errorStyles.title}>Something went wrong</Text>
-      <Text style={errorStyles.message}>An unexpected error occurred. Please try again.</Text>
-      <TouchableOpacity style={errorStyles.button} onPress={retry} accessibilityRole="button" accessibilityLabel="Try Again">
-        <Text style={errorStyles.buttonText}>Try Again</Text>
+      <Text style={errorStyles.title}>{i18n.t('common.somethingWentWrong')}</Text>
+      <Text style={errorStyles.message}>{i18n.t('common.unexpectedError')}</Text>
+      <TouchableOpacity style={errorStyles.button} onPress={retry} accessibilityRole="button" accessibilityLabel={i18n.t('common.tryAgain')}>
+        <Text style={errorStyles.buttonText}>{i18n.t('common.tryAgain')}</Text>
       </TouchableOpacity>
     </View>
   );

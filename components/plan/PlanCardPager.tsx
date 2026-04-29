@@ -27,6 +27,7 @@ import { PhotoHero, type Category } from '../ui/PhotoHero';
 import { PhotoMosaic } from '../ui/PhotoMosaic';
 import { CategoryBadge } from '../ui/CategoryBadge';
 import { ProgressDots } from '../ui/design-system';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import { DaySection } from '../plan-editor/DaySection';
@@ -339,8 +340,9 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
   allDays,
   onDayChange,
 }) => {
+  const { t } = useTranslation();
   const heroFallback = (plan.category ?? plan.type ?? 'Culture') as Category;
-  const heroSubtitle = `${plan.city} · ${plan.durationDays} ${plan.durationDays === 1 ? 'day' : 'days'}`;
+  const heroSubtitle = `${plan.city} · ${t('builder.day', { count: plan.durationDays })}`;
 
   const stopsForCurrentDay = useMemo(
     () =>
@@ -399,7 +401,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
           <View style={styles.messageCard}>
             <View style={styles.messageHeader}>
               <Ionicons name="sparkles" size={16} color={colors.sunsetOrange} />
-              <Text style={styles.messageLabel}>AI Curator</Text>
+              <Text style={styles.messageLabel}>{t('plan.aiCurator')}</Text>
             </View>
             <Text style={styles.messageText}>{message}</Text>
           </View>
@@ -409,7 +411,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
             <Ionicons name="list-outline" size={16} color={colors.sunsetOrange} />
-            <Text style={styles.summaryLabel}>{"What's inside"}</Text>
+            <Text style={styles.summaryLabel}>{t('plan.whatsInside')}</Text>
           </View>
 
           {isOwner ? (
@@ -420,10 +422,8 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
                   <View style={styles.editorEmptyIcon}>
                     <Ionicons name="compass-outline" size={32} color={colors.sunsetOrange} />
                   </View>
-                  <Text style={styles.editorEmptyTitle}>No stops yet</Text>
-                  <Text style={styles.editorEmptyBody}>
-                    {'Tap "+ Add a stop" on any day to start building your itinerary.'}
-                  </Text>
+                  <Text style={styles.editorEmptyTitle}>{t('plan.noStopsYet')}</Text>
+                  <Text style={styles.editorEmptyBody}>{t('plan.noStopsYetHint')}</Text>
                 </Animated.View>
               )}
               <View style={styles.editorDays}>
@@ -519,14 +519,14 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
               onPress={onEditorSave}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel={isNew ? 'Create plan' : 'Save changes'}
+              accessibilityLabel={isNew ? t('plan.createPlan') : t('plan.saveChanges')}
             >
               {editorIsSaving ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
                   <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.saveBtnText}>{isNew ? 'Create plan' : 'Save changes'}</Text>
+                  <Text style={styles.saveBtnText}>{isNew ? t('plan.createPlan') : t('plan.saveChanges')}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -540,7 +540,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
                 accessibilityLabel="Delete this plan"
               >
                 <Ionicons name="trash-outline" size={16} color={colors.error} />
-                <Text style={styles.deleteBtnText}>Delete</Text>
+                <Text style={styles.deleteBtnText}>{t('common.delete')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -549,7 +549,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
         {editorIsDirty && (
           <View style={styles.dirtyBadge}>
             <Ionicons name="alert-circle" size={14} color={colors.sunsetOrange} />
-            <Text style={styles.dirtyBadgeText}>Unsaved changes</Text>
+            <Text style={styles.dirtyBadgeText}>{t('plan.unsavedChanges')}</Text>
           </View>
         )}
 
@@ -590,6 +590,7 @@ interface StopSlotProps {
 }
 
 const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) => {
+  const { t } = useTranslation();
   const [photoIdx, setPhotoIdx] = useState(0);
   const place = stop.place;
   const photos = place?.photos ?? [];
@@ -661,7 +662,7 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) =>
           )}
         </View>
 
-        <Text style={styles.stopName}>{place?.name ?? 'Unknown place'}</Text>
+        <Text style={styles.stopName}>{place?.name ?? t('plan.unknownPlace')}</Text>
 
         {chipTokens.length > 0 && (
           <View style={styles.chipsRow}>
@@ -714,7 +715,7 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) =>
 
         {why.length > 0 && (
           <View style={styles.whyBlock}>
-            <Text style={styles.sectionLabel}>Why this place</Text>
+            <Text style={styles.sectionLabel}>{t('place.whyThisPlace')}</Text>
             <Text style={styles.whyText}>{why}</Text>
           </View>
         )}

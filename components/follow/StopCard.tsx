@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { PhotoHero, type Category } from '../ui/PhotoHero';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 
@@ -52,6 +53,7 @@ const formatDuration = (minutes?: number): string => {
 };
 
 export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
+  const { t } = useTranslation();
   const photoUrl = stop.photos?.[0]?.url;
   const categoryColor = CATEGORY_COLOR[stop.category ?? 'Culture'] ?? '#0f172a';
 
@@ -147,7 +149,7 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
 
         {why.length > 0 && (
           <View style={styles.whyBlock}>
-            <Text style={styles.sectionLabel}>Why this place</Text>
+            <Text style={styles.sectionLabel}>{t('place.whyThisPlace')}</Text>
             <Text style={styles.description}>{why}</Text>
           </View>
         )}

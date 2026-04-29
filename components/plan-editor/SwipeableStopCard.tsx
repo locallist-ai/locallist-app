@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Animated as RNAnimated } from 'react-native';
 import { Swipeable, RectButton } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { EditableStopCard } from './EditableStopCard';
 import type { PlanStop } from '../../lib/types';
@@ -17,6 +18,7 @@ type Props = {
 };
 
 export function SwipeableStopCard({ stop, onDelete, onMovePress, drag, isActive, onPress }: Props) {
+  const { t } = useTranslation();
   const swipeableRef = useRef<Swipeable>(null);
 
   const renderRightActions = (
@@ -40,7 +42,7 @@ export function SwipeableStopCard({ stop, onDelete, onMovePress, drag, isActive,
       >
         <RNAnimated.View style={[s.deleteContent, { transform: [{ scale }] }]}>
           <Ionicons name="trash-outline" size={22} color="#FFFFFF" />
-          <Text style={s.deleteText}>Delete</Text>
+          <Text style={s.deleteText}>{t('common.delete')}</Text>
         </RNAnimated.View>
       </RectButton>
     );

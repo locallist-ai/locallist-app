@@ -526,7 +526,7 @@ export default function PlansScreen() {
           <Ionicons name="cloud-offline-outline" size={48} color={colors.textSecondary} />
           <Text style={s.errorText}>{error}</Text>
           <TouchableOpacity style={s.retryBtn} onPress={onRefresh}>
-            <Text style={s.retryText}>Try again</Text>
+            <Text style={s.retryText}>{t('common.tryAgain')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
