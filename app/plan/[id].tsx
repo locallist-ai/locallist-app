@@ -15,12 +15,12 @@ import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { getPreviewPlan } from '../../lib/plan-store';
+import { getPreviewPlan } from '../../lib/plan/plan-store';
 import { PlanCardPager } from '../../components/plan/PlanCardPager';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
-import { usePlanEditor } from '../../lib/use-plan-editor';
+import { usePlanEditor } from '../../lib/plan/use-plan-editor';
 import type { Plan, PlanStop, PlanDetailResponse } from '../../lib/types';
-import type { DayGroup } from '../../lib/use-plan-editor';
+import type { DayGroup } from '../../lib/plan/use-plan-editor';
 
 function flattenStopsFromDays(days: DayGroup[]): PlanStop[] {
   return days

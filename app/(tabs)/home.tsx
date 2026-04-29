@@ -1,12 +1,12 @@
 import React from 'react';
 import { View } from 'react-native';
-import { HomeV2 } from '../../components/home/HomeV2';
+import { HomeScreen } from '../../components/home/HomeScreen';
 import { colors } from '../../lib/theme';
 
-export default function HomeScreen() {
+export default function HomeTab() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bgMain }}>
-      <HomeV2 />
+      <HomeScreen />
     </View>
   );
 }

@@ -1,4 +1,4 @@
-import type { BuilderResponse } from './types';
+import type { BuilderResponse } from '../types';
 
 let _preview: BuilderResponse | null = null;
 

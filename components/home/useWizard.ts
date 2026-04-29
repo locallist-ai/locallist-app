@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ImpactFeedbackStyle } from 'expo-haptics';
 import { api } from '../../lib/api';
 import { logger } from '../../lib/logger';
-import { setPreviewPlan } from '../../lib/plan-store';
+import { setPreviewPlan } from '../../lib/plan/plan-store';
 import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX, tierFromBudgetAmount } from './constants';
 import type { BuilderResponse } from '../../lib/types';
 

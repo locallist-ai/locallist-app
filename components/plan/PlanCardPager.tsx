@@ -34,7 +34,7 @@ import { DaySection } from '../plan-editor/DaySection';
 import { MoveToDay } from '../plan-editor/MoveToDay';
 import { PlaceSearchModal } from '../plan-editor/PlaceSearchModal';
 import type { Plan, PlanStop } from '../../lib/types';
-import type { DayGroup } from '../../lib/use-plan-editor';
+import type { DayGroup } from '../../lib/plan/use-plan-editor';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

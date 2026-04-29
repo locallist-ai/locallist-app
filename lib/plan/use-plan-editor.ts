@@ -1,6 +1,6 @@
 import { useReducer, useCallback, useEffect, useState, useRef } from 'react';
-import { api } from './api';
-import type { Place, PlanStop, PlanDetailResponse, StopInput } from './types';
+import { api } from '../api';
+import type { Place, PlanStop, PlanDetailResponse, StopInput } from '../types';
 
 export type DayGroup = {
   dayNumber: number;

@@ -29,7 +29,7 @@ import { HeroSkiaBg } from './HeroSkiaBg';
 
 // ── Component ──
 
-export const HomeV2: React.FC = () => {
+export const HomeScreen: React.FC = () => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
