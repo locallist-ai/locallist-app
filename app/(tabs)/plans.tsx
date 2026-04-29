@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
+  Image,
   FlatList,
   StyleSheet,
   TouchableOpacity,
@@ -10,7 +11,6 @@ import {
   useWindowDimensions,
   Alert,
 } from 'react-native';
-import { VideoView, useVideoPlayer } from 'expo-video';
 import { router, useNavigation, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -24,6 +24,7 @@ import { runBulkWithConcurrency } from '../../lib/bulk-ops';
 import { useAuth } from '../../lib/auth';
 import { getCached, setCache, isFresh } from '../../lib/api-cache';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
+import { HeroSkiaBg } from '../../components/home/HeroSkiaBg';
 import { SkeletonCard } from '../../components/ui/SkeletonCard';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { EditorialTitle, StepSubtitle } from '../../components/ui/design-system';
@@ -56,27 +57,6 @@ function sortPlans(list: Plan[]): Plan[] {
 
 type PlansMode = 'chooser' | 'curated' | 'mine';
 
-const HERO_VIDEO_SOURCE = require('../../assets/video/hero-loop.mp4');
-
-const PlansHeroBg: React.FC = () => {
-  const player = useVideoPlayer(HERO_VIDEO_SOURCE, (p) => {
-    p.loop = true;
-    p.muted = true;
-    p.play();
-  });
-  return (
-    <>
-      <VideoView
-        player={player}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        nativeControls={false}
-        pointerEvents="none"
-      />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.45)' }]} pointerEvents="none" />
-    </>
-  );
-};
 
 export default function PlansScreen() {
   const { t } = useTranslation();
@@ -286,7 +266,13 @@ export default function PlansScreen() {
     ];
     return (
       <View style={s.root}>
-        <PlansHeroBg />
+        <Image
+          source={require('../../assets/images/hero-bg.jpg')}
+          style={[s.heroBgImage, { width: screenWidth + 200, height: screenHeight + 300 }]}
+          resizeMode="cover"
+        />
+        <HeroSkiaBg />
+        <View style={s.heroBgOverlay} />
         <ScrollView
           contentContainerStyle={[s.chooserContainer, { paddingTop: insets.top + spacing.lg }]}
           showsVerticalScrollIndicator={false}
@@ -341,7 +327,13 @@ export default function PlansScreen() {
     };
     return (
       <View style={s.root}>
-        <PlansHeroBg />
+        <Image
+          source={require('../../assets/images/hero-bg.jpg')}
+          style={[s.heroBgImage, { width: screenWidth + 200, height: screenHeight + 300 }]}
+          resizeMode="cover"
+        />
+        <HeroSkiaBg />
+        <View style={s.heroBgOverlay} />
         <TouchableOpacity
           onPress={() => (selectionMode ? exitSelection() : setMode('chooser'))}
           style={[s.floatingClose, { top: insets.top + spacing.xs }]}
@@ -476,7 +468,13 @@ export default function PlansScreen() {
 
   return (
     <View style={s.root}>
-      <PlansHeroBg />
+      <Image
+        source={require('../../assets/images/hero-bg.jpg')}
+        style={[s.heroBgImage, { width: screenWidth + 200, height: screenHeight + 300 }]}
+        resizeMode="cover"
+      />
+      <HeroSkiaBg />
+      <View style={s.heroBgOverlay} />
       <TouchableOpacity
         onPress={() => setMode('chooser')}
         style={[s.floatingClose, { top: insets.top + spacing.xs }]}
@@ -621,6 +619,15 @@ export default function PlansScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bgMain },
+  heroBgImage: {
+    position: 'absolute',
+    top: -100,
+    left: -100,
+  },
+  heroBgOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
 
   // Chooser cards — lenguaje wizard (ChoiceChip-like)
   chooserContainer: {
