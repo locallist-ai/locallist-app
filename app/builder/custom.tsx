@@ -8,17 +8,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { api } from '../../lib/api';
-import type { CityDto } from '../../lib/types';
 
 const DURATION_OPTIONS = [1, 2, 3] as const;
 
@@ -26,28 +23,10 @@ export default function CustomBuilderScreen() {
   const insets = useSafeAreaInsets();
 
   const [name, setName] = useState('');
-  const [city, setCity] = useState('Miami');
+  const city = 'Miami'; // única ciudad con places por ahora; expandir a picker cuando haya más
   const [days, setDays] = useState(2);
 
-  // Autocomplete state — Pablo 2026-04-27. Suggestions vivos al teclear; si
-  // no hay match exacto, mostramos opción "Add 'X' as a new city" que dispara
-  // POST /cities y queda registrada en la DB.
-  const [suggestions, setSuggestions] = useState<CityDto[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const [creatingCity, setCreatingCity] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastQueryRef = useRef<string>('');
-  // Audit follow-up D2 (2026-04-27): guard contra setState tras unmount —
-  // cold-start search puede tardar ~1s; navegar fuera durante typing causaba
-  // updates en componente desmontado.
-  const isMountedRef = useRef(true);
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
+  const [nameTouched, setNameTouched] = useState(false);
 
   const nameInputRef = useRef<TextInput>(null);
   useEffect(() => {
@@ -55,88 +34,8 @@ export default function CustomBuilderScreen() {
     return () => clearTimeout(t);
   }, []);
 
-  // Debounced search en cada cambio de city. 250ms parece un punto dulce
-  // entre responsivo y no spamear el backend.
-  useEffect(() => {
-    const trimmed = city.trim();
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (trimmed.length < 2) {
-      setSuggestions([]);
-      setSearching(false);
-      return;
-    }
-    debounceRef.current = setTimeout(async () => {
-      lastQueryRef.current = trimmed;
-      if (!isMountedRef.current) return;
-      setSearching(true);
-      const res = await api<{ cities: CityDto[] }>(
-        `/cities/search?q=${encodeURIComponent(trimmed)}`,
-      );
-      // Si el query cambió mientras llegaba la respuesta, o el componente se
-      // desmontó, ignora — no setState fuera de cycle.
-      if (!isMountedRef.current) return;
-      if (lastQueryRef.current !== trimmed) return;
-      setSearching(false);
-      if (res.data) setSuggestions(res.data.cities ?? []);
-      else setSuggestions([]);
-    }, 250);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [city]);
-
-  const trimmedCity = city.trim();
-  const hasExactMatch = suggestions.some(
-    (c) => c.name.toLowerCase() === trimmedCity.toLowerCase(),
-  );
-  const showAddOption =
-    showSuggestions
-    && trimmedCity.length >= 2
-    && !hasExactMatch
-    && !searching;
-
-  const handleSelectSuggestion = (c: CityDto) => {
-    setCity(c.name);
-    setShowSuggestions(false);
-    Haptics.selectionAsync();
-  };
-
-  const handleAddCustomCity = async () => {
-    if (creatingCity) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCreatingCity(true);
-    const res = await api<CityDto>('/cities', {
-      method: 'POST',
-      body: { name: trimmedCity },
-    });
-    if (!isMountedRef.current) return;
-    setCreatingCity(false);
-    if (res.data) {
-      setCity(res.data.name);
-      setShowSuggestions(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-  };
-
-  // Validación de city name. Pablo 2026-04-27: si la ciudad no está en
-  // nuestro catálogo, se crea como nueva location. Reglas:
-  //   - 2 a 60 caracteres.
-  //   - Letras (incluye acentos), espacios, hyphens, apóstrofes, puntos.
-  //   - No solo dígitos ni símbolos.
-  // \p{L} = unicode letter (e.g. á, ñ, ü, etc.).
-  const cityValidation = (() => {
-    const trimmed = city.trim();
-    if (trimmed.length === 0) return { ok: false, error: null }; // vacío = no error visible aún
-    if (trimmed.length < 2) return { ok: false, error: 'City name must be at least 2 characters' };
-    if (trimmed.length > 60) return { ok: false, error: 'City name is too long (max 60)' };
-    if (!/^[\p{L}][\p{L}\s'\-.]*$/u.test(trimmed)) {
-      return { ok: false, error: 'City name has invalid characters. Use letters, spaces, hyphens or apostrophes.' };
-    }
-    return { ok: true, error: null };
-  })();
-
-  const cityError = cityValidation.error;
-  const canCreate = name.trim().length > 0 && cityValidation.ok;
+  const nameError = nameTouched && name.trim().length === 0 ? 'Plan name is required' : null;
+  const canCreate = name.trim().length > 0;
 
   const handleCreate = () => {
     if (!canCreate) return;
@@ -178,7 +77,7 @@ export default function CustomBuilderScreen() {
         {/* Title */}
         <Animated.View entering={FadeInDown.duration(320)} style={s.titleSection}>
           <View style={s.titleIcon}>
-            <Ionicons name="map-outline" size={28} color={colors.sunsetOrange} />
+            <MaterialCommunityIcons name="map-marker-outline" size={28} color={colors.sunsetOrange} />
           </View>
           <Text style={s.title}>Build Your Plan</Text>
           <Text style={s.subtitle}>
@@ -194,79 +93,24 @@ export default function CustomBuilderScreen() {
               <Text style={s.label}>Plan name</Text>
               <TextInput
                 ref={nameInputRef}
-                style={s.input}
+                style={[s.input, !!nameError && s.inputError]}
                 value={name}
                 onChangeText={setName}
+                onBlur={() => setNameTouched(true)}
                 maxLength={100}
               />
+              {!!nameError && <Text style={s.fieldError}>{nameError}</Text>}
             </View>
 
-            {/* City */}
+            {/* City — locked to Miami until multi-city support lands */}
             <View style={s.field}>
               <Text style={s.label}>City</Text>
-              <View style={[s.inputWithIcon, !!cityError && s.inputWithIconError]}>
-                <Ionicons name="location-outline" size={18} color={colors.sunsetOrange} style={s.inputIcon} />
-                <TextInput
-                  style={s.inputInner}
-                  placeholder="e.g. Miami"
-                  placeholderTextColor={colors.textSecondary + '80'}
-                  value={city}
-                  onChangeText={(t) => {
-                    setCity(t);
-                    setShowSuggestions(true);
-                  }}
-                  onFocus={() => setShowSuggestions(true)}
-                  maxLength={60}
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                />
-                {searching && (
-                  <ActivityIndicator size="small" color={colors.sunsetOrange} style={{ marginRight: spacing.md }} />
-                )}
-              </View>
-
-              {/* Autocomplete dropdown */}
-              {showSuggestions && (suggestions.length > 0 || showAddOption) && (
-                <View style={s.suggestionsList}>
-                  {suggestions.map((c) => (
-                    <TouchableOpacity
-                      key={c.id}
-                      onPress={() => handleSelectSuggestion(c)}
-                      activeOpacity={0.7}
-                      style={s.suggestionRow}
-                    >
-                      <Ionicons name="location-outline" size={16} color={colors.sunsetOrange} />
-                      <Text style={s.suggestionText}>{c.name}</Text>
-                      {c.country && <Text style={s.suggestionMeta}>· {c.country}</Text>}
-                    </TouchableOpacity>
-                  ))}
-                  {showAddOption && (
-                    <TouchableOpacity
-                      onPress={handleAddCustomCity}
-                      activeOpacity={0.85}
-                      style={[s.suggestionRow, s.suggestionRowAdd]}
-                      disabled={creatingCity || !!cityError}
-                    >
-                      {creatingCity ? (
-                        <ActivityIndicator size="small" color={colors.sunsetOrange} />
-                      ) : (
-                        <Ionicons name="add-circle-outline" size={18} color={colors.sunsetOrange} />
-                      )}
-                      <Text style={s.suggestionAddText} numberOfLines={1}>
-                        Add "{trimmedCity}" as a new city
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+              <View style={s.cityChip}>
+                <View style={s.inputIconBubble}>
+                  <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.sunsetOrange} />
                 </View>
-              )}
-
-              {cityError ? (
-                <Text style={s.fieldError}>{cityError}</Text>
-              ) : (
-                <Text style={s.fieldHint}>
-                  If your city isn't in our catalog yet, we'll add it as a new location.
-                </Text>
-              )}
+                <Text style={s.cityChipText}>{city}</Text>
+              </View>
             </View>
 
             {/* Duration */}
@@ -350,10 +194,12 @@ const s = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.sunsetOrange + '12',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
+    backgroundColor: 'rgba(242, 239, 233, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
   },
   title: {
     fontFamily: fonts.headingBold,
@@ -396,28 +242,35 @@ const s = StyleSheet.create({
     fontSize: 16,
     color: colors.textMain,
   },
-  inputWithIcon: {
+  cityChip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.bgMain,
     borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    paddingVertical: 10,
+    paddingRight: spacing.md,
+    gap: spacing.sm,
   },
-  inputWithIconError: {
-    borderColor: colors.error,
-    backgroundColor: colors.error + '0D', // ~5% alpha
-  },
-  inputIcon: {
-    marginLeft: spacing.md,
-  },
-  inputInner: {
-    flex: 1,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 14,
-    fontFamily: fonts.body,
+  cityChipText: {
+    fontFamily: fonts.bodySemiBold,
     fontSize: 16,
     color: colors.textMain,
+  },
+  inputIconBubble: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(242, 239, 233, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
+    marginLeft: spacing.sm,
+  },
+  inputError: {
+    borderWidth: 1,
+    borderColor: colors.error,
+    backgroundColor: colors.error + '0D',
   },
   fieldError: {
     fontFamily: fonts.body,
@@ -433,43 +286,6 @@ const s = StyleSheet.create({
     marginTop: 6,
     paddingHorizontal: spacing.xs,
     lineHeight: 16,
-  },
-  suggestionsList: {
-    marginTop: 4,
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.borderColor,
-    overflow: 'hidden',
-  },
-  suggestionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderColor,
-  },
-  suggestionRowAdd: {
-    backgroundColor: colors.sunsetOrange + '10',
-    borderBottomWidth: 0,
-  },
-  suggestionText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 14,
-    color: colors.deepOcean,
-  },
-  suggestionMeta: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  suggestionAddText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 14,
-    color: colors.sunsetOrange,
-    flex: 1,
   },
   durationRow: {
     flexDirection: 'row',
