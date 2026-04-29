@@ -14,7 +14,7 @@ interface OptionCardProps {
   onSelect: () => void;
 }
 
-export const OptionCard: React.FC<OptionCardProps> = React.memo(({ option, index, selected, onSelect }) => {
+export const OptionCard: React.FC<OptionCardProps> = React.memo(function OptionCard({ option, index, selected, onSelect }) {
   const { t } = useTranslation();
   return (
     <ChoiceChip

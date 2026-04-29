@@ -33,7 +33,7 @@ export interface ChoiceChipProps {
   testID?: string;
 }
 
-export const ChoiceChip: React.FC<ChoiceChipProps> = React.memo(({
+export const ChoiceChip: React.FC<ChoiceChipProps> = React.memo(function ChoiceChip({
   label,
   emoji,
   iconName,
@@ -43,7 +43,7 @@ export const ChoiceChip: React.FC<ChoiceChipProps> = React.memo(({
   haptics = true,
   accessibilityLabel,
   testID,
-}) => {
+}) {
   // Pablo 2026-04-26: animaciones eliminadas. ChoiceChip queda estático.
   // Solo se mantiene el ZoomIn del checkmark cuando el chip se selecciona,
   // que es feedback de tap inmediato (no infinite animation).

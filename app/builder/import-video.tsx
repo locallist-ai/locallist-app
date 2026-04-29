@@ -46,7 +46,7 @@ export default function ImportVideoScreen() {
           {t('plans.importVideo')}
         </Text>
         <Text style={{ fontFamily: fonts.body, fontSize: 16, color: colors.textSecondary, textAlign: 'center', lineHeight: 24 }}>
-          Paste a Reels or TikTok link and we'll turn it into a plan.
+          {"Paste a Reels or TikTok link and we'll turn it into a plan."}
         </Text>
       </View>
     </View>

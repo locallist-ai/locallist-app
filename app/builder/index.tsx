@@ -146,7 +146,7 @@ export default function BuilderWizardScreen() {
                 <View style={s.stepContainer}>
                     {step === 0 && (
                         <Animated.View entering={FadeInRight.duration(260)} exiting={FadeOutLeft.duration(180)} style={s.stepBody}>
-                            <Text style={s.title}>What's your vibe?</Text>
+                            <Text style={s.title}>{"What's your vibe?"}</Text>
                             <Text style={s.subtitle}>Select the style of trip you are looking for.</Text>
 
                             <View style={s.optionsGrid}>
@@ -171,7 +171,7 @@ export default function BuilderWizardScreen() {
 
                     {step === 1 && (
                         <Animated.View entering={FadeInRight.duration(260)} exiting={FadeOutLeft.duration(180)} style={s.stepBody}>
-                            <Text style={s.title}>Who's coming?</Text>
+                            <Text style={s.title}>{"Who's coming?"}</Text>
                             <Text style={s.subtitle}>Who are you going to share this amazing trip with?</Text>
 
                             <View style={s.optionsGrid}>
@@ -197,7 +197,7 @@ export default function BuilderWizardScreen() {
                     {step === 2 && (
                         <Animated.View entering={FadeInRight.duration(260)} exiting={FadeOutLeft.duration(180)} style={s.stepBody}>
                             <Text style={s.title}>Details</Text>
-                            <Text style={s.subtitle}>How long will you stay and what's your budget?</Text>
+                            <Text style={s.subtitle}>{"How long will you stay and what's your budget?"}</Text>
 
                             <Text style={s.sectionHeader}>Duration</Text>
                             <View style={s.multiOptionRow}>

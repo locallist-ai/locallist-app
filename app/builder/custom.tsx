@@ -137,7 +137,7 @@ export default function CustomBuilderScreen() {
     if (!canCreate) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push({
-      pathname: '/plan/edit/new',
+      pathname: '/plan/new',
       params: {
         planName: name.trim(),
         planCity: city.trim(),
@@ -254,7 +254,7 @@ export default function CustomBuilderScreen() {
                         <Ionicons name="add-circle-outline" size={18} color={colors.sunsetOrange} />
                       )}
                       <Text style={s.suggestionAddText} numberOfLines={1}>
-                        Add "{trimmedCity}" as a new city
+                        {`Add "${trimmedCity}" as a new city`}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -269,7 +269,7 @@ export default function CustomBuilderScreen() {
                 <Text style={s.fieldError}>{cityAddError}</Text>
               ) : (
                 <Text style={s.fieldHint}>
-                  If your city isn't in our catalog yet, we'll add it as a new location.
+                  {"If your city isn't in our catalog yet, we'll add it as a new location."}
                 </Text>
               )}
             </View>

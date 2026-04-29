@@ -38,14 +38,14 @@ interface DotProps {
   colorPending: string;
 }
 
-const Dot: React.FC<DotProps> = React.memo(({
+const Dot: React.FC<DotProps> = React.memo(function Dot({
   index,
   current,
   size,
   colorActive,
   colorCompleted,
   colorPending,
-}) => {
+}) {
   const activeWidth = size * 3;
   const animStyle = useAnimatedStyle(() => ({
     width: withTiming(index === current ? activeWidth : size, { duration: 250 }),

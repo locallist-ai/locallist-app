@@ -25,7 +25,7 @@ interface CityCardProps {
 
 // ── Component ──
 
-export const CityCard: React.FC<CityCardProps> = React.memo(({ city, index, selected = false, onSelect }) => {
+export const CityCard: React.FC<CityCardProps> = React.memo(function CityCard({ city, index, selected = false, onSelect }) {
   const pulse = useSharedValue(1);
   const glowOpacity = useSharedValue(0.4);
 
@@ -98,6 +98,7 @@ export const CityCard: React.FC<CityCardProps> = React.memo(({ city, index, sele
     </Animated.View>
   );
 });
+CityCard.displayName = 'CityCard';
 
 // ── Styles ──
 
