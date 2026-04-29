@@ -1,96 +1,96 @@
-# LocalList.App
-
-Parent context: see `../CLAUDE.md` for brand, domain concepts, and conventions.
+# LocalList App
 
 | | Details |
 |---|---|
-| **Tech** | Expo SDK 54, React Native, Expo Router 6 |
-| **Deploy** | EAS Build → Apple App Store (TestFlight for beta) |
-| **Auth** | Apple Sign In + Google OAuth + email/password |
+| **Tech** | Expo SDK 54, React Native, Expo Router 4, TypeScript |
+| **Deploy** | EAS Build (local) → TestFlight → App Store |
+| **Auth** | Apple Sign In + Google OAuth + email/password (HS256 JWT, auto-refresh) |
 | **Payments** | RevenueCat SDK (Apple IAP) — **planned, not yet installed** |
-| **Storage** | SecureStore (iOS/Android), localStorage (web) |
-| **iOS Target** | iOS 16.0+ (set in app.json) |
+| **Storage** | SecureStore (tokens), in-memory cache (api-cache.ts) |
+| **iOS Target** | iOS 16.0+ |
 | **Privacy** | Privacy manifest configured (4 API types, 3 data types, no tracking) |
+| **i18n** | i18next + expo-localization. EN + ES (España). Parity test: `lib/i18n/__tests__/parity.test.ts` |
 
 ## Running Locally
 
 ```bash
-cd LocalList/LocalList.App && npx expo start --dev-client
-```
-
-## Android Development Build
-
-Usamos **development build** (`expo-dev-client`) en lugar de Expo Go. El dev build compila las dependencias nativas exactas del proyecto, evitando mismatches de versiones.
-
-**Requisitos**:
-- **JDK 17**: `C:\Program Files\Java\jdk-17` (configurar `JAVA_HOME`)
-- **Android SDK**: `C:\Users\Pablo\AppData\Local\Android\Sdk`
-- **AVD disponible**: `pixel_5`
-
-**Env vars** (configuradas permanentemente en User PATH):
-- `ANDROID_HOME` = `C:\Users\Pablo\AppData\Local\Android\Sdk`
-- `PATH` incluye `platform-tools` y `emulator` (adb y emulator disponibles globalmente)
-- `JAVA_HOME` = `C:\Program Files\Java\jdk-17` (necesaria para Gradle)
-
-### Primera vez (compilar + instalar APK)
-
-```bash
-# 1. Iniciar el emulador
-emulator -avd pixel_5 &disown
-
-# 2. Compilar e instalar el dev build (~5 min primera vez)
-cd LocalList/LocalList.App
-$env:JAVA_HOME = 'C:\Program Files\Java\jdk-17'
-npx expo run:android
-```
-
-Esto genera la carpeta `android/`, compila con Gradle, instala el APK en el emulador y arranca Metro.
-
-### Uso diario (APK ya instalado)
-
-```bash
-cd LocalList/LocalList.App
+cd locallist-app
 npx expo start --dev-client
 ```
-Pulsar `a` para abrir en Android. Hot reload funciona automaticamente para cambios JS/TS.
 
-### Cuando recompilar (`npx expo run:android`)
-- Al añadir/actualizar dependencias con codigo nativo (ej: nuevo `expo install expo-camera`)
-- Al cambiar `app.json` (splash, plugins, scheme)
-- Despues de `npx expo prebuild --clean`
+Requires a **development build** installed on device/simulator — Expo Go will not work (native modules).
 
-**No** necesitas recompilar para cambios en JS/TS/CSS — hot reload los aplica al instante.
+## iOS Builds (EAS local)
 
-### Troubleshooting
-- **`JAVA_HOME` no configurado**: `$env:JAVA_HOME = 'C:\Program Files\Java\jdk-17'` antes de compilar
-- **`local.properties` faltante**: Crear `android/local.properties` con `sdk.dir=C:\\Users\\Pablo\\AppData\\Local\\Android\\Sdk`
-- **Ver logs RN**: `adb logcat -s "ReactNativeJS"` para ver console.log del app
-- **`adb` o `emulator` no encontrado**: Abrir una terminal nueva (las env vars se cargan al abrir terminal)
+```bash
+# Simulator debug build (fast, no signing)
+npx expo run:ios --configuration Debug
 
-## Key Files
+# TestFlight build (requires signing)
+git add -A && git commit  # EAS reads git HEAD
+eas build --platform ios --profile preview --local
+```
 
-- `app/_layout.tsx` — Root layout (useFonts, SafeAreaProvider, splash animation, AuthGate)
-- `app/(tabs)/_layout.tsx` — Tab navigation layout
-- `app/(tabs)/index.tsx` — Home screen (editorial hero, CTA, preference chips)
-- `app/(tabs)/plans.tsx` — Plans list (PhotoHero covers, filter chips, skeleton loading)
-- `app/(tabs)/account.tsx` — Account (profile, tier badge, sign out)
-- `app/login.tsx` — Login (Apple Sign In, Google OAuth, email/password)
-- `app/plan/[id].tsx` — Plan detail (parallax hero, day-by-day stops, Follow button)
-- `app/follow/[id].tsx` — Follow Mode (full-screen PlanMap, BottomSheetStop, progress bar)
-- `components/ui/PhotoHero.tsx` — Full-bleed image with gradient fallback by category
-- `components/ui/SkeletonCard.tsx` — Shimmer skeleton loader
-- `components/map/PlanMap.tsx` — MapLibre map with pins, route line, animated camera
-- `components/map/useOfflineTiles.ts` — Offline tile caching hook
-- `components/follow/StopCard.tsx` — Stop display card with photo + WhyThisPlace
-- `components/follow/BottomSheetStop.tsx` — Animated bottom sheet with swipe gestures
-- `lib/theme.ts` — Brand tokens (colors, typography, spacing, borderRadius)
-- `lib/api.ts` — API client with auto JWT refresh, SecureStore token storage
-- `lib/auth.ts` — AuthContext (user state, logout, isPro flag)
-- `lib/types.ts` — Shared TypeScript types (Plan, Place, Stop, etc.)
-- `lib/i18n/` — i18n infrastructure (i18next + expo-localization, EN/ES translations)
-- `assets/fonts/` — Inter (4 weights) + Playfair Display (3 weights), loaded via useFonts in _layout.tsx
+Credentials live in EAS (never in repo). `eas.json` configures preview + production profiles.
 
-## Screens NOT yet implemented (backend ready, no UI)
+## Key Screens (`app/`)
 
-- Place detail screen
-- Builder UI (AI plan wizard) — API endpoint exists, no app screen
+| File | Description |
+|---|---|
+| `_layout.tsx` | Root layout: fonts, SafeAreaProvider, splash animation, AuthGate |
+| `(tabs)/_layout.tsx` | Tab bar (Home, Plans, Account) |
+| `(tabs)/home.tsx` | Editorial hero, CTA, preference chips |
+| `(tabs)/plans.tsx` | Plans list: PhotoHero covers, filter chips, skeleton loading |
+| `(tabs)/account.tsx` | Profile, tier badge, language selector, sign out |
+| `login.tsx` | Apple Sign In, Google OAuth, email/password, password strength rules |
+| `builder/custom.tsx` | AI plan wizard (5-step: city → days → group → preferences → budget) |
+| `builder/import-video.tsx` | Stub — import-from-video, not yet built |
+| `plan/[id].tsx` | Plan detail: parallax hero, day tabs, inline stop editor, Follow button |
+| `follow/[id].tsx` | Follow Mode: PlanMap fullscreen, BottomSheetStop, progress bar, day completion |
+| `place/[id].tsx` | Place detail: parallax hero, ratings, Google Maps link |
+
+## Key Components (`components/`)
+
+| Path | Description |
+|---|---|
+| `ui/PhotoHero.tsx` | Full-bleed image with gradient fallback by category |
+| `ui/SkeletonCard.tsx` | Shimmer skeleton loader |
+| `ui/design-system/` | ChoiceChip, EditorialTitle, StepSubtitle, ProgressDots — wizard design system |
+| `map/PlanMap.tsx` | MapLibre map: pins, route line, animated camera |
+| `map/useOfflineTiles.ts` | Offline tile caching hook |
+| `follow/StopCard.tsx` | Stop display card: photo, metadata, WhyThisPlace |
+| `follow/BottomSheetStop.tsx` | Animated bottom sheet with swipe gestures |
+| `follow/FollowDaySheet.tsx` | Day overview sheet inside Follow Mode |
+| `plan/PlanCardPager.tsx` | Swipeable plan overview + per-stop cards |
+| `plan-editor/DaySection.tsx` | Editable day section with add-stop affordance |
+| `plan-editor/SwipeableStopCard.tsx` | Swipe-to-delete stop row |
+| `plan-editor/MoveToDay.tsx` | Move stop between days modal |
+| `plan-editor/PlaceSearchModal.tsx` | Search places to add to a plan |
+| `home/HomeV2.tsx` | Home screen component (rename to HomeScreen.tsx pending) |
+| `DestinationScreen.tsx` | **Dead code** — 0 imports, pending deletion (Fase 4 cleanup) |
+
+## Key Libs (`lib/`)
+
+| File | Description |
+|---|---|
+| `api.ts` | API client: auto JWT refresh, SecureStore token storage |
+| `auth.ts` | AuthContext: user state, logout, isPro flag |
+| `theme.ts` | Brand tokens: colors, typography, spacing, borderRadius |
+| `types.ts` | Shared TypeScript types (Plan, Place, PlanStop, etc.) |
+| `i18n/` | i18next setup, EN/ES resources, parity test |
+| `plan-store.ts` | Zustand store for plan edit state |
+| `use-plan-editor.ts` | Hook: plan editor actions (add/move/delete stops) |
+| `bulk-ops.ts` | Batch stop reordering + persistence helpers |
+| `api-cache.ts` | Simple in-memory stale-while-revalidate cache |
+| `safe-store.ts` | SecureStore wrapper with web fallback |
+| `timeBlocks.ts` | Time block constants + icon map (Morning/Afternoon/Evening/Night) |
+| `logger.ts` | Leveled logger (`debug` in dev, `warn+` in prod) — use instead of console.log |
+| `sentry.ts` | Sentry init + wrap helpers |
+| `preload.ts` | Preloads plan list + images during splash |
+
+## Conventions
+
+- **i18n**: always use `t('key')` — never hardcode visible strings. Add keys to both `en.ts` and `es.ts`. Parity test will catch drift.
+- **Logging**: `logger.debug/info/warn/error(msg, obj)` — never `console.log`.
+- **`autoFocus` inside Animated.View**: use `ref + setTimeout` post-animation, not `autoFocus` prop directly (iOS crash).
+- **Commits before EAS build**: EAS reads `git HEAD` — always commit local changes first.
