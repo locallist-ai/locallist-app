@@ -7,7 +7,7 @@
  *    con timeout o exception, fallback a Map in-memory.
  *
  * Audit follow-up E1 (2026-04-27): este archivo existía como gap. Los tres
- * consumers (api.ts, i18n, hero-variant) cargan el módulo en cold start —
+ * consumers (api.ts, i18n) cargan el módulo en cold start —
  * regression aquí desloggea a todos los users.
  */
 

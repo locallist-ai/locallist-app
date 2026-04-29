@@ -38,6 +38,8 @@ export interface UseWizardResult {
   setMessage: (text: string) => void;
   /** Submit the wizard and generate a plan */
   handleGenerate: () => void;
+  /** Reset wizard to step 0, clearing all selections and errors */
+  handleReset: () => void;
 
   /** Top-level interests (multi). */
   interests: string[];
@@ -142,10 +144,25 @@ export const useWizard = (): UseWizardResult => {
     });
   }, []);
 
+  const handleReset = useCallback(() => {
+    setStep(0);
+    setDirection('forward');
+    setSelections([null, null, null, null, null]);
+    setCity(null);
+    setMessage('');
+    setError(null);
+    setInterests([]);
+    setSubcategoryPicks({});
+    setBudgetAmountState(null);
+    setCompanySubs([]);
+    setStyleSubs([]);
+  }, []);
+
   const handleBack = useCallback(() => {
     if (step === 0) return;
     hapticImpact(ImpactFeedbackStyle.Light);
     setDirection('back');
+    setError(null);
     setStep((s) => Math.max(s - 1, 0));
   }, [step]);
 
@@ -357,6 +374,7 @@ export const useWizard = (): UseWizardResult => {
     advanceToNext,
     setMessage,
     handleGenerate,
+    handleReset,
     interests,
     subcategoryPicks,
     toggleInterest,

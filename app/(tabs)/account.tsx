@@ -31,7 +31,6 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/api';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
-import { useHeroVariant, type HeroVariant } from '../../lib/hero-variant';
 
 const LANGUAGES = [
   { code: 'en', flag: '\u{1F1FA}\u{1F1F8}', labelKey: 'account.languageEnglish' as const },
@@ -131,8 +130,7 @@ function PlusUpsellCard({ t }: { t: ReturnType<typeof useTranslation>['t'] }) {
 export default function AccountScreen() {
   const { t, i18n } = useTranslation();
   const { user, isAuthenticated, isPro, isAdmin, logout, setTierOverride } = useAuth();
-  const [heroVariant, setHeroVariant] = useHeroVariant();
-  const [langPickerVisible, setLangPickerVisible] = useState(false);
+const [langPickerVisible, setLangPickerVisible] = useState(false);
   const [pendingLang, setPendingLang] = useState<string | null>(null);
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
@@ -278,33 +276,6 @@ export default function AccountScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
-
-        {/* Wizard hero variant — visible para todos los testers (Pablo
-          * 2026-04-27). A/B testing del background del wizard. */}
-        <Animated.View entering={FadeInDown.duration(400).delay(250)}>
-          <View style={s.devHeader}>
-            <Ionicons name="image-outline" size={14} color={colors.sunsetOrange} />
-            <Text style={s.devHeaderText}>Wizard background</Text>
-          </View>
-          <View style={[s.section, { flexDirection: 'row', gap: 8, padding: 8 }]}>
-            {(['photo', 'skia', 'veo'] as HeroVariant[]).map((v) => {
-              const active = heroVariant === v;
-              const label = v === 'photo' ? 'Photo' : v === 'skia' ? 'Animated' : 'Cinematic';
-              return (
-                <TouchableOpacity
-                  key={v}
-                  activeOpacity={0.7}
-                  onPress={() => setHeroVariant(v)}
-                  style={[s.variantChip, active && s.variantChipActive]}
-                >
-                  <Text style={[s.variantChipText, active && s.variantChipTextActive]}>
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </Animated.View>
 
         {/* Dev Tools — solo en development + @locallist.ai admins */}
         {__DEV__ && isAdmin && (
@@ -692,29 +663,6 @@ const s = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  variantChip: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.bgMain,
-    borderWidth: 1,
-    borderColor: colors.borderColor,
-  },
-  variantChipActive: {
-    backgroundColor: colors.sunsetOrange,
-    borderColor: colors.sunsetOrange,
-  },
-  variantChipText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 13,
-    color: colors.deepOcean,
-  },
-  variantChipTextActive: {
-    color: '#FFFFFF',
-  },
-
   // Footer
   version: {
     fontFamily: fonts.body,

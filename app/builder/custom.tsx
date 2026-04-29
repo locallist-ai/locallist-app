@@ -49,6 +49,12 @@ export default function CustomBuilderScreen() {
     };
   }, []);
 
+  const nameInputRef = useRef<TextInput>(null);
+  useEffect(() => {
+    const t = setTimeout(() => nameInputRef.current?.focus(), 650);
+    return () => clearTimeout(t);
+  }, []);
+
   // Debounced search en cada cambio de city. 250ms parece un punto dulce
   // entre responsivo y no spamear el backend.
   useEffect(() => {
@@ -187,13 +193,11 @@ export default function CustomBuilderScreen() {
             <View style={s.field}>
               <Text style={s.label}>Plan name</Text>
               <TextInput
+                ref={nameInputRef}
                 style={s.input}
-                placeholder="e.g. Weekend in Barcelona"
-                placeholderTextColor={colors.textSecondary + '80'}
                 value={name}
                 onChangeText={setName}
                 maxLength={100}
-                autoFocus
               />
             </View>
 

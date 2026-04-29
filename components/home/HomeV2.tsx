@@ -27,13 +27,6 @@ import { RefineableStep } from './RefineableStep';
 // los emojis legacy del bg — el wizard se ve más editorial sin ellos.
 import { ProgressDots } from './ProgressDots';
 import { HeroSkiaBg } from './HeroSkiaBg';
-import { HeroVideoBg } from './HeroVideoBg';
-import { useHeroVariant } from '../../lib/hero-variant';
-
-// Pablo 2026-04-26: "eliminar por completo las animaciones de la home y del
-// wizard". Quitamos parallax sensor + Ken Burns + light leak del variant
-// 'photo'. Skia y Veo siguen activos para el variant selector dev (cuando
-// quiera volver a probarlos).
 
 // ── Component ──
 
@@ -42,7 +35,6 @@ export const HomeV2: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const wizard = useWizard();
-  const [heroVariant] = useHeroVariant();
 
   // Animations stripped per Pablo 2026-04-26. Hero photo se renderiza
   // estático. Si Pablo cambia de opinión, el variant 'skia' o 'veo' siguen
@@ -80,23 +72,12 @@ export const HomeV2: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      {/* Variant switch — Pablo 2026-04-25 quiere A/B entre 3 fondos.
-        * 'photo' = hero estático + Ken Burns + light leak (Fase A actual).
-        * 'skia'  = Fase B — partículas Skia + sun rays sobre el hero photo.
-        * 'veo'   = Fase C — video loop cinemático full-screen.
-        * El selector vive en Account screen (dev menu). */}
-      {heroVariant === 'veo' ? (
-        <HeroVideoBg />
-      ) : (
-        <>
-          <Image
-            source={require('../../assets/images/hero-bg.jpg')}
-            style={[styles.bgImage, { width: screenWidth + 200, height: screenHeight + 300 }]}
-            resizeMode="cover"
-          />
-          {heroVariant === 'skia' && <HeroSkiaBg />}
-        </>
-      )}
+      <Image
+        source={require('../../assets/images/hero-bg.jpg')}
+        style={[styles.bgImage, { width: screenWidth + 200, height: screenHeight + 300 }]}
+        resizeMode="cover"
+      />
+      <HeroSkiaBg />
       <View style={styles.bgOverlay} />
 
       {/* Wizard */}
@@ -269,7 +250,7 @@ export const HomeV2: React.FC = () => {
                   <Text style={styles.generatingError}>{wizard.error}</Text>
                   <TouchableOpacity
                     activeOpacity={0.8}
-                    onPress={wizard.handleGenerate}
+                    onPress={wizard.handleReset}
                     style={styles.retryBtn}
                     accessibilityRole="button"
                     accessibilityLabel="Retry"
