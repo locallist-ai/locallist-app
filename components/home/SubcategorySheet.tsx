@@ -31,6 +31,8 @@ interface SubcategorySheetProps {
   initialSelected: string[];
   onConfirm: (selected: string[]) => void;
   onCancel: () => void;
+  /** 'single' → max 1 chip a la vez (reemplaza al hacer tap); 'multi' → toggle normal. Default 'multi'. */
+  mode?: 'single' | 'multi';
 }
 
 export const SubcategorySheet: React.FC<SubcategorySheetProps> = ({
@@ -40,6 +42,7 @@ export const SubcategorySheet: React.FC<SubcategorySheetProps> = ({
   initialSelected,
   onConfirm,
   onCancel,
+  mode = 'multi',
 }) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -51,9 +54,13 @@ export const SubcategorySheet: React.FC<SubcategorySheetProps> = ({
   }, [visible, initialSelected]);
 
   const toggle = (id: string) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
+    if (mode === 'single') {
+      setSelected((prev) => (prev.includes(id) ? [] : [id]));
+    } else {
+      setSelected((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+      );
+    }
   };
 
   const handleAny = () => onConfirm([]);
@@ -147,7 +154,7 @@ export const SubcategorySheet: React.FC<SubcategorySheetProps> = ({
                 >
                   <Text style={styles.doneText}>
                     {t('wizard.interestDone')}
-                    {selected.length > 0 ? ` · ${selected.length}` : ''}
+                    {mode === 'multi' && selected.length > 0 ? ` · ${selected.length}` : ''}
                   </Text>
                 </TouchableOpacity>
               </View>

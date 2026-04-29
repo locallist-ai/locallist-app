@@ -13,7 +13,6 @@ import {
   WIZARD_ONLY,
   INTERESTS_STEP_INDEX_IN_STEPS,
   COMPANY_SUBCATEGORIES,
-  STYLE_SUBCATEGORIES,
 } from './constants';
 import { useWizard } from './useWizard';
 import { CityCard } from './CityCard';
@@ -49,10 +48,9 @@ export const HomeV2: React.FC = () => {
 
   const isCityStep = wizard.step === 0;
   const stepIndexInSteps = wizard.step - 1; // 0..STEPS.length-1
-  // Steps con drill-down sheet (single-select parent + sub-tags multi):
-  // index 1 = company, index 2 = style. Index 3 = interests (multi parents).
+  // Steps con drill-down sheet (single-select parent + sub-tags single):
+  // index 1 = company. Index 2 = interests (multi parents).
   const isCompanyStep = stepIndexInSteps === 1;
-  const isStyleStep = stepIndexInSteps === 2;
   const isInterestsStep = stepIndexInSteps === INTERESTS_STEP_INDEX_IN_STEPS;
   // Budget = último step. Custom input numérico, no chips (Pablo 2026-04-25).
   const isBudgetStep = stepIndexInSteps === STEPS.length - 1;
@@ -62,7 +60,6 @@ export const HomeV2: React.FC = () => {
     stepIndexInSteps >= 0 &&
     stepIndexInSteps < STEPS.length &&
     !isCompanyStep &&
-    !isStyleStep &&
     !isInterestsStep &&
     !isBudgetStep;
   const currentStepConfig = usesWizardStep ? STEPS[stepIndexInSteps] : null;
@@ -170,20 +167,7 @@ export const HomeV2: React.FC = () => {
                 onSelect={wizard.selectCompany}
                 onSetSubs={wizard.setCompanySubs}
                 onContinue={wizard.advanceToNext}
-              />
-            </Animated.View>
-          )}
-
-          {isStyleStep && (
-            <Animated.View key="step-style" entering={entering} exiting={exiting} style={styles.stepFill}>
-              <RefineableStep
-                config={STEPS[2]}
-                selectedId={wizard.selections[2]}
-                subOptionsByParent={STYLE_SUBCATEGORIES}
-                selectedSubs={wizard.styleSubs}
-                onSelect={wizard.selectStyle}
-                onSetSubs={wizard.setStyleSubs}
-                onContinue={wizard.advanceToNext}
+                mode="single"
               />
             </Animated.View>
           )}

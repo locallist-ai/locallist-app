@@ -48,31 +48,25 @@ export const CITIES: City[] = [
 // ── Step option data ──
 
 export const DURATION_OPTIONS: StepOption[] = [
-  { id: '1', icon: require('../../assets/images/icon_1day.png'), labelKey: 'wizard.duration1Day', emoji: '\u2600\uFE0F', iconName: 'numeric-1-circle-outline' },
+  { id: '1', icon: require('../../assets/images/icon_1day.png'), labelKey: 'wizard.duration1Day', emoji: '☀️', iconName: 'numeric-1-circle-outline' },
   { id: '2', icon: require('../../assets/images/icon_3days.png'), labelKey: 'wizard.duration2Days', emoji: '\u{1F338}', iconName: 'numeric-2-circle-outline' },
   { id: '3', icon: require('../../assets/images/icon_3days.png'), labelKey: 'wizard.duration3Days', emoji: '\u{1F33C}', iconName: 'numeric-3-circle-outline' },
 ];
 
 export const COMPANY_OPTIONS: StepOption[] = [
   { id: 'solo', icon: require('../../assets/images/icon_solo.png'), labelKey: 'wizard.companySolo', emoji: '\u{1F9D1}', iconName: 'account' },
-  { id: 'couple', icon: require('../../assets/images/icon_couple.png'), labelKey: 'wizard.companyCouple', emoji: '\u2764\uFE0F', iconName: 'account-heart' },
+  { id: 'couple', icon: require('../../assets/images/icon_couple.png'), labelKey: 'wizard.companyCouple', emoji: '❤️', iconName: 'account-heart' },
   { id: 'family', icon: require('../../assets/images/icon_family.png'), labelKey: 'wizard.companyFamily', emoji: '\u{1F46A}', iconName: 'account-group' },
   { id: 'friends', icon: require('../../assets/images/icon_solo.png'), labelKey: 'wizard.companyFriends', emoji: '\u{1F46B}', iconName: 'account-multiple' },
-];
-
-export const STYLE_OPTIONS: StepOption[] = [
-  { id: 'adventure', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.styleAdventure', emoji: '\u{1F9ED}', iconName: 'compass-outline' },
-  { id: 'relax', icon: require('../../assets/images/icon_relax.png'), labelKey: 'wizard.styleRelax', emoji: '\u{1F33F}', iconName: 'leaf' },
-  { id: 'cultural', icon: require('../../assets/images/icon_cultural.png'), labelKey: 'wizard.styleCultural', emoji: '\u{1F3A8}', iconName: 'palette-outline' },
 ];
 
 // Top-level interests (multi-select). Cuando el usuario tap una de estas, abre
 // un sheet de subcategorías para profundizar (sushi/italian dentro de food, etc).
 // El icon es legacy del StepOption type — ChoiceChip solo renderiza emoji.
 export const INTEREST_OPTIONS: StepOption[] = [
-  { id: 'food', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestFood', emoji: '\u{1F37D}\uFE0F', iconName: 'silverware-fork-knife' },
+  { id: 'food', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestFood', emoji: '\u{1F37D}️', iconName: 'silverware-fork-knife' },
   { id: 'outdoors', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestOutdoors', emoji: '\u{1F332}', iconName: 'pine-tree' },
-  { id: 'coffee', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestCoffee', emoji: '\u2615', iconName: 'coffee' },
+  { id: 'coffee', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestCoffee', emoji: '☕', iconName: 'coffee' },
   { id: 'culture', icon: require('../../assets/images/icon_cultural.png'), labelKey: 'wizard.interestCulture', emoji: '\u{1F3A8}', iconName: 'bank-outline' },
   { id: 'nightlife', icon: require('../../assets/images/icon_adventure.png'), labelKey: 'wizard.interestNightlife', emoji: '\u{1F378}', iconName: 'glass-cocktail' },
   { id: 'wellness', icon: require('../../assets/images/icon_relax.png'), labelKey: 'wizard.interestWellness', emoji: '\u{1F9D8}', iconName: 'spa-outline' },
@@ -101,18 +95,18 @@ export const SUBCATEGORIES_BY_INTEREST: Record<string, SubcategoryOption[]> = {
     { id: 'asian', label: 'Asian', emoji: '\u{1F961}', iconName: 'bowl-mix-outline' },
   ],
   outdoors: [
-    { id: 'beach', label: 'Beach', emoji: '\u{1F3D6}\uFE0F', iconName: 'beach' },
+    { id: 'beach', label: 'Beach', emoji: '\u{1F3D6}️', iconName: 'beach' },
     { id: 'park', label: 'Parks', emoji: '\u{1F333}', iconName: 'tree-outline' },
     { id: 'garden', label: 'Gardens', emoji: '\u{1F33A}', iconName: 'flower-outline' },
     { id: 'trail', label: 'Trails', emoji: '\u{1F97E}', iconName: 'hiking' },
   ],
   coffee: [
-    { id: 'specialty', label: 'Specialty', emoji: '\u2615', iconName: 'coffee-outline' },
+    { id: 'specialty', label: 'Specialty', emoji: '☕', iconName: 'coffee-outline' },
     { id: 'bakery', label: 'Bakery', emoji: '\u{1F950}', iconName: 'baguette' },
     { id: 'dessert', label: 'Dessert', emoji: '\u{1F370}', iconName: 'cupcake' },
   ],
   culture: [
-    { id: 'museum', label: 'Museums', emoji: '\u{1F3DB}\uFE0F', iconName: 'bank-outline' },
+    { id: 'museum', label: 'Museums', emoji: '\u{1F3DB}️', iconName: 'bank-outline' },
     { id: 'festival', label: 'Festivals', emoji: '\u{1F3AA}', iconName: 'party-popper' },
     { id: 'art', label: 'Art', emoji: '\u{1F3A8}', iconName: 'palette-outline' },
   ],
@@ -153,8 +147,7 @@ export const tierFromBudgetAmount = (amount: number): 'budget' | 'moderate' | 'p
 export const STEPS: WizardStepConfig[] = [
   { titleKey: 'wizard.step1Title', subtitleKey: 'wizard.step1Subtitle', options: DURATION_OPTIONS },
   { titleKey: 'wizard.step2Title', subtitleKey: 'wizard.step2Subtitle', options: COMPANY_OPTIONS },
-  { titleKey: 'wizard.step3Title', subtitleKey: 'wizard.step3Subtitle', options: STYLE_OPTIONS },
-  // STEPS[3] = interests (multi-select con drill-down). El config aquí es un
+  // STEPS[2] = interests (multi-select con drill-down). El config aquí es un
   // marker — el render de InterestsStep es manejado aparte en HomeV2; el title/
   // subtitle se usa solo si en algún momento se cae al render fallback.
   { titleKey: 'wizard.stepInterestsTitle', subtitleKey: 'wizard.stepInterestsSubtitle', options: INTEREST_OPTIONS },
@@ -162,7 +155,7 @@ export const STEPS: WizardStepConfig[] = [
 ];
 
 /** Index de la step de interests dentro de STEPS (= step de wizard - 1). */
-export const INTERESTS_STEP_INDEX_IN_STEPS = 3;
+export const INTERESTS_STEP_INDEX_IN_STEPS = 2;
 
 // Sub-options para company step (drill-down). Pablo 2026-04-25: cada step
 // del wizard puede llevar a un menú de refinamiento. Aquí, al picar un parent
@@ -190,26 +183,6 @@ export const COMPANY_SUBCATEGORIES: Record<string, SubcategoryOption[]> = {
     { id: 'bachelorette', label: 'Bachelorette', emoji: '\u{1F478}', iconName: 'crown-outline' },
     { id: 'group-trip', label: 'Group trip', emoji: '\u{1F46B}', iconName: 'account-multiple-outline' },
     { id: 'birthday', label: 'Birthday', emoji: '\u{1F389}', iconName: 'cake-variant-outline' },
-  ],
-};
-
-// Sub-options para style step (drill-down). Refina el vibe del trip dentro de
-// adventure/relax/cultural. Tags mapean a bestFor/bestTime en el catálogo.
-export const STYLE_SUBCATEGORIES: Record<string, SubcategoryOption[]> = {
-  adventure: [
-    { id: 'urban', label: 'Urban explorer', emoji: '\u{1F306}', iconName: 'city-variant-outline' },
-    { id: 'outdoor', label: 'Outdoor', emoji: '\u{1F3D5}\uFE0F', iconName: 'tent' },
-    { id: 'foodie', label: 'Foodie', emoji: '\u{1F371}', iconName: 'silverware-fork-knife' },
-  ],
-  relax: [
-    { id: 'beach', label: 'Beach lounge', emoji: '\u{1F3D6}\uFE0F', iconName: 'beach' },
-    { id: 'spa', label: 'Spa retreat', emoji: '\u{1F9D6}', iconName: 'spa-outline' },
-    { id: 'slow', label: 'Slow mornings', emoji: '\u{1F31E}', iconName: 'weather-sunset' },
-  ],
-  cultural: [
-    { id: 'museums', label: 'Museums', emoji: '\u{1F3DB}\uFE0F', iconName: 'bank-outline' },
-    { id: 'history', label: 'History', emoji: '\u{1F4DC}', iconName: 'book-open-page-variant-outline' },
-    { id: 'art', label: 'Local art', emoji: '\u{1F3A8}', iconName: 'palette-outline' },
   ],
 };
 
@@ -242,8 +215,8 @@ export const hapticImpact = (style: Haptics.ImpactFeedbackStyle = Haptics.Impact
  */
 export const WIZARD_ONLY = true;
 
-/** Total number of progress dots — city + 5 prefs (incluye interests). */
-export const TOTAL_STEPS = WIZARD_ONLY ? 6 : 7;
+/** Total number of progress dots — city + 4 prefs (incluye interests). */
+export const TOTAL_STEPS = WIZARD_ONLY ? 5 : 6;
 
-/** Última step index del flujo interactivo (después → generar). step=5 = budget. */
-export const LAST_STEP_INDEX = WIZARD_ONLY ? 5 : 6;
+/** Última step index del flujo interactivo (después → generar). step=4 = budget. */
+export const LAST_STEP_INDEX = WIZARD_ONLY ? 4 : 5;

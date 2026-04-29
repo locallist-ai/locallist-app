@@ -35,6 +35,8 @@ interface RefineableStepProps {
   onSetSubs: (subs: string[]) => void;
   /** Avanza al siguiente step (tras cerrar el sheet o skip). */
   onContinue: () => void;
+  /** Modo del sheet de sub-tags. 'single' → máx 1 chip; 'multi' → multi-select. Default 'multi'. */
+  mode?: 'single' | 'multi';
 }
 
 export const RefineableStep: React.FC<RefineableStepProps> = ({
@@ -45,6 +47,7 @@ export const RefineableStep: React.FC<RefineableStepProps> = ({
   onSelect,
   onSetSubs,
   onContinue,
+  mode = 'multi',
 }) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -156,6 +159,7 @@ export const RefineableStep: React.FC<RefineableStepProps> = ({
         }
         onConfirm={handleSheetConfirm}
         onCancel={handleSheetCancel}
+        mode={mode}
       />
     </View>
   );

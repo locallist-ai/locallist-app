@@ -11,7 +11,7 @@ import type { BuilderResponse } from '../../lib/types';
 // ── Return type ──
 
 export interface UseWizardResult {
-  /** Current step index (0 = city, 1-4 = prefs, 5 = chat) */
+  /** Current step index (0 = city, 1-4 = prefs, 5 = chat legacy) */
   step: number;
   /** Slide direction for enter/exit animations */
   direction: 'forward' | 'back';
@@ -52,21 +52,15 @@ export interface UseWizardResult {
 
   /** Presupuesto USD/día/persona (custom). null = sin valor. */
   budgetAmount: number | null;
-  /** Setter del amount. Sincroniza también el tier en selections[4]. */
+  /** Setter del amount. Sincroniza también el tier en selections[3]. */
   setBudgetAmount: (n: number | null) => void;
 
   /** Sub-tags del company parent activo (ej. ['honeymoon'] cuando couple). */
   companySubs: string[];
   /** Setter de sub-tags para el company activo. */
   setCompanySubs: (subs: string[]) => void;
-  /** Sub-tags del style parent activo. */
-  styleSubs: string[];
-  /** Setter de sub-tags para el style activo. */
-  setStyleSubs: (subs: string[]) => void;
   /** Selector del parent en company step (resetea subs si cambia). */
   selectCompany: (id: string) => void;
-  /** Selector del parent en style step (resetea subs si cambia). */
-  selectStyle: (id: string) => void;
   /** Ciudad seleccionada (step 0). */
   city: string | null;
 }
@@ -79,9 +73,8 @@ export const useWizard = (): UseWizardResult => {
 
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
-  // Slot indices: 0=days, 1=company, 2=style, 3=interests-marker (unused),
-  // 4=budget. Slot 3 queda null porque interests usa estado dedicado.
-  const [selections, setSelections] = useState<(string | null)[]>([null, null, null, null, null]);
+  // Slot indices: 0=days, 1=company, 2=interests-marker (unused), 3=budget.
+  const [selections, setSelections] = useState<(string | null)[]>([null, null, null, null]);
   const [city, setCity] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -93,26 +86,25 @@ export const useWizard = (): UseWizardResult => {
   const [subcategoryPicks, setSubcategoryPicks] = useState<Record<string, string[]>>({});
 
   // Budget custom amount (USD/día/persona). El tier derivado se mantiene en
-  // selections[4] para no cambiar la firma del payload existente.
+  // selections[3] para no cambiar la firma del payload existente.
   const [budgetAmount, setBudgetAmountState] = useState<number | null>(null);
   const setBudgetAmount = useCallback((n: number | null) => {
     setBudgetAmountState(n);
     setSelections((prev) => {
       const next = [...prev];
-      next[4] = n != null && n > 0 ? tierFromBudgetAmount(n) : null;
+      next[3] = n != null && n > 0 ? tierFromBudgetAmount(n) : null;
       return next;
     });
   }, []);
 
-  // Drill-down state para Company y Style. Solo se mantienen los subs del
-  // parent ACTIVO; al cambiar parent se resetean (ver handleSelect override).
+  // Drill-down state para Company. Solo se mantienen los subs del parent ACTIVO;
+  // al cambiar parent se resetean (ver selectCompany).
   const [companySubs, setCompanySubs] = useState<string[]>([]);
-  const [styleSubs, setStyleSubs] = useState<string[]>([]);
 
   // Show bubble text after a delay when reaching the chat step.
-  // En WIZARD_ONLY no entramos a step 5, este efecto queda dormido.
+  // En WIZARD_ONLY no entramos a step 4 (chat legacy), este efecto queda dormido.
   useEffect(() => {
-    if (step === 5 && !WIZARD_ONLY) {
+    if (step === 4 && !WIZARD_ONLY) {
       const timer = setTimeout(() => setShowBubbleText(true), 800);
       return () => clearTimeout(timer);
     }
@@ -147,7 +139,7 @@ export const useWizard = (): UseWizardResult => {
   const handleReset = useCallback(() => {
     setStep(0);
     setDirection('forward');
-    setSelections([null, null, null, null, null]);
+    setSelections([null, null, null, null]);
     setCity(null);
     setMessage('');
     setError(null);
@@ -155,7 +147,6 @@ export const useWizard = (): UseWizardResult => {
     setSubcategoryPicks({});
     setBudgetAmountState(null);
     setCompanySubs([]);
-    setStyleSubs([]);
   }, []);
 
   const handleBack = useCallback(() => {
@@ -174,9 +165,9 @@ export const useWizard = (): UseWizardResult => {
   }, []);
 
   const handleSelect = useCallback((optionId: string) => {
-    // Step 4 = interests (multi-select), no usa este path; tiene su propio
-    // toggleInterest con botón Continue. Evitamos pisar selections[3].
-    if (step === 4) return;
+    // Step 3 = interests (multi-select), no usa este path; tiene su propio
+    // toggleInterest con botón Continue. Evitamos pisar selections[2].
+    if (step === 3) return;
     const prefIdx = step - 1;
     setSelections((prev) => {
       const next = [...prev];
@@ -188,7 +179,7 @@ export const useWizard = (): UseWizardResult => {
     // explícitamente. Antes había setTimeout(advanceToNext, 350).
   }, [step]);
 
-  // Selectores de parents con drill-down. RefineableStep llama estos handlers
+  // Selector de parent con drill-down. RefineableStep llama este handler
   // cuando el usuario tap un parent — NO auto-advance aquí, el sheet del
   // RefineableStep maneja el continue. Al cambiar de parent, reseteamos los
   // sub-tags del parent anterior (no tienen sentido fuera de su contexto).
@@ -201,18 +192,6 @@ export const useWizard = (): UseWizardResult => {
       }
       const next = [...prev];
       next[1] = id;
-      return next;
-    });
-  }, []);
-
-  const selectStyle = useCallback((id: string) => {
-    hapticImpact(ImpactFeedbackStyle.Light);
-    setSelections((prev) => {
-      if (prev[2] !== id) {
-        setStyleSubs([]);
-      }
-      const next = [...prev];
-      next[2] = id;
       return next;
     });
   }, []);
@@ -250,17 +229,13 @@ export const useWizard = (): UseWizardResult => {
 
     // Client-side validation — espejo de ValidateMinimumInput del backend (PR #48 api-net).
     // Evita roundtrip innecesario al backend cuando sabemos que va a devolver 400.
-    // Regla: ≥3 de 6 señales wizard {city, days, groupType, style, budget, interests}.
-    // Audit follow-up D4 (2026-04-27): interests cuenta como señal — el backend
-    // ya procesa Categories + Subcategories como soft-signals (peso 0.10/0.05,
-    // ver pattern_soft_signal_matching).
+    // Regla: ≥3 de 5 señales wizard {city, days, groupType, budget, interests}.
     const hasCity = !!city;
     const hasDays = !!selections[0];
     const hasGroupType = !!selections[1];
-    const hasPreferences = !!selections[2];
-    const hasBudget = !!selections[4];
+    const hasBudget = !!selections[3];
     const hasInterests = interests.length > 0;
-    const wizardSignals = [hasCity, hasDays, hasGroupType, hasPreferences, hasBudget, hasInterests]
+    const wizardSignals = [hasCity, hasDays, hasGroupType, hasBudget, hasInterests]
       .filter(Boolean).length;
     if (wizardSignals < 3) {
       hapticImpact(ImpactFeedbackStyle.Heavy);
@@ -285,15 +260,12 @@ export const useWizard = (): UseWizardResult => {
     // si no llegan al umbral mínimo (ver PR #47 api-net + ValidateMinimumInput).
     // - city (step 0): seleccionado en el chooser de ciudad.
     // - days (step 1): 1/2/3 via daysFromDuration.
-    // - groupType (step 2): solo/couple/family-kids/etc.
-    // - preferences + vibes (step 3): mismo valor (adventure/relax/cultural).
-    // - budget (step 4): budget/moderate/premium.
+    // - groupType (step 2): solo/couple/family/friends.
+    // - categories + subcategories (step 3): interests multi-select con drill-down.
+    // - budget (step 4): budget/moderate/premium + amount numérico raw.
     // El chat es opcional. Si usuario no escribió nada, enviamos string vacío; el
     // backend lo acepta (PR #48 Message nullable) y usa solo el wizard para el
     // pipeline. En WIZARD_ONLY siempre va vacío (Pablo 2026-04-25).
-    // `categories` = interests top-level (food, outdoors, ...) que el backend
-    // mapeará contra Place.Category. `subcategories` = drill-down per category
-    // que el backend mapeará contra Place.Subcategory (substring match).
     // `budget` = tier derivado desde budgetAmount (compat con backend actual).
     // `budgetAmount` = USD/día/persona raw para futuro matching más fino.
     // Backend: campos additive (System.Text.Json ignora unknown), añadidos al
@@ -303,27 +275,19 @@ export const useWizard = (): UseWizardResult => {
       tripContext: {
         city: city ?? undefined,
         groupType: selections[1] ?? 'solo',
-        preferences: selections[2] ? [selections[2]] : [],
-        vibes: selections[2] ? [selections[2]] : [],
         days: daysFromDuration(selections[0]),
-        budget: selections[4] ?? undefined,
+        budget: selections[3] ?? undefined,
         budgetAmount: budgetAmount != null && budgetAmount > 0 ? budgetAmount : undefined,
         categories: interests.length > 0 ? interests : undefined,
         subcategories:
           Object.keys(subcategoryPicks).length > 0 ? subcategoryPicks : undefined,
-        // Drill-down tags para company/style. Solo se envían los del parent
+        // Drill-down tags para company. Solo se envían los del parent
         // ACTUALMENTE seleccionado (al cambiar parent, los subs anteriores se
-        // limpian — ver selectCompany/selectStyle).
+        // limpian — ver selectCompany).
         companyTags: companySubs.length > 0 ? companySubs : undefined,
-        styleTags: styleSubs.length > 0 ? styleSubs : undefined,
       },
     };
 
-    // Dev-only inspection of the builder request/response. `logger.debug` is a
-    // no-op in Release (`MIN_LEVEL = 'warn'` when __DEV__ is false), so these
-    // calls disappear at runtime in TestFlight / App Store builds without
-    // needing `#if DEBUG`-style guards. Passing the objects directly (not
-    // JSON.stringify) avoids evaluation cost in prod too.
     logger.debug('[builder/chat] REQUEST', body);
 
     try {
@@ -350,7 +314,7 @@ export const useWizard = (): UseWizardResult => {
     } finally {
       setLoading(false);
     }
-  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, companySubs, styleSubs, t]);
+  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, companySubs, t]);
 
   // Mantener el ref siempre apuntando al último handleGenerate. advanceToNext
   // lo invoca cuando el usuario completa el último step de prefs y necesitamos
@@ -383,10 +347,7 @@ export const useWizard = (): UseWizardResult => {
     setBudgetAmount,
     companySubs,
     setCompanySubs,
-    styleSubs,
-    setStyleSubs,
     selectCompany,
-    selectStyle,
     city,
   };
 };
