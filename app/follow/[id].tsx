@@ -22,7 +22,8 @@ import { ProgressDots } from '../../components/ui/design-system';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { PlaceSearchModal } from '../../components/plan-editor/PlaceSearchModal';
 import { useOfflineTiles } from '../../components/map/useOfflineTiles';
-import type { PlanStop, PlanDetailResponse, Place, UpdateStopsRequest } from '../../lib/types';
+import { clearResume, getResume, setResume } from '../../lib/follow/resume-store';
+import type { PlanStop, PlanDetailResponse, Place, UpdateStopsRequest, RouteSegment } from '../../lib/types';
 import type { MapStop } from '../../components/map/PlanMap';
 
 type FollowSession = { id: string; planId: string; status: string };
@@ -52,6 +53,7 @@ export default function FollowModeScreen() {
   const [planCity, setPlanCity] = useState('');
   const [planCreatedById, setPlanCreatedById] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -95,6 +97,14 @@ export default function FollowModeScreen() {
   );
   const { tileUrl, isDownloading, hasCache } = useOfflineTiles(offlineTileStops);
 
+  // Persiste el stop actual en SecureStore para reanudar tras cerrar la app.
+  useEffect(() => {
+    if (!id || allStops.length === 0) return;
+    const stop = allStops[currentIndex];
+    if (!stop) return;
+    void setResume(id, stop.dayNumber, stop.orderIndex);
+  }, [id, currentIndex, allStops]);
+
   useEffect(() => {
     if (!isAuthenticated) {
       router.replace('/login');
@@ -114,10 +124,19 @@ export default function FollowModeScreen() {
     setPlanName(planRes.data.name);
     setPlanCity(planRes.data.city ?? '');
     setPlanCreatedById(planRes.data.createdById ?? null);
+    setRouteSegments(planRes.data.routeSegments ?? []);
     const stops = planRes.data.days
       .sort((a, b) => a.dayNumber - b.dayNumber)
       .flatMap((d) => d.stops.sort((a, b) => a.orderIndex - b.orderIndex));
     setAllStops(stops);
+
+    const resume = await getResume(id);
+    if (resume) {
+      const resumeIdx = stops.findIndex(
+        (s) => s.dayNumber === resume.dayNumber && s.orderIndex === resume.orderIndex,
+      );
+      if (resumeIdx >= 0) setCurrentIndex(resumeIdx);
+    }
 
     const sessionRes = await api<FollowSession>('/follow/start', {
       method: 'POST',
@@ -188,6 +207,7 @@ export default function FollowModeScreen() {
     if (session) {
       await api(`/follow/${session.id}/complete`, { method: 'PATCH' });
     }
+    void clearResume(id);
     Alert.alert(t('follow.tripCompleteTitle'), t('follow.tripCompleteBody'), [
       { text: t('follow.done'), onPress: () => router.back() },
     ]);
@@ -344,6 +364,8 @@ export default function FollowModeScreen() {
         activePinIndex={activeMapPinIndex}
         onPinPress={handlePinPress}
         style={s.map}
+        routeSegments={routeSegments}
+        activeDayNumber={currentDay}
       />
 
       <BlurView
