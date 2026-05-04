@@ -4,7 +4,6 @@ import DraggableFlatList, {
   ScaleDecorator,
   RenderItemParams,
 } from 'react-native-draggable-flatlist';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
@@ -50,22 +49,6 @@ export function DaySection({
 
   return (
     <View style={s.section}>
-      {/* Day header */}
-      <View style={s.header}>
-        <LinearGradient
-          colors={[colors.deepOcean, '#1e293b']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={s.badge}
-        >
-          <Text style={s.badgeText}>Day {dayNumber}</Text>
-        </LinearGradient>
-        <Text style={s.stopCount}>
-          {stops.length} {stops.length === 1 ? 'stop' : 'stops'}
-        </Text>
-        <View style={s.headerLine} />
-      </View>
-
       {/* Draggable list */}
       <DraggableFlatList
         data={stops}
@@ -99,32 +82,6 @@ export function DaySection({
 const s = StyleSheet.create({
   section: {
     marginBottom: spacing.lg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  badge: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: borderRadius.full,
-  },
-  badgeText: {
-    fontFamily: fonts.headingSemiBold,
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-  stopCount: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  headerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.borderColor,
   },
   listContainer: {
     minHeight: 1,
