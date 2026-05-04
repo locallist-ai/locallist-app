@@ -146,7 +146,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
       <MapLibreGL.MapView
         ref={mapRef}
         style={styles.map}
-        mapStyle="https://demotiles.maplibre.org/style.json"
+        mapStyle="https://tiles.openfreemap.org/styles/liberty"
         pitchEnabled={false}
         rotateEnabled={false}
       >

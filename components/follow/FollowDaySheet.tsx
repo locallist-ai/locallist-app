@@ -7,7 +7,8 @@ import {
   ScrollView,
   type LayoutChangeEvent,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -16,6 +17,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
@@ -24,6 +26,24 @@ import type { PlanStop } from '../../lib/types';
 
 const COLLAPSED_PEEK_HEIGHT = 56;
 const COMMIT_THRESHOLD = 0.35;
+
+const CATEGORY_COLOR: Record<string, string> = {
+  Food: '#f97316',
+  Outdoors: '#10b981',
+  Coffee: '#92400e',
+  Nightlife: '#1e1b4b',
+  Culture: '#0f172a',
+  Wellness: '#7c3aed',
+};
+
+const CATEGORY_GRADIENT: Record<string, [string, string]> = {
+  Food: ['#f97316', '#ea580c'],
+  Outdoors: ['#10b981', '#059669'],
+  Coffee: ['#92400e', '#78350f'],
+  Nightlife: ['#1e1b4b', '#312e81'],
+  Culture: ['#0f172a', '#1e293b'],
+  Wellness: ['#7c3aed', '#6d28d9'],
+};
 
 interface FollowDaySheetProps {
   allStops: PlanStop[];
@@ -128,11 +148,22 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
     transform: [{ translateY: translateY.value }],
   }));
 
+  // Current stop data shortcuts
+  const place = currentStop?.place;
+  const photoUrl = place?.photos?.[0];
+  const isValidPhoto = photoUrl?.startsWith('https://');
+  const categoryColor = CATEGORY_COLOR[place?.category ?? 'Culture'] ?? '#0f172a';
+  const categoryGradient: [string, string] = CATEGORY_GRADIENT[place?.category ?? 'Culture'] ?? ['#0f172a', '#1e293b'];
+  const iconName = currentStop?.timeBlock
+    ? TIME_BLOCK_ICON[currentStop.timeBlock] ?? DEFAULT_STOP_ICON
+    : DEFAULT_STOP_ICON;
+
   return (
     <Animated.View
       style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }, animatedSheetStyle]}
       onLayout={onLayoutSheet}
     >
+      {/* Handle bar — tap or drag to collapse/expand */}
       <GestureDetector gesture={handleGesture}>
         <View
           style={styles.handleBar}
@@ -142,6 +173,88 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
           <View style={styles.handle} />
         </View>
       </GestureDetector>
+
+      {/* Featured card — current stop with photo, name, rating, why */}
+      {place && (
+        <View style={styles.featuredCard}>
+          {/* Photo / gradient backdrop */}
+          <View style={styles.featuredPhoto}>
+            {isValidPhoto ? (
+              <Image
+                source={{ uri: photoUrl }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                transition={300}
+              />
+            ) : (
+              <LinearGradient colors={categoryGradient} style={StyleSheet.absoluteFill} />
+            )}
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.55)']}
+              style={styles.featuredGradient}
+            />
+            {/* Arrival pill + category badge */}
+            <View style={styles.featuredTopRow}>
+              {currentStop?.suggestedArrival && (
+                <View style={styles.timePill}>
+                  <MaterialCommunityIcons name={iconName} size={12} color={colors.sunsetOrange} />
+                  <Text style={styles.timePillText}>{currentStop.suggestedArrival}</Text>
+                </View>
+              )}
+              <View style={[styles.categoryBadge, { backgroundColor: categoryColor }]}>
+                <Text style={styles.categoryBadgeText}>{place.category}</Text>
+              </View>
+            </View>
+            {/* Name + neighborhood over photo */}
+            <View style={styles.featuredNameBlock}>
+              <Text style={styles.featuredName} numberOfLines={2}>{place.name}</Text>
+              {place.neighborhood && (
+                <View style={styles.featuredNeighborhood}>
+                  <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.75)" />
+                  <Text style={styles.featuredNeighborhoodText}>{place.neighborhood}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Metadata strip */}
+          <View style={styles.featuredMeta}>
+            {typeof place.googleRating === 'number' && place.googleRating > 0 && (
+              <View style={styles.metaPill}>
+                <MaterialCommunityIcons name="star" size={13} color="#b45309" />
+                <Text style={styles.metaPillText}>
+                  {place.googleRating.toFixed(1)}
+                  {typeof place.googleReviewCount === 'number' && place.googleReviewCount > 0
+                    ? ` · ${place.googleReviewCount}`
+                    : ''}
+                </Text>
+              </View>
+            )}
+            {currentStop?.suggestedDurationMin && (
+              <View style={styles.metaPill}>
+                <MaterialCommunityIcons name="clock-outline" size={13} color={colors.deepOcean} />
+                <Text style={styles.metaPillText}>
+                  {currentStop.suggestedDurationMin < 60
+                    ? `${currentStop.suggestedDurationMin}m`
+                    : `${Math.floor(currentStop.suggestedDurationMin / 60)}h`}
+                </Text>
+              </View>
+            )}
+            {place.priceRange && (
+              <View style={[styles.metaPill, styles.pricePill]}>
+                <Text style={styles.pricePillText}>{place.priceRange}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Why this place */}
+          {place.whyThisPlace?.length > 0 && (
+            <View style={styles.featuredWhy}>
+              <Text style={styles.featuredWhyText} numberOfLines={2}>{place.whyThisPlace}</Text>
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Day switcher */}
       <View style={styles.daySwitcherRow}>
@@ -163,9 +276,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
                   accessibilityRole="button"
                   accessibilityLabel={t('follow.dayLabel', { day: d })}
                 >
-                  <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>
-                    {d}
-                  </Text>
+                  <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{d}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -173,7 +284,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
         )}
       </View>
 
-      {/* Stops list */}
+      {/* Stop navigation list */}
       <ScrollView
         style={styles.list}
         contentContainerStyle={styles.listContent}
@@ -181,11 +292,15 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
       >
         {dayItems.map(({ stop, linearIndex }, idx) => {
           const isActive = linearIndex === currentIndex;
-          const iconName = stop.timeBlock
+          const stopIcon = stop.timeBlock
             ? TIME_BLOCK_ICON[stop.timeBlock] ?? DEFAULT_STOP_ICON
             : DEFAULT_STOP_ICON;
-          const arrival = stop.suggestedArrival ?? '';
+          const stopPhoto = stop.place?.photos?.[0];
+          const isValidStopPhoto = stopPhoto?.startsWith('https://');
+          const stopCategoryGradient: [string, string] =
+            CATEGORY_GRADIENT[stop.place?.category ?? 'Culture'] ?? ['#0f172a', '#1e293b'];
           const isLast = idx === dayItems.length - 1;
+
           return (
             <TouchableOpacity
               key={`${stop.placeId}-${idx}`}
@@ -194,31 +309,25 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
               style={[styles.row, isActive && styles.rowActive]}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
-              accessibilityLabel={`${stop.place?.name ?? 'Stop'} ${arrival}`}
+              accessibilityLabel={stop.place?.name ?? 'Stop'}
             >
               {/* Time-block icon + connector */}
               <View style={styles.timeCol}>
                 <View style={[styles.emojiBubble, isActive && styles.emojiBubbleActive]}>
                   <MaterialCommunityIcons
-                    name={iconName}
-                    size={18}
+                    name={stopIcon}
+                    size={15}
                     color={isActive ? '#FFFFFF' : colors.sunsetOrange}
                   />
                 </View>
                 {!isLast && <View style={styles.connector} />}
               </View>
 
-              {/* Content */}
+              {/* Name + neighborhood */}
               <View style={styles.contentCol}>
-                <View style={styles.rowHeader}>
-                  {arrival && <Text style={styles.timeText}>{arrival}</Text>}
-                  {stop.place?.category && (
-                    <Text style={styles.categoryText}>· {stop.place.category}</Text>
-                  )}
-                </View>
                 <Text
                   style={[styles.nameText, isActive && styles.nameTextActive]}
-                  numberOfLines={2}
+                  numberOfLines={1}
                 >
                   {stop.place?.name ?? 'Unknown place'}
                 </Text>
@@ -226,6 +335,20 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
                   <Text style={styles.neighborhoodText} numberOfLines={1}>
                     {stop.place.neighborhood}
                   </Text>
+                )}
+              </View>
+
+              {/* Thumbnail */}
+              <View style={styles.thumbContainer}>
+                {isValidStopPhoto ? (
+                  <Image
+                    source={{ uri: stopPhoto }}
+                    style={styles.thumb}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                ) : (
+                  <LinearGradient colors={stopCategoryGradient} style={styles.thumb} />
                 )}
               </View>
             </TouchableOpacity>
@@ -268,7 +391,7 @@ const styles = StyleSheet.create({
   },
   handleBar: {
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   handle: {
     width: 48,
@@ -276,16 +399,131 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: colors.borderColor,
   },
+
+  // --- Featured stop card ---
+  featuredCard: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: colors.bgMain,
+  },
+  featuredPhoto: {
+    height: 140,
+    position: 'relative',
+    justifyContent: 'flex-end',
+  },
+  featuredGradient: {
+    ...StyleSheet.absoluteFillObject,
+    top: '40%',
+  },
+  featuredTopRow: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    right: spacing.sm,
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+  },
+  timePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+  },
+  timePillText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 11,
+    color: '#FFFFFF',
+  },
+  categoryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+  },
+  categoryBadgeText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 10,
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  featuredNameBlock: {
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  featuredName: {
+    fontFamily: fonts.headingBold,
+    fontSize: 20,
+    color: '#FFFFFF',
+    lineHeight: 26,
+  },
+  featuredNeighborhood: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 2,
+  },
+  featuredNeighborhoodText: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.75)',
+  },
+  featuredMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingTop: 8,
+  },
+  metaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+  },
+  metaPillText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.deepOcean,
+  },
+  pricePill: {
+    backgroundColor: '#d1fae5',
+  },
+  pricePillText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: '#059669',
+  },
+  featuredWhy: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+  },
+  featuredWhyText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textSecondary,
+  },
+
+  // --- Day switcher ---
   daySwitcherRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   dayTitle: {
     fontFamily: fonts.headingBold,
-    fontSize: 22,
+    fontSize: 18,
     color: colors.deepOcean,
   },
   daySwitcher: {
@@ -293,9 +531,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   dayChip: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgMain,
@@ -308,22 +546,25 @@ const styles = StyleSheet.create({
   },
   dayChipText: {
     fontFamily: fonts.bodySemiBold,
-    fontSize: 13,
+    fontSize: 12,
     color: colors.deepOcean,
   },
   dayChipTextActive: {
     color: '#FFFFFF',
   },
+
+  // --- Stop navigation list ---
   list: {
     flex: 1,
   },
   listContent: {
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
   row: {
     flexDirection: 'row',
-    paddingVertical: 10,
+    alignItems: 'center',
+    paddingVertical: 8,
     paddingHorizontal: 4,
     gap: spacing.sm,
     borderRadius: borderRadius.md,
@@ -333,12 +574,12 @@ const styles = StyleSheet.create({
   },
   timeCol: {
     alignItems: 'center',
-    width: 40,
+    width: 36,
   },
   emojiBubble: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(242, 239, 233, 0.85)',
     borderWidth: 1,
     borderColor: 'rgba(249, 115, 22, 0.18)',
@@ -353,43 +594,38 @@ const styles = StyleSheet.create({
     flex: 1,
     width: 2,
     backgroundColor: colors.borderColor,
-    marginTop: 4,
+    marginTop: 2,
+    minHeight: 8,
   },
   contentCol: {
     flex: 1,
-    paddingTop: 4,
-  },
-  rowHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-  },
-  timeText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: colors.sunsetOrange,
-  },
-  categoryText: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    color: colors.textSecondary,
   },
   nameText: {
     fontFamily: fonts.headingSemiBold,
-    fontSize: 16,
+    fontSize: 14,
     color: colors.deepOcean,
-    lineHeight: 21,
+    lineHeight: 19,
   },
   nameTextActive: {
-    color: colors.deepOcean,
+    color: colors.sunsetOrange,
   },
   neighborhoodText: {
     fontFamily: fonts.body,
     fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: 1,
   },
+  thumbContainer: {
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  thumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+  },
+
+  // --- Empty state ---
   empty: {
     alignItems: 'center',
     paddingVertical: spacing.xl,
@@ -399,6 +635,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
   },
+
+  // --- Footer ---
   footer: {
     flexDirection: 'row',
     paddingHorizontal: spacing.md,
