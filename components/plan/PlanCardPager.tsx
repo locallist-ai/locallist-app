@@ -98,11 +98,16 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
     }
   }, [allDays, currentDay]);
 
+  const stopsForDay = useMemo(
+    () => stops.filter((s) => (s.dayNumber || 1) === currentDay).sort((a, b) => a.orderIndex - b.orderIndex),
+    [stops, currentDay],
+  );
+
   // Modals hoisted here so they render above the horizontal pager
   const [moveState, setMoveState] = useState({ visible: false, fromDay: 0, stopIndex: 0 });
   const [addState, setAddState] = useState({ visible: false, dayNumber: 1 });
 
-  const slotCount = 1 + stops.length;
+  const slotCount = 1 + stopsForDay.length;
   const hasMoreSlides = slotCount > 1;
   const isMultiDay = stops.some((s) => s.dayNumber !== stops[0]?.dayNumber);
 
@@ -147,16 +152,18 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
 
   const slideLabel = useMemo(() => {
     if (slide === 0) return 'Overview';
-    const stop = stops[slide - 1];
+    const stop = stopsForDay[slide - 1];
     if (!stop) return '';
-    const total = stops.length;
-    const dayLabel = isMultiDay ? `Day ${stop.dayNumber} · ` : '';
-    return `${dayLabel}Stop ${slide} of ${total}`;
-  }, [slide, stops, isMultiDay]);
+    return `Stop ${slide} of ${stopsForDay.length}`;
+  }, [slide, stopsForDay]);
 
   const handleDayChange = (day: number) => {
     Haptics.selectionAsync();
-    if (day !== currentDay) setCurrentDay(day);
+    if (day !== currentDay) {
+      setCurrentDay(day);
+      setSlide(0);
+      scrollRef.current?.scrollTo({ x: 0, animated: false });
+    }
   };
 
   // Scroll to a stop slide by its global index in `stops`.
@@ -219,12 +226,12 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
           allDays={allDays}
           onDayChange={handleDayChange}
         />
-        {stops.map((stop, idx) => (
+        {stopsForDay.map((stop, idx) => (
           <StopSlot
             key={`${stop.placeId}-${idx}`}
             stop={stop}
             index={idx}
-            total={stops.length}
+            total={stopsForDay.length}
           />
         ))}
       </ScrollView>
