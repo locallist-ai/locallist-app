@@ -19,9 +19,11 @@
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.0.3",
+    "@mapbox/polyline": "^1.2.1",
     "@maplibre/maplibre-react-native": "^10.4.2",
     "@sentry/react-native": "~7.2.0",
     "@shopify/react-native-skia": "2.2.12",
+    "@types/mapbox__polyline": "^1.0.5",
     "babel-preset-expo": "~54.0.10",
     "expo": "~54.0.33",
     "expo-apple-authentication": "~8.0.8",

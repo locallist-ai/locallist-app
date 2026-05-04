@@ -70,12 +70,22 @@ export type AuthResponse = {
   user: AuthUser;
 };
 
+export type RouteSegment = {
+  dayNumber: number;
+  fromOrderIndex: number;
+  toOrderIndex: number;
+  encodedPolyline: string;
+  distanceMeters: number;
+  durationSeconds: number;
+};
+
 export type PlanDetailResponse = Plan & {
   createdById?: string;
   days: {
     dayNumber: number;
     stops: (PlanStop & { id: string })[];
   }[];
+  routeSegments?: RouteSegment[];
 };
 
 export type StopInput = {

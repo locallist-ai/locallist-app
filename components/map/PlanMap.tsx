@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { View, StyleSheet, Pressable, Text, Linking, type ViewStyle } from 'react-native';
 import MapLibreGL, { type MapViewRef, type CameraRef } from '@maplibre/maplibre-react-native';
 import Animated, {
@@ -7,6 +7,8 @@ import Animated, {
   withRepeat,
   withSpring,
 } from 'react-native-reanimated';
+import polyline from '@mapbox/polyline';
+import type { RouteSegment } from '../../lib/types';
 
 export interface MapStop {
   id: string;
@@ -23,6 +25,10 @@ interface PlanMapProps {
   /** Callback cuando el usuario tap un pin. Recibe el índice del stop. */
   onPinPress?: (index: number) => void;
   style?: ViewStyle;
+  /** Polylines de routing del backend. Cuando estén presentes se usan en lugar de línea recta. */
+  routeSegments?: RouteSegment[];
+  /** Día activo para filtrar los routeSegments (Follow Mode muestra un día a la vez). */
+  activeDayNumber?: number;
 }
 
 const PIN_COLOR = '#3b82f6'; // electric-blue
@@ -34,6 +40,8 @@ export const PlanMap: React.FC<PlanMapProps> = ({
   onCameraUpdate,
   onPinPress,
   style,
+  routeSegments,
+  activeDayNumber,
 }) => {
   const mapRef = useRef<MapViewRef>(null);
   const cameraRef = useRef<CameraRef>(null);
@@ -97,20 +105,41 @@ export const PlanMap: React.FC<PlanMapProps> = ({
 
   const { center, bounds } = calculateBounds();
 
-  // Create GeoJSON for route line
-  const routeGeoJSON: GeoJSON.GeoJSON = {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        geometry: {
-          type: 'LineString',
-          coordinates: stops.map((stop) => [stop.longitude, stop.latitude]),
+  const routeGeoJSON = useMemo<GeoJSON.GeoJSON>(() => {
+    const daySegments = routeSegments?.filter(
+      (s) => activeDayNumber === undefined || s.dayNumber === activeDayNumber,
+    ) ?? [];
+
+    if (daySegments.length > 0) {
+      return {
+        type: 'FeatureCollection',
+        features: daySegments.map((seg) => {
+          const coords = polyline
+            .decode(seg.encodedPolyline, 6)
+            .map(([lat, lng]) => [lng, lat] as [number, number]);
+          return {
+            type: 'Feature' as const,
+            geometry: { type: 'LineString' as const, coordinates: coords },
+            properties: {},
+          };
+        }),
+      };
+    }
+
+    return {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: stops.map((stop) => [stop.longitude, stop.latitude]),
+          },
+          properties: {},
         },
-        properties: {},
-      },
-    ],
-  };
+      ],
+    };
+  }, [stops, routeSegments, activeDayNumber]);
 
   return (
     <View style={[styles.container, style]}>
