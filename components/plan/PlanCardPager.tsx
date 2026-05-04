@@ -85,12 +85,12 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   const lastHaptic = useRef(0);
   const hintPulse = useSharedValue(0);
 
-  // For non-owner read-only view: day chip filter
   const allDays = useMemo(() => {
     const set = new Set<number>();
     stops.forEach((s) => set.add(s.dayNumber || 1));
+    editorDays.forEach((d) => set.add(d.dayNumber));
     return Array.from(set).sort((a, b) => a - b);
-  }, [stops]);
+  }, [stops, editorDays]);
   const [currentDay, setCurrentDay] = useState<number>(allDays[0] ?? 1);
   useEffect(() => {
     if (allDays.length > 0 && !allDays.includes(currentDay)) {
@@ -415,8 +415,30 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
           </View>
 
           {isOwner ? (
-            /* ── Owner: inline editor ── */
+            /* ── Owner: inline editor with day filter ── */
             <>
+              {allDays.length > 1 && (
+                <View style={styles.summaryDayChips}>
+                  {allDays.map((d) => {
+                    const active = d === currentDay;
+                    return (
+                      <TouchableOpacity
+                        key={d}
+                        onPress={() => onDayChange(d)}
+                        activeOpacity={0.85}
+                        style={[styles.summaryDayChip, active && styles.summaryDayChipActive]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        accessibilityLabel={`Day ${d}`}
+                      >
+                        <Text style={[styles.summaryDayChipText, active && styles.summaryDayChipTextActive]}>
+                          Day {d}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
               {totalStops === 0 && (
                 <Animated.View entering={FadeInDown.duration(400).springify().damping(16)} style={styles.editorEmpty}>
                   <View style={styles.editorEmptyIcon}>
@@ -427,34 +449,37 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
                 </Animated.View>
               )}
               <View style={styles.editorDays}>
-                {editorDays.reduce<{ offset: number; nodes: React.ReactNode[] }>(
-                  (acc, day, dayIdx) => {
-                    const dayOffset = acc.offset;
-                    acc.nodes.push(
-                      <Animated.View
-                        key={day.dayNumber}
-                        entering={FadeInDown.delay(dayIdx * 60).duration(350).springify().damping(16)}
-                      >
-                        <DaySection
-                          dayNumber={day.dayNumber}
-                          stops={day.stops}
-                          onReorder={(from, to) =>
-                            dispatch({ type: 'REORDER', dayNumber: day.dayNumber, from, to })
-                          }
-                          onDeleteStop={(stopIndex) =>
-                            dispatch({ type: 'DELETE_STOP', dayNumber: day.dayNumber, stopIndex })
-                          }
-                          onMoveStop={editorDays.length > 1 ? (stopIndex) => onRequestMove(day.dayNumber, stopIndex) : undefined}
-                          onAddPress={() => onRequestAdd(day.dayNumber)}
-                          onStopPress={(localIdx) => onScrollToStop(dayOffset + localIdx)}
-                        />
-                      </Animated.View>
-                    );
-                    acc.offset += day.stops.length;
-                    return acc;
-                  },
-                  { offset: 0, nodes: [] },
-                ).nodes}
+                {editorDays
+                  .filter((day) => day.dayNumber === currentDay)
+                  .reduce<{ offset: number; nodes: React.ReactNode[] }>(
+                    (acc, day, dayIdx) => {
+                      const dayOffset = editorDays
+                        .filter((d) => d.dayNumber < day.dayNumber)
+                        .reduce((sum, d) => sum + d.stops.length, 0);
+                      acc.nodes.push(
+                        <Animated.View
+                          key={day.dayNumber}
+                          entering={FadeInDown.delay(dayIdx * 60).duration(350).springify().damping(16)}
+                        >
+                          <DaySection
+                            dayNumber={day.dayNumber}
+                            stops={day.stops}
+                            onReorder={(from, to) =>
+                              dispatch({ type: 'REORDER', dayNumber: day.dayNumber, from, to })
+                            }
+                            onDeleteStop={(stopIndex) =>
+                              dispatch({ type: 'DELETE_STOP', dayNumber: day.dayNumber, stopIndex })
+                            }
+                            onMoveStop={editorDays.length > 1 ? (stopIndex) => onRequestMove(day.dayNumber, stopIndex) : undefined}
+                            onAddPress={() => onRequestAdd(day.dayNumber)}
+                            onStopPress={(localIdx) => onScrollToStop(dayOffset + localIdx)}
+                          />
+                        </Animated.View>
+                      );
+                      return acc;
+                    },
+                    { offset: 0, nodes: [] },
+                  ).nodes}
               </View>
             </>
           ) : (
