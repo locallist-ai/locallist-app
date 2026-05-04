@@ -17,6 +17,7 @@ type Props = {
   onReorder: (from: number, to: number) => void;
   onDeleteStop: (stopIndex: number) => void;
   onMoveStop?: (stopIndex: number) => void;
+  onReplaceStop?: (stopIndex: number) => void;
   onAddPress: () => void;
   onStopPress?: (stopIndex: number) => void;
 };
@@ -27,6 +28,7 @@ export function DaySection({
   onReorder,
   onDeleteStop,
   onMoveStop,
+  onReplaceStop,
   onAddPress,
   onStopPress,
 }: Props) {
@@ -39,6 +41,7 @@ export function DaySection({
           stop={item}
           onDelete={() => onDeleteStop(index)}
           onMovePress={onMoveStop ? () => onMoveStop(index) : undefined}
+          onReplacePress={onReplaceStop ? () => onReplaceStop(index) : undefined}
           drag={drag}
           isActive={isActive}
           onPress={onStopPress ? () => onStopPress(index) : undefined}

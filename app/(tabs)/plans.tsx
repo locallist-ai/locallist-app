@@ -583,7 +583,7 @@ export default function PlansScreen() {
                     </Text>
                     {item.type && (
                       <View style={s.typeBadge}>
-                        <Text style={s.typeBadgeText}>{item.type}</Text>
+                        <Text style={s.typeBadgeText}>{t(`planType.${item.type}`, { defaultValue: item.type })}</Text>
                       </View>
                     )}
                   </View>

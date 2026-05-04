@@ -19,6 +19,7 @@ type Action =
   | { type: 'DELETE_STOP'; dayNumber: number; stopIndex: number }
   | { type: 'MOVE_TO_DAY'; fromDay: number; stopIndex: number; toDay: number }
   | { type: 'ADD_STOP'; dayNumber: number; place: Place }
+  | { type: 'REPLACE_STOP'; dayNumber: number; stopIndex: number; place: Place }
   | { type: 'SET_SAVING'; value: boolean }
   | { type: 'MARK_SAVED' };
 
@@ -126,6 +127,19 @@ function reducer(state: State, action: Action): State {
       }
 
       return { ...state, days: recalcOrderIndices(days), isDirty: true };
+    }
+
+    case 'REPLACE_STOP': {
+      const days = state.days.map((day) => {
+        if (day.dayNumber !== action.dayNumber) return day;
+        const stops = day.stops.map((s, idx) =>
+          idx === action.stopIndex
+            ? { ...s, placeId: action.place.id, place: action.place }
+            : s,
+        );
+        return { ...day, stops };
+      });
+      return { ...state, days, isDirty: true };
     }
 
     case 'SET_SAVING':

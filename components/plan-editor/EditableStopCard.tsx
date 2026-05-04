@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import type { PlanStop } from '../../lib/types';
 
@@ -20,12 +21,14 @@ const CATEGORY_GRADIENTS: Record<Category, [string, string]> = {
 type Props = {
   stop: PlanStop & { id?: string };
   onMovePress?: () => void;
+  onReplacePress?: () => void;
   drag: () => void;
   isActive: boolean;
   onPress?: () => void;
 };
 
-export function EditableStopCard({ stop, onMovePress, drag, isActive, onPress }: Props) {
+export function EditableStopCard({ stop, onMovePress, onReplacePress, drag, isActive, onPress }: Props) {
+  const { t } = useTranslation();
   const place = stop.place;
   const photoUrl = place?.photos?.[0] ?? null;
   const category = (place?.category ?? 'Culture') as Category;
@@ -44,30 +47,32 @@ export function EditableStopCard({ stop, onMovePress, drag, isActive, onPress }:
         <Ionicons name="reorder-three" size={22} color={colors.textSecondary} />
       </TouchableOpacity>
 
-      {/* Tappable area: photo + content → navigates to stop slide */}
+      {/* Thumbnail */}
+      <View style={s.thumbnail}>
+        {photoUrl ? (
+          <Image source={{ uri: photoUrl }} style={s.thumbnailImg} contentFit="cover" />
+        ) : (
+          <LinearGradient colors={gradient} style={s.thumbnailImg} />
+        )}
+      </View>
+
+      {/* Right column: name (full width) + chips & buttons row */}
       <TouchableOpacity
-        style={s.tappable}
+        style={s.rightCol}
         onPress={onPress}
         activeOpacity={onPress ? 0.7 : 1}
         accessibilityRole={onPress ? 'button' : 'none'}
         accessibilityLabel={onPress ? `View ${place?.name ?? 'stop'} details` : undefined}
       >
-        <View style={s.thumbnail}>
-          {photoUrl ? (
-            <Image source={{ uri: photoUrl }} style={s.thumbnailImg} contentFit="cover" />
-          ) : (
-            <LinearGradient colors={gradient} style={s.thumbnailImg} />
-          )}
-        </View>
+        <Text style={s.name} numberOfLines={1} ellipsizeMode="tail">
+          {place?.name ?? 'Unknown place'}
+        </Text>
 
-        <View style={s.content}>
-          <Text style={s.name} numberOfLines={1}>
-            {place?.name ?? 'Unknown place'}
-          </Text>
-          <View style={s.metaRow}>
+        <View style={s.bottomRow}>
+          <View style={s.chips}>
             {place?.category && (
               <View style={s.categoryChip}>
-                <Text style={s.categoryText}>{place.category}</Text>
+                <Text style={s.categoryText}>{t(`category.${place.category}`, { defaultValue: place.category })}</Text>
               </View>
             )}
             {stop.suggestedDurationMin != null && (
@@ -77,20 +82,33 @@ export function EditableStopCard({ stop, onMovePress, drag, isActive, onPress }:
               </View>
             )}
           </View>
+
+          <View style={s.actions}>
+            {onReplacePress && (
+              <TouchableOpacity
+                onPress={onReplacePress}
+                style={s.actionBtn}
+                accessibilityLabel="Replace stop"
+                accessibilityRole="button"
+              >
+                <Ionicons name="swap-horizontal-outline" size={17} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+            {onMovePress && (
+              <TouchableOpacity
+                onPress={onMovePress}
+                style={s.actionBtn}
+                accessibilityLabel="Move to another day"
+                accessibilityRole="button"
+              >
+                <View style={s.dayNumBadge}>
+                  <Text style={s.dayNumText}>{stop.dayNumber}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </TouchableOpacity>
-
-      {/* Move to day button — only shown for multi-day plans */}
-      {onMovePress && (
-        <TouchableOpacity
-          onPress={onMovePress}
-          style={s.moveBtn}
-          accessibilityLabel="Move to another day"
-          accessibilityRole="button"
-        >
-          <Ionicons name="swap-horizontal-outline" size={18} color={colors.textSecondary} />
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -118,37 +136,39 @@ const s = StyleSheet.create({
     padding: 4,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   thumbnail: {
-    width: 72,
-    height: 72,
+    width: 56,
+    height: 56,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
     backgroundColor: colors.bgMain,
+    flexShrink: 0,
   },
   thumbnailImg: {
     width: '100%',
     height: '100%',
   },
-  tappable: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  rightCol: {
     flex: 1,
-    gap: spacing.sm,
-  },
-  content: {
-    flex: 1,
-    gap: 4,
+    minWidth: 0,
+    gap: 6,
   },
   name: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 15,
     color: colors.deepOcean,
   },
-  metaRow: {
+  bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
+  },
+  chips: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 3,
   },
   categoryChip: {
     backgroundColor: colors.sunsetOrange + '15',
@@ -175,9 +195,27 @@ const s = StyleSheet.create({
     fontSize: 10,
     color: colors.electricBlue,
   },
-  moveBtn: {
-    padding: 8,
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  actionBtn: {
+    padding: 6,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  dayNumBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: colors.textSecondary + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayNumText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.textSecondary,
   },
 });

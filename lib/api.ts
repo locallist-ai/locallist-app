@@ -1,6 +1,7 @@
 import * as SecureStore from './safe-store';
 import { Platform } from 'react-native';
 import { logger } from './logger';
+import i18n from './i18n';
 
 function getApiUrl(): string {
   const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -98,6 +99,7 @@ export async function api<T>(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Accept-Language': i18n.language || 'en',
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 

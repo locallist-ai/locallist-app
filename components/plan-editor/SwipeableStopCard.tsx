@@ -12,12 +12,13 @@ type Props = {
   stop: PlanStop & { id?: string };
   onDelete: () => void;
   onMovePress?: () => void;
+  onReplacePress?: () => void;
   drag: () => void;
   isActive: boolean;
   onPress?: () => void;
 };
 
-export function SwipeableStopCard({ stop, onDelete, onMovePress, drag, isActive, onPress }: Props) {
+export function SwipeableStopCard({ stop, onDelete, onMovePress, onReplacePress, drag, isActive, onPress }: Props) {
   const { t } = useTranslation();
   const swipeableRef = useRef<Swipeable>(null);
 
@@ -61,6 +62,7 @@ export function SwipeableStopCard({ stop, onDelete, onMovePress, drag, isActive,
         <EditableStopCard
           stop={stop}
           onMovePress={onMovePress}
+          onReplacePress={onReplacePress}
           drag={drag}
           isActive={isActive}
           onPress={onPress}

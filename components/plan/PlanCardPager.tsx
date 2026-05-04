@@ -106,6 +106,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   // Modals hoisted here so they render above the horizontal pager
   const [moveState, setMoveState] = useState({ visible: false, fromDay: 0, stopIndex: 0 });
   const [addState, setAddState] = useState({ visible: false, dayNumber: 1 });
+  const [replaceState, setReplaceState] = useState({ visible: false, dayNumber: 1, stopIndex: 0 });
 
   const slotCount = 1 + stopsForDay.length;
   const hasMoreSlides = slotCount > 1;
@@ -221,6 +222,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
           onEditorSave={onEditorSave}
           onRequestMove={(fromDay, stopIndex) => setMoveState({ visible: true, fromDay, stopIndex })}
           onRequestAdd={(dayNumber) => setAddState({ visible: true, dayNumber })}
+          onRequestReplace={(dayNumber, stopIndex) => setReplaceState({ visible: true, dayNumber, stopIndex })}
           onScrollToStop={handleScrollToStop}
           currentDay={currentDay}
           allDays={allDays}
@@ -232,6 +234,10 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
             stop={stop}
             index={idx}
             total={stopsForDay.length}
+            isOwner={isOwner}
+            dayNumber={currentDay}
+            stopIndex={idx}
+            onRequestReplace={isOwner ? (dayNumber, stopIndex) => setReplaceState({ visible: true, dayNumber, stopIndex }) : undefined}
           />
         ))}
       </ScrollView>
@@ -293,6 +299,15 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
         }}
         onClose={() => setAddState({ ...addState, visible: false })}
       />
+      <PlaceSearchModal
+        visible={replaceState.visible}
+        city={plan.city}
+        onSelect={(place) => {
+          onEditorDispatch?.({ type: 'REPLACE_STOP', dayNumber: replaceState.dayNumber, stopIndex: replaceState.stopIndex, place });
+          setReplaceState({ ...replaceState, visible: false });
+        }}
+        onClose={() => setReplaceState({ ...replaceState, visible: false })}
+      />
     </View>
   );
 };
@@ -317,6 +332,7 @@ interface OverviewSlotProps {
   onEditorSave?: () => Promise<void>;
   onRequestMove: (fromDay: number, stopIndex: number) => void;
   onRequestAdd: (dayNumber: number) => void;
+  onRequestReplace: (dayNumber: number, stopIndex: number) => void;
   onScrollToStop: (globalStopIndex: number) => void;
   // read-only (non-owner)
   currentDay: number;
@@ -342,6 +358,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
   onEditorSave,
   onRequestMove,
   onRequestAdd,
+  onRequestReplace,
   onScrollToStop,
   currentDay,
   allDays,
@@ -395,7 +412,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
           </View>
           {plan.type && (
             <View style={styles.typePill}>
-              <Text style={styles.typePillText}>{plan.type}</Text>
+              <Text style={styles.typePillText}>{t(`planType.${plan.type}`, { defaultValue: plan.type })}</Text>
             </View>
           )}
         </View>
@@ -478,6 +495,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
                               dispatch({ type: 'DELETE_STOP', dayNumber: day.dayNumber, stopIndex })
                             }
                             onMoveStop={editorDays.length > 1 ? (stopIndex) => onRequestMove(day.dayNumber, stopIndex) : undefined}
+                            onReplaceStop={(stopIndex) => onRequestReplace(day.dayNumber, stopIndex)}
                             onAddPress={() => onRequestAdd(day.dayNumber)}
                             onStopPress={(localIdx) => onScrollToStop(dayOffset + localIdx)}
                           />
@@ -527,7 +545,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
                         {s.place?.name ?? 'Unknown'}
                       </Text>
                       <Text style={styles.summaryRowMeta} numberOfLines={1}>
-                        {s.place?.category ?? ''}
+                        {s.place?.category ? t(`category.${s.place.category}`, { defaultValue: s.place.category }) : ''}
                         {arrival}
                       </Text>
                     </View>
@@ -619,9 +637,13 @@ interface StopSlotProps {
   stop: PlanStop;
   index: number;
   total: number;
+  isOwner?: boolean;
+  dayNumber?: number;
+  stopIndex?: number;
+  onRequestReplace?: (dayNumber: number, stopIndex: number) => void;
 }
 
-const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) => {
+const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total, isOwner, dayNumber, stopIndex, onRequestReplace }) => {
   const { t } = useTranslation();
   const [photoIdx, setPhotoIdx] = useState(0);
   const place = stop.place;
@@ -750,6 +772,19 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total }) =>
             <Text style={styles.sectionLabel}>{t('place.whyThisPlace')}</Text>
             <Text style={styles.whyText}>{why}</Text>
           </View>
+        )}
+
+        {isOwner && onRequestReplace && (
+          <TouchableOpacity
+            style={styles.replaceBtn}
+            onPress={() => onRequestReplace(dayNumber!, stopIndex!)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Replace this stop"
+          >
+            <Ionicons name="swap-horizontal-outline" size={15} color={colors.sunsetOrange} />
+            <Text style={styles.replaceBtnText}>{t('plan.replaceStop')}</Text>
+          </TouchableOpacity>
         )}
       </View>
     </ScrollView>
@@ -1129,6 +1164,24 @@ const styles = StyleSheet.create({
   travelPill: { backgroundColor: '#e0f2fe' },
   travelPillText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: '#0369a1' },
 
+  replaceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.sunsetOrange + '40',
+    borderStyle: 'dashed',
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.sunsetOrange + '08',
+    marginTop: spacing.xs,
+  },
+  replaceBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.sunsetOrange,
+  },
   whyBlock: {
     marginTop: 4,
   },
