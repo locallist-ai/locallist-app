@@ -5,10 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   type LayoutChangeEvent,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -23,45 +22,15 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import type { PlanStop } from '../../lib/types';
 
-// Follow Mode day list — Pablo 2026-04-26: "show day 1: -coffee or breakfast,
-// -activity, -lunch, -activity, -dinner. Each have edit button right here."
-//
-// Sustituye al BottomSheetStop single-card con un listado del día activo.
-// Cada fila es tocable (focus en el mapa) y tiene un menu (...) con opciones
-// editables: Replace place / Skip / Delete.
-//
-// Edit handlers:
-//  - onReplace: el padre abre PlaceSearchModal y persiste el cambio.
-//  - onDelete: el padre confirma + persiste.
-// El sheet en sí solo dispara los handlers; toda la persistencia vive en
-// app/follow/[id].tsx para tener control sobre la API.
-//
-// Pablo 2026-04-27 evening: el sheet ahora es colapsable — tap en el handle
-// bar (o drag down) lo baja para revelar el mapa a pantalla completa. Tap
-// otra vez (o drag up) lo expande. Pause button removido por redundante
-// (era equivalente al chevron back de la pantalla).
-
-/** Cantidad de píxeles del sheet que quedan visibles cuando está colapsado. */
 const COLLAPSED_PEEK_HEIGHT = 56;
-/** Threshold de drag (% del recorrido) para commitear toggle al soltar. */
 const COMMIT_THRESHOLD = 0.35;
 
 interface FollowDaySheetProps {
-  /** Todos los stops del plan, ya con dayNumber poblado. */
   allStops: PlanStop[];
-  /** Index activo (lineal sobre allStops). */
   currentIndex: number;
-  /** Cambiar el stop activo (linear index sobre allStops). */
   onSelect: (linearIndex: number) => void;
-  /** Cambiar al día siguiente/anterior cuando hay multi-día. */
   onChangeDay?: (day: number) => void;
-  /** Acciones por stop (las dispara el padre, persistencia + reload). */
-  onReplaceStop?: (stop: PlanStop) => void;
-  onDeleteStop?: (stop: PlanStop) => void;
-  /** Marca el plan como completo. */
   onComplete?: () => void;
-  /** ¿El usuario es owner? Solo el owner puede editar/borrar. */
-  canEdit?: boolean;
 }
 
 export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
@@ -69,17 +38,13 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
   currentIndex,
   onSelect,
   onChangeDay,
-  onReplaceStop,
-  onDeleteStop,
   onComplete,
-  canEdit = false,
 }) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const currentStop = allStops[currentIndex];
   const currentDay = currentStop?.dayNumber ?? 1;
 
-  // Stops del día activo + sus indices linear (para onSelect).
   const dayItems = useMemo(() => {
     const items: { stop: PlanStop; linearIndex: number }[] = [];
     allStops.forEach((stop, i) => {
@@ -89,14 +54,12 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
     return items;
   }, [allStops, currentDay]);
 
-  // ¿Hay multi-día?
   const allDays = useMemo(() => {
     const days = new Set<number>();
     allStops.forEach((s) => days.add(s.dayNumber));
     return Array.from(days).sort();
   }, [allStops]);
 
-  // Collapse state (Pablo 2026-04-27): translateY=0 expanded, =maxOffset collapsed.
   const [collapsed, setCollapsed] = useState(false);
   const sheetHeight = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -105,7 +68,6 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
     const h = e.nativeEvent.layout.height;
     if (h > 0 && sheetHeight.value !== h) {
       sheetHeight.value = h;
-      // Si ya está colapsado, re-aplica el offset al nuevo height.
       if (collapsed) translateY.value = h - COLLAPSED_PEEK_HEIGHT;
     }
   };
@@ -123,7 +85,6 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
     runOnJS(setCollapsedJS)(target !== 0);
   }, [setCollapsedJS, sheetHeight, translateY]);
 
-  // Tap en el handle bar = toggle.
   const tapGesture = useMemo(
     () =>
       Gesture.Tap().onEnd(() => {
@@ -133,7 +94,6 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
     [toggleCollapse],
   );
 
-  // Pan en el handle bar = drag fino con commit por threshold/velocity.
   const panGesture = useMemo(() => {
     const startY = { value: 0 };
     return Gesture.Pan()
@@ -150,7 +110,6 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
       .onEnd((e) => {
         'worklet';
         const max = sheetHeight.value - COLLAPSED_PEEK_HEIGHT;
-        // Commit por velocity rápida o por posición pasada el threshold.
         const fastDown = e.velocityY > 800;
         const fastUp = e.velocityY < -800;
         const past = translateY.value > max * COMMIT_THRESHOLD;
@@ -169,42 +128,24 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
     transform: [{ translateY: translateY.value }],
   }));
 
-  const handleEditMenu = (stop: PlanStop) => {
-    if (!canEdit) return;
-    Haptics.selectionAsync();
-    Alert.alert(
-      stop.place?.name ?? 'Stop',
-      'What would you like to do with this stop?',
-      [
-        {
-          text: 'Replace place',
-          onPress: () => onReplaceStop?.(stop),
-        },
-        {
-          text: 'Delete stop',
-          style: 'destructive',
-          onPress: () => onDeleteStop?.(stop),
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-      { cancelable: true },
-    );
-  };
-
   return (
     <Animated.View
       style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }, animatedSheetStyle]}
       onLayout={onLayoutSheet}
     >
       <GestureDetector gesture={handleGesture}>
-        <View style={styles.handleBar} accessibilityRole="button" accessibilityLabel={collapsed ? 'Expand stops list' : 'Collapse stops list to see map'}>
+        <View
+          style={styles.handleBar}
+          accessibilityRole="button"
+          accessibilityLabel={collapsed ? t('follow.expandSheet') : t('follow.collapseSheet')}
+        >
           <View style={styles.handle} />
         </View>
       </GestureDetector>
 
       {/* Day switcher */}
       <View style={styles.daySwitcherRow}>
-        <Text style={styles.dayTitle}>Day {currentDay}</Text>
+        <Text style={styles.dayTitle}>{t('follow.dayLabel', { day: currentDay })}</Text>
         {allDays.length > 1 && (
           <View style={styles.daySwitcher}>
             {allDays.map((d) => {
@@ -220,7 +161,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
                   style={[styles.dayChip, active && styles.dayChipActive]}
                   activeOpacity={0.7}
                   accessibilityRole="button"
-                  accessibilityLabel={`Day ${d}`}
+                  accessibilityLabel={t('follow.dayLabel', { day: d })}
                 >
                   <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>
                     {d}
@@ -255,7 +196,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={`${stop.place?.name ?? 'Stop'} ${arrival}`}
             >
-              {/* Time-block + connector */}
+              {/* Time-block icon + connector */}
               <View style={styles.timeCol}>
                 <View style={[styles.emojiBubble, isActive && styles.emojiBubbleActive]}>
                   <MaterialCommunityIcons
@@ -287,19 +228,6 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
                   </Text>
                 )}
               </View>
-
-              {/* Edit menu (solo owner) */}
-              {canEdit && (
-                <TouchableOpacity
-                  onPress={() => handleEditMenu(stop)}
-                  hitSlop={10}
-                  style={styles.menuBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Edit stop"
-                >
-                  <Ionicons name="ellipsis-vertical" size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
-              )}
             </TouchableOpacity>
           );
         })}
@@ -311,8 +239,6 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
         )}
       </ScrollView>
 
-      {/* Footer action — solo Complete day. Pause removido por redundante (era
-          equivalente al chevron back de la pantalla — Pablo 2026-04-27). */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.footerBtn, styles.footerBtnPrimary]}
@@ -320,8 +246,8 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
           activeOpacity={0.85}
           accessibilityRole="button"
         >
-          <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-          <Text style={styles.footerBtnPrimaryText}>{t('follow.completeDay')}</Text>
+          <MaterialCommunityIcons name="check-circle" size={18} color="#FFFFFF" />
+          <Text style={styles.footerBtnPrimaryText}>{t('follow.completeTrip')}</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -463,9 +389,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: 2,
-  },
-  menuBtn: {
-    padding: 6,
   },
   empty: {
     alignItems: 'center',

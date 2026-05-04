@@ -19,11 +19,9 @@ import { useAuth } from '../../lib/auth';
 import { PlanMap } from '../../components/map/PlanMap';
 import { FollowDaySheet } from '../../components/follow/FollowDaySheet';
 import { ProgressDots } from '../../components/ui/design-system';
-import { ConfirmModal } from '../../components/ui/ConfirmModal';
-import { PlaceSearchModal } from '../../components/plan-editor/PlaceSearchModal';
 import { useOfflineTiles } from '../../components/map/useOfflineTiles';
 import { clearResume, getResume, setResume } from '../../lib/follow/resume-store';
-import type { PlanStop, PlanDetailResponse, Place, UpdateStopsRequest, RouteSegment } from '../../lib/types';
+import type { PlanStop, PlanDetailResponse, RouteSegment } from '../../lib/types';
 import type { MapStop } from '../../components/map/PlanMap';
 
 type FollowSession = { id: string; planId: string; status: string };
@@ -44,30 +42,17 @@ const mapToMapStop = (planStop: PlanStop): MapStop | null => {
 export default function FollowModeScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [session, setSession] = useState<FollowSession | null>(null);
   const [allStops, setAllStops] = useState<(PlanStop & { id?: string })[]>([]);
   const [planName, setPlanName] = useState('');
-  const [planCity, setPlanCity] = useState('');
-  const [planCreatedById, setPlanCreatedById] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Edit state
-  const [stopBeingEdited, setStopBeingEdited] = useState<PlanStop | null>(null);
-  const [stopToDelete, setStopToDelete] = useState<PlanStop | null>(null);
-  const [searchVisible, setSearchVisible] = useState(false);
-  const [savingEdit, setSavingEdit] = useState(false);
-
-  const isOwner = !!(user && planCreatedById && user.id === planCreatedById);
-
-  // Pablo 2026-04-26: Follow Mode debe mostrar UN solo día a la vez en el
-  // top bar y mapa — antes los progress dots, el counter, y los pins del
-  // mapa sumaban TODOS los stops del plan, lo que confunde en multi-día.
   const currentStopRef = allStops[currentIndex];
   const currentDay = currentStopRef?.dayNumber ?? 1;
   const dayStops = useMemo(
@@ -81,7 +66,6 @@ export default function FollowModeScreen() {
     return idx >= 0 ? idx : 0;
   }, [dayStops, currentStopRef]);
 
-  // Pins del mapa: solo del día activo.
   const mapStops = useMemo<MapStop[]>(
     () =>
       allStops
@@ -95,7 +79,7 @@ export default function FollowModeScreen() {
     () => mapStops.map((s) => ({ latitude: s.latitude, longitude: s.longitude })),
     [mapStops],
   );
-  const { tileUrl, isDownloading, hasCache } = useOfflineTiles(offlineTileStops);
+  useOfflineTiles(offlineTileStops);
 
   // Persiste el stop actual en SecureStore para reanudar tras cerrar la app.
   useEffect(() => {
@@ -122,8 +106,6 @@ export default function FollowModeScreen() {
     }
 
     setPlanName(planRes.data.name);
-    setPlanCity(planRes.data.city ?? '');
-    setPlanCreatedById(planRes.data.createdById ?? null);
     setRouteSegments(planRes.data.routeSegments ?? []);
     const stops = planRes.data.days
       .sort((a, b) => a.dayNumber - b.dayNumber)
@@ -154,10 +136,6 @@ export default function FollowModeScreen() {
     Haptics.selectionAsync();
   };
 
-  // Audit follow-up D5 (2026-04-27): cuando el next stop está en otro día,
-  // pedimos confirmación antes de cruzar — la UI day-scoped (chip "Day N",
-  // dots por día, pins por día) hacía que el cruce silencioso confundiera al
-  // user. handleComplete sigue siendo el final del plan completo.
   const advanceLinear = (nextIndex: number) => {
     if (nextIndex >= allStops.length) {
       handleComplete();
@@ -182,26 +160,6 @@ export default function FollowModeScreen() {
     setCurrentIndex(nextIndex);
   };
 
-  const handleNext = () => {
-    if (currentIndex < allStops.length - 1) {
-      advanceLinear(currentIndex + 1);
-    } else {
-      handleComplete();
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
-  };
-
-  const handleSkip = () => {
-    if (currentIndex < allStops.length - 1) {
-      advanceLinear(currentIndex + 1);
-    } else {
-      handleComplete();
-    }
-  };
-
   const handleComplete = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (session) {
@@ -211,108 +169,6 @@ export default function FollowModeScreen() {
     Alert.alert(t('follow.tripCompleteTitle'), t('follow.tripCompleteBody'), [
       { text: t('follow.done'), onPress: () => router.back() },
     ]);
-  };
-
-// Reload stops desde backend tras editar (mantiene currentIndex en el mismo
-  // place si existe, o cae al primer stop disponible).
-  const reloadStops = async () => {
-    const res = await api<PlanDetailResponse>(`/plans/${id}`);
-    if (res.data) {
-      const reloaded = res.data.days
-        .sort((a, b) => a.dayNumber - b.dayNumber)
-        .flatMap((d) => d.stops.sort((a, b) => a.orderIndex - b.orderIndex));
-      setAllStops(reloaded);
-      // Reajustar currentIndex si el stop activo desapareció.
-      const currentPlaceId = allStops[currentIndex]?.placeId;
-      const newIdx = reloaded.findIndex((s) => s.placeId === currentPlaceId);
-      if (newIdx >= 0) {
-        setCurrentIndex(newIdx);
-      } else if (reloaded.length > 0) {
-        setCurrentIndex(Math.min(currentIndex, reloaded.length - 1));
-      } else {
-        setCurrentIndex(0);
-      }
-    }
-  };
-
-  // Construye el body para PUT /plans/{id}/stops a partir del state actual,
-  // aplicando una transformación opcional sobre el array de stops.
-  const persistStops = async (
-    transform: (stops: PlanStop[]) => Array<{ placeId: string; dayNumber: number; orderIndex: number; timeBlock: string | null; suggestedDurationMin: number | null }>,
-  ): Promise<boolean> => {
-    setSavingEdit(true);
-    const next = transform(allStops);
-    const body: UpdateStopsRequest = { stops: next };
-    const res = await api(`/plans/${id}/stops`, { method: 'PUT', body });
-    setSavingEdit(false);
-    if (res.status >= 200 && res.status < 300) {
-      await reloadStops();
-      return true;
-    }
-    Alert.alert(t('follow.updateFailedTitle'), res.error ?? t('follow.updateFailedBody'));
-    return false;
-  };
-
-  const handleReplaceStop = (stop: PlanStop) => {
-    setStopBeingEdited(stop);
-    setSearchVisible(true);
-  };
-
-  const handlePlaceSelectedForReplace = async (place: Place) => {
-    setSearchVisible(false);
-    if (!stopBeingEdited) return;
-    const target = stopBeingEdited;
-    setStopBeingEdited(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await persistStops((stops) =>
-      stops.map((s) => ({
-        placeId: s.placeId === target.placeId && s.dayNumber === target.dayNumber && s.orderIndex === target.orderIndex
-          ? place.id
-          : s.placeId,
-        dayNumber: s.dayNumber,
-        orderIndex: s.orderIndex,
-        timeBlock: s.timeBlock,
-        suggestedDurationMin: s.suggestedDurationMin ?? null,
-      })),
-    );
-  };
-
-  const handleDeleteStop = (stop: PlanStop) => {
-    setStopToDelete(stop);
-  };
-
-  const confirmDeleteStop = async () => {
-    if (!stopToDelete) return;
-    const target = stopToDelete;
-    setStopToDelete(null);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    await persistStops((stops) => {
-      // Filtrar el stop target + reindexar orderIndex dentro de su día.
-      const filtered = stops.filter(
-        (s) => !(s.placeId === target.placeId && s.dayNumber === target.dayNumber && s.orderIndex === target.orderIndex),
-      );
-      const byDay = new Map<number, PlanStop[]>();
-      for (const s of filtered) {
-        const arr = byDay.get(s.dayNumber) ?? [];
-        arr.push(s);
-        byDay.set(s.dayNumber, arr);
-      }
-      const result: Array<{ placeId: string; dayNumber: number; orderIndex: number; timeBlock: string | null; suggestedDurationMin: number | null }> = [];
-      for (const [day, list] of byDay) {
-        list
-          .sort((a, b) => a.orderIndex - b.orderIndex)
-          .forEach((s, i) => {
-            result.push({
-              placeId: s.placeId,
-              dayNumber: day,
-              orderIndex: i,
-              timeBlock: s.timeBlock,
-              suggestedDurationMin: s.suggestedDurationMin ?? null,
-            });
-          });
-      }
-      return result;
-    });
   };
 
   const handleChangeDay = (day: number) => {
@@ -407,34 +263,9 @@ export default function FollowModeScreen() {
           currentIndex={currentIndex}
           onSelect={goTo}
           onChangeDay={handleChangeDay}
-          onReplaceStop={handleReplaceStop}
-          onDeleteStop={handleDeleteStop}
           onComplete={handleComplete}
-          canEdit={isOwner}
         />
       </View>
-
-      <PlaceSearchModal
-        visible={searchVisible}
-        city={planCity || 'Miami'}
-        onSelect={handlePlaceSelectedForReplace}
-        onClose={() => {
-          setSearchVisible(false);
-          setStopBeingEdited(null);
-        }}
-      />
-
-      <ConfirmModal
-        visible={!!stopToDelete}
-        icon="trash-outline"
-        iconColor={colors.error}
-        title={t('follow.deleteStopTitle')}
-        body={t('follow.deleteStopBody', { name: stopToDelete?.place?.name ?? '' })}
-        confirmLabel={savingEdit ? t('plan.deleting') : t('common.delete')}
-        confirmDestructive
-        onCancel={() => setStopToDelete(null)}
-        onConfirm={confirmDeleteStop}
-      />
     </View>
   );
 }
@@ -524,8 +355,6 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 2,
   },
-  // Day list sheet — ocupa la mitad inferior de la pantalla (~60% para
-  // dejar el mapa visible arriba). El sheet es scrollable internamente.
   dayListWrap: {
     position: 'absolute',
     left: 0,
