@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -47,11 +47,22 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const emailInputRef = useRef<TextInput>(null);
 
   // Check Apple Sign In availability on mount
   useEffect(() => {
     AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
   }, []);
+
+  // Focus email input after step transition animation completes (iOS crash prevention)
+  useEffect(() => {
+    if (step === 'credentials') {
+      const timer = setTimeout(() => {
+        emailInputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [step]);
 
   // Google OAuth setup — pass a dummy clientId when env vars are missing to satisfy
   // the hook's invariant (can't skip hooks conditionally). The Google button is hidden
@@ -476,7 +487,7 @@ export default function LoginScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
-              autoFocus
+              ref={emailInputRef}
             />
 
             {/* Password Input */}

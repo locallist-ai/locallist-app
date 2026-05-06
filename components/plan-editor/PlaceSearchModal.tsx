@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -47,6 +47,7 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const searchInputRef = useRef<TextInput>(null);
 
   // Client-side subcategory filter: use id (lowercase) with includes() to match
   // both canonical ("Ramen") and legacy free-text ("ramen / japanese") subcategories
@@ -99,6 +100,16 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
   const handleOpen = useCallback(() => {
     if (!searched) search('', null);
   }, [searched, search]);
+
+  // Focus search input after modal slide-in animation completes (iOS crash prevention)
+  useEffect(() => {
+    if (visible) {
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [visible]);
 
   const renderPlace = ({ item }: { item: Place }) => {
     const photoUrl = item.photos?.[0] ?? null;
@@ -174,8 +185,8 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
             placeholderTextColor={colors.textSecondary}
             value={query}
             onChangeText={handleQueryChange}
-            autoFocus
             returnKeyType="search"
+            ref={searchInputRef}
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={() => handleQueryChange('')}>
