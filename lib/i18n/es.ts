@@ -72,7 +72,7 @@ export default {
   plans: {
     chooserTitle: 'Tu próximo plan',
     chooserSubtitle: '¿Cómo quieres empezar?',
-    exploreCurated: 'Explora planes curados',
+    exploreCurated: 'Explora planes seleccionados',
     exploreCuratedSub: 'Seleccionados por locales que conocen lo mejor',
     buildYourOwn: 'Crea tu propio plan',
     buildYourOwnSub: 'Dinos tu estilo, nosotros hacemos el resto',
@@ -204,7 +204,7 @@ export default {
   },
   planType: {
     ai: 'IA',
-    curated: 'Curado',
+    curated: 'Seleccionado',
     custom: 'Personalizado',
     foodie: 'Gastronómico',
     adventure: 'Aventura',
