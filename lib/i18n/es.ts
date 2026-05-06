@@ -44,6 +44,7 @@ export default {
     interestCulture: 'Cultura',
     interestNightlife: 'Noche',
     interestWellness: 'Bienestar',
+    interestShopping: 'Compras',
     interestSubcategoryTitle: '¿Qué tipo de {{category}}?',
     interestSubcategorySubtitle: 'Elige una o varias (opcional)',
     interestDone: 'Listo',
@@ -199,6 +200,7 @@ export default {
     Nightlife: 'Noche',
     Culture: 'Cultura',
     Wellness: 'Bienestar',
+    Shopping: 'Compras',
   },
   planType: {
     ai: 'IA',
