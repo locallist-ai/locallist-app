@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -47,11 +47,22 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const emailInputRef = useRef<TextInput>(null);
 
   // Check Apple Sign In availability on mount
   useEffect(() => {
     AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
   }, []);
+
+  // Focus email input after step transition animation completes (iOS crash prevention)
+  useEffect(() => {
+    if (step === 'credentials') {
+      const timer = setTimeout(() => {
+        emailInputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [step]);
 
   // Google OAuth setup — pass a dummy clientId when env vars are missing to satisfy
   // the hook's invariant (can't skip hooks conditionally). The Google button is hidden
@@ -70,14 +81,14 @@ export default function LoginScreen() {
     if (googleResponse.type !== 'success') {
       setLoading(null);
       if (googleResponse.type === 'error') {
-        setError('Google Sign In failed');
+        setError(t('auth.errorGoogleFailed'));
       }
       return;
     }
 
     const idToken = googleResponse.params.id_token;
     if (!idToken) {
-      setError('Google Sign In failed: no token received');
+      setError(t('auth.errorGoogleNoToken'));
       setLoading(null);
       return;
     }
@@ -94,7 +105,7 @@ export default function LoginScreen() {
       if (res.data) {
         await login(res.data.user, res.data.accessToken, res.data.refreshToken);
       } else {
-        setError(res.error ?? 'Google Sign In failed');
+        setError(res.error ?? t('auth.errorGoogleFailed'));
       }
       setLoading(null);
     })();
@@ -130,11 +141,11 @@ export default function LoginScreen() {
       if (res.data) {
         await login(res.data.user, res.data.accessToken, res.data.refreshToken);
       } else {
-        setError(res.error ?? 'Log in failed');
+        setError(res.error ?? t('auth.errorLoginFailed'));
       }
     } catch (err: unknown) {
       if (err instanceof Error && 'code' in err && (err as { code: string }).code === 'ERR_REQUEST_CANCELED') return;
-      setError('Apple Sign In failed');
+      setError(t('auth.errorAppleFailed'));
     } finally {
       setLoading(null);
     }
@@ -144,14 +155,14 @@ export default function LoginScreen() {
     setError(null);
 
     if (!googleConfigured) {
-      setError('Google Sign In no está configurado en este build. Usa Apple o email por ahora.');
+      setError(t('auth.errorGoogleNotConfigured'));
       return;
     }
 
     setLoading('google');
 
     if (!googleRequest) {
-      setError('Google Sign In is not ready yet, try again in a moment');
+      setError(t('auth.errorGoogleNotReady'));
       setLoading(null);
       return;
     }
@@ -159,7 +170,7 @@ export default function LoginScreen() {
     try {
       await googlePromptAsync();
     } catch {
-      setError('Google Sign In failed');
+      setError(t('auth.errorGoogleFailed'));
       setLoading(null);
     }
   };
@@ -169,11 +180,11 @@ export default function LoginScreen() {
 
     // Validate inputs
     if (!email.trim() || !email.includes('@')) {
-      setError('Please enter a valid email');
+      setError(t('auth.errorInvalidEmail'));
       return;
     }
-    if (!password.trim()) {
-      setError('Please enter a password');
+    if (!password) {
+      setError(t('auth.errorPasswordRequired'));
       return;
     }
 
@@ -185,7 +196,7 @@ export default function LoginScreen() {
         method: 'POST',
         body: {
           email: email.trim(),
-          password: password.trim(),
+          password,
           name: name.trim() || undefined,
         },
       },
@@ -196,7 +207,7 @@ export default function LoginScreen() {
     if (res.data) {
       await login(res.data.user, res.data.accessToken, res.data.refreshToken);
     } else {
-      setError(res.error ?? 'Registration failed');
+      setError(res.error ?? t('auth.errorRegistrationFailed'));
     }
   };
 
@@ -205,11 +216,11 @@ export default function LoginScreen() {
 
     // Validate inputs
     if (!email.trim() || !email.includes('@')) {
-      setError('Please enter a valid email');
+      setError(t('auth.errorInvalidEmail'));
       return;
     }
-    if (!password.trim()) {
-      setError('Please enter a password');
+    if (!password) {
+      setError(t('auth.errorPasswordRequired'));
       return;
     }
 
@@ -221,7 +232,7 @@ export default function LoginScreen() {
         method: 'POST',
         body: {
           email: email.trim(),
-          password: password.trim(),
+          password,
         },
       },
     );
@@ -231,7 +242,7 @@ export default function LoginScreen() {
     if (res.data) {
       await login(res.data.user, res.data.accessToken, res.data.refreshToken);
     } else {
-      setError(res.error ?? 'Login failed');
+      setError(res.error ?? t('auth.errorLoginFailed'));
     }
   };
 
@@ -271,8 +282,8 @@ export default function LoginScreen() {
           }}
         >
           {step === 'choose'
-            ? (authMode === 'signin' ? 'Welcome back' : 'Join LocalList')
-            : credentialsMode === 'login' ? 'Log in' : 'Create account'}
+            ? (authMode === 'signin' ? t('auth.welcomeBack') : t('auth.joinLocalList'))
+            : credentialsMode === 'login' ? t('auth.logIn') : t('auth.createAccount')}
         </Text>
         <Text
           style={{
@@ -284,8 +295,7 @@ export default function LoginScreen() {
             lineHeight: 22,
           }}
         >
-          Stop researching. Start traveling.{'\n'}
-          Only the best, nothing else.
+          {t('auth.tagline')}
         </Text>
 
         {error && (
@@ -351,7 +361,7 @@ export default function LoginScreen() {
                         color: active ? '#FFFFFF' : colors.textSecondary,
                       }}
                     >
-                      {mode === 'signin' ? 'Log in' : 'Sign up'}
+                      {mode === 'signin' ? t('auth.logIn') : t('auth.signUp')}
                     </Text>
                   </Pressable>
                 );
@@ -383,7 +393,7 @@ export default function LoginScreen() {
                   <>
                     <Ionicons name="logo-apple" size={20} color="#FFFFFF" />
                     <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' }}>
-                      {authMode === 'signin' ? 'Log in with Apple' : 'Sign up with Apple'}
+                      {authMode === 'signin' ? t('auth.logInWithApple') : t('auth.signUpWithApple')}
                     </Text>
                   </>
                 )}
@@ -418,7 +428,7 @@ export default function LoginScreen() {
                 <>
                   <Ionicons name="logo-google" size={20} color={colors.deepOcean} />
                   <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.deepOcean }}>
-                    {authMode === 'signin' ? 'Log in with Google' : 'Sign up with Google'}
+                    {authMode === 'signin' ? t('auth.logInWithGoogle') : t('auth.signUpWithGoogle')}
                   </Text>
                 </>
               )}
@@ -450,7 +460,7 @@ export default function LoginScreen() {
             >
               <Ionicons name="mail-outline" size={20} color={colors.sunsetOrange} />
               <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.sunsetOrange }}>
-                {authMode === 'signin' ? 'Log in with Email' : 'Sign up with Email'}
+                {authMode === 'signin' ? t('auth.logInWithEmail') : t('auth.signUpWithEmail')}
               </Text>
             </Pressable>
           </View>
@@ -477,7 +487,7 @@ export default function LoginScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
-              autoFocus
+              ref={emailInputRef}
             />
 
             {/* Password Input */}
@@ -567,8 +577,8 @@ export default function LoginScreen() {
                 borderCurve: 'continuous',
                 backgroundColor: colors.sunsetOrange,
                 opacity:
-                  (credentialsMode === 'login' && (!email.trim() || !password.trim())) ||
-                  (credentialsMode === 'register' && (!email.trim() || !password.trim() || passwordStrength < 5))
+                  (credentialsMode === 'login' && (!email.trim() || !password)) ||
+                  (credentialsMode === 'register' && (!email.trim() || !password || passwordStrength < 5))
                     ? 0.5
                     : loading ? 0.6 : pressed ? 0.85 : 1,
                 transform: [{ scale: pressed ? 0.98 : 1 }],
@@ -576,15 +586,15 @@ export default function LoginScreen() {
               onPress={credentialsMode === 'login' ? handleLogin : handleRegister}
               disabled={
                 loading !== null ||
-                (credentialsMode === 'login' && (!email.trim() || !password.trim())) ||
-                (credentialsMode === 'register' && (!email.trim() || !password.trim() || passwordStrength < 5))
+                (credentialsMode === 'login' && (!email.trim() || !password)) ||
+                (credentialsMode === 'register' && (!email.trim() || !password || passwordStrength < 5))
               }
             >
               {loading === 'email' ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' }}>
-                  {credentialsMode === 'login' ? 'Log In' : 'Create Account'}
+                  {credentialsMode === 'login' ? t('auth.logInButton') : t('auth.createAccountButton')}
                 </Text>
               )}
             </Pressable>
@@ -610,9 +620,9 @@ export default function LoginScreen() {
                   color: colors.textSecondary,
                 }}
               >
-                {credentialsMode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+                {credentialsMode === 'login' ? t('auth.noAccount') : t('auth.alreadyHaveAccount')}
                 <Text style={{ color: colors.sunsetOrange, fontFamily: fonts.bodySemiBold }}>
-                  {credentialsMode === 'login' ? 'Create one' : 'Log in'}
+                  {credentialsMode === 'login' ? t('auth.createOne') : t('auth.logIn')}
                 </Text>
               </Text>
             </Pressable>
@@ -633,7 +643,7 @@ export default function LoginScreen() {
                   color: colors.sunsetOrange,
                 }}
               >
-                Back
+                {t('auth.back')}
               </Text>
             </Pressable>
           </View>

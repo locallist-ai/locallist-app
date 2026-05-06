@@ -3,6 +3,7 @@ import i18n from '../lib/i18n';
 import { initSentry, Sentry } from '../lib/sentry';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Animated as RNAnimated, Platform, TouchableOpacity } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -172,6 +173,7 @@ function AuthGate() {
 }
 
 function AppStack() {
+  const { t } = useTranslation();
   return (
     <Stack
       screenOptions={{
@@ -193,21 +195,21 @@ function AppStack() {
       <Stack.Screen
         name="follow/[id]"
         options={{
-          title: 'Follow Mode',
+          title: t('nav.followMode'),
           headerShown: false,
         }}
       />
       <Stack.Screen
         name="place/[id]"
         options={{
-          title: 'Place',
+          title: t('nav.place'),
           headerBackTitle: 'Back',
         }}
       />
       <Stack.Screen
         name="login"
         options={{
-          title: 'Sign In',
+          title: t('nav.signIn'),
           presentation: Platform.OS === 'ios' ? 'modal' : 'card',
         }}
       />

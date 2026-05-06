@@ -9,6 +9,7 @@ import {
   Pressable,
   Share,
   Linking,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -82,7 +83,7 @@ function PlusUpsellCard({ t }: { t: ReturnType<typeof useTranslation>['t'] }) {
     <Animated.View entering={FadeInDown.duration(600).delay(200).springify().damping(14)}>
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => {/* TODO: open paywall */}}
+        onPress={() => Alert.alert(t('pro.comingSoonTitle'), t('pro.comingSoonBody'), [{ text: t('pro.ok') }])}
         style={s.plusCard}
       >
         <LinearGradient

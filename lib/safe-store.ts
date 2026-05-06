@@ -58,14 +58,15 @@ export async function getItemAsync(key: string): Promise<string | null> {
 }
 
 export async function setItemAsync(key: string, value: string): Promise<void> {
-  fallback.set(key, value);
   if (await probeSecureStore()) {
     try {
       await SecureStore.setItemAsync(key, value);
+      return;
     } catch {
-      // already in fallback
+      // SecureStore available but write failed (rare); fall through to Map
     }
   }
+  fallback.set(key, value);
 }
 
 export async function deleteItemAsync(key: string): Promise<void> {
