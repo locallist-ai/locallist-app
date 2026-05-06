@@ -4,7 +4,7 @@ import { Image, ImageSource } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export type Category = 'Food' | 'Outdoors' | 'Coffee' | 'Nightlife' | 'Culture' | 'Wellness';
+export type Category = 'Food' | 'Outdoors' | 'Coffee' | 'Nightlife' | 'Culture' | 'Wellness' | 'Shopping';
 
 interface PhotoHeroProps {
   imageUrl?: string;
@@ -28,6 +28,7 @@ const CATEGORY_GRADIENTS: Record<Category, [string, string]> = {
   Nightlife: ['#1e1b4b', '#312e81'],      // deep indigo
   Culture: ['#0f172a', '#1e293b'],        // deepOcean
   Wellness: ['#7c3aed', '#6d28d9'],       // purple
+  Shopping: ['#be185d', '#9d174d'],       // rose-700 → rose-800
 };
 
 export const PhotoHero: React.FC<PhotoHeroProps> = ({

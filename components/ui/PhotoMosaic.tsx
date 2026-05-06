@@ -17,6 +17,7 @@ const CATEGORY_GRADIENTS: Record<Category, [string, string]> = {
   Nightlife: ['#1e1b4b', '#312e81'],
   Culture: ['#0f172a', '#1e293b'],
   Wellness: ['#7c3aed', '#6d28d9'],
+  Shopping: ['#be185d', '#9d174d'],
 };
 
 const Tile: React.FC<{ uri?: string; gradient: [string, string]; style?: object }> = ({ uri, gradient, style }) => {

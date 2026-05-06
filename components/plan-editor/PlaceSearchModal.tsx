@@ -6,9 +6,9 @@ import {
   Modal,
   TextInput,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  TouchableWithoutFeedback,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,8 +17,9 @@ import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import type { Place } from '../../lib/types';
+import { SUBCATEGORIES_BY_INTEREST } from '../home/constants';
 
-const CATEGORIES = ['Food', 'Coffee', 'Culture', 'Outdoors', 'Nightlife', 'Wellness'] as const;
+const CATEGORIES = ['Food', 'Coffee', 'Culture', 'Outdoors', 'Nightlife', 'Wellness', 'Shopping'] as const;
 
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   Food: 'restaurant-outline',
@@ -27,6 +28,7 @@ const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   Outdoors: 'leaf-outline',
   Nightlife: 'moon-outline',
   Wellness: 'fitness-outline',
+  Shopping: 'bag-outline',
 };
 
 type Props = {
@@ -40,10 +42,17 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
-  const [results, setResults] = useState<Place[]>([]);
+  const [subcategory, setSubcategory] = useState<string | null>(null);
+  const [allResults, setAllResults] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  // Client-side subcategory filter: use id (lowercase) with includes() to match
+  // both canonical ("Ramen") and legacy free-text ("ramen / japanese") subcategories
+  const results = subcategory
+    ? allResults.filter((p) => p.subcategory?.toLowerCase().includes(subcategory))
+    : allResults;
 
   const search = useCallback(
     async (searchQuery: string, searchCategory: string | null) => {
@@ -58,7 +67,7 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
         `/places?${params.toString()}`,
       );
       if (res.data) {
-        setResults(res.data.places);
+        setAllResults(res.data.places);
       }
       setLoading(false);
       setSearched(true);
@@ -81,6 +90,7 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
     (cat: string) => {
       const newCat = category === cat ? null : cat;
       setCategory(newCat);
+      setSubcategory(null);
       search(query, newCat);
     },
     [category, query, search],
@@ -100,7 +110,8 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
           onSelect(item);
           setQuery('');
           setCategory(null);
-          setResults([]);
+          setSubcategory(null);
+          setAllResults([]);
           setSearched(false);
         }}
         activeOpacity={0.7}
@@ -173,26 +184,64 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
           )}
         </View>
 
-        {/* Category chips — 2 rows grid */}
-        <View style={s.chipGrid}>
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[s.chip, category === cat && s.chipActive]}
-              onPress={() => handleCategoryPress(cat)}
-              activeOpacity={0.7}
+        {/* Category grid OR selected category + subcategory drill-down */}
+        {category === null ? (
+          <View style={s.chipGrid}>
+            {CATEGORIES.map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                style={s.chip}
+                onPress={() => handleCategoryPress(cat)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={CATEGORY_ICONS[cat]} size={15} color={colors.textSecondary} />
+                <Text style={s.chipText}>{cat}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <View style={s.subChipWrapper}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={s.subChipScroll}
+              contentContainerStyle={s.subChipContent}
             >
-              <Ionicons
-                name={CATEGORY_ICONS[cat]}
-                size={15}
-                color={category === cat ? '#FFFFFF' : colors.textSecondary}
-              />
-              <Text style={[s.chipText, category === cat && s.chipTextActive]}>
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+              {/* Active category chip — tap to return to grid */}
+              <TouchableOpacity
+                style={s.chipSelected}
+                onPress={() => handleCategoryPress(category)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={CATEGORY_ICONS[category]} size={15} color="#FFFFFF" />
+                <Text style={[s.chipText, s.chipTextActive]}>{category}</Text>
+              </TouchableOpacity>
+              {(SUBCATEGORIES_BY_INTEREST[category.toLowerCase()] ?? []).map((opt) => {
+                const active = subcategory === opt.id;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[s.subChip, active && s.subChipActive]}
+                    onPress={() => setSubcategory(active ? null : opt.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[s.subChipText, active && s.subChipTextActive]}>
+                      {opt.emoji} {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            {/* Right-edge fade — indicates more chips to scroll */}
+            <LinearGradient
+              colors={[colors.bgMain + '00', colors.bgMain]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.subChipFade}
+              pointerEvents="none"
+            />
+          </View>
+        )}
 
         {/* Results */}
         {loading ? (
@@ -272,6 +321,17 @@ const s = StyleSheet.create({
     backgroundColor: colors.sunsetOrange,
     borderColor: colors.sunsetOrange,
   },
+  chipSelected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 9,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.sunsetOrange,
+    borderWidth: 1,
+    borderColor: colors.sunsetOrange,
+  },
   chipText: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 13,
@@ -344,5 +404,44 @@ const s = StyleSheet.create({
     fontSize: 11,
     color: colors.textSecondary,
     flex: 1,
+  },
+  subChipWrapper: {
+    marginBottom: spacing.md,
+  },
+  subChipScroll: {
+    flexGrow: 0,
+  },
+  subChipContent: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  subChipFade: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 48,
+    pointerEvents: 'none',
+  },
+  subChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
+  subChipActive: {
+    backgroundColor: colors.electricBlue,
+    borderColor: colors.electricBlue,
+  },
+  subChipText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  subChipTextActive: {
+    color: '#FFFFFF',
   },
 });
