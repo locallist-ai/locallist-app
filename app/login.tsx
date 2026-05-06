@@ -185,7 +185,7 @@ export default function LoginScreen() {
         method: 'POST',
         body: {
           email: email.trim(),
-          password: password.trim(),
+          password,
           name: name.trim() || undefined,
         },
       },
@@ -221,7 +221,7 @@ export default function LoginScreen() {
         method: 'POST',
         body: {
           email: email.trim(),
-          password: password.trim(),
+          password,
         },
       },
     );
