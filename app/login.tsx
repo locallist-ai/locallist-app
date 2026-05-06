@@ -172,7 +172,7 @@ export default function LoginScreen() {
       setError(t('auth.errorInvalidEmail'));
       return;
     }
-    if (!password.trim()) {
+    if (!password) {
       setError(t('auth.errorPasswordRequired'));
       return;
     }
@@ -208,7 +208,7 @@ export default function LoginScreen() {
       setError(t('auth.errorInvalidEmail'));
       return;
     }
-    if (!password.trim()) {
+    if (!password) {
       setError(t('auth.errorPasswordRequired'));
       return;
     }
@@ -566,8 +566,8 @@ export default function LoginScreen() {
                 borderCurve: 'continuous',
                 backgroundColor: colors.sunsetOrange,
                 opacity:
-                  (credentialsMode === 'login' && (!email.trim() || !password.trim())) ||
-                  (credentialsMode === 'register' && (!email.trim() || !password.trim() || passwordStrength < 5))
+                  (credentialsMode === 'login' && (!email.trim() || !password)) ||
+                  (credentialsMode === 'register' && (!email.trim() || !password || passwordStrength < 5))
                     ? 0.5
                     : loading ? 0.6 : pressed ? 0.85 : 1,
                 transform: [{ scale: pressed ? 0.98 : 1 }],
@@ -575,8 +575,8 @@ export default function LoginScreen() {
               onPress={credentialsMode === 'login' ? handleLogin : handleRegister}
               disabled={
                 loading !== null ||
-                (credentialsMode === 'login' && (!email.trim() || !password.trim())) ||
-                (credentialsMode === 'register' && (!email.trim() || !password.trim() || passwordStrength < 5))
+                (credentialsMode === 'login' && (!email.trim() || !password)) ||
+                (credentialsMode === 'register' && (!email.trim() || !password || passwordStrength < 5))
               }
             >
               {loading === 'email' ? (
