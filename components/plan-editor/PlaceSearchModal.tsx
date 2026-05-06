@@ -170,7 +170,7 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
           <Ionicons name="search" size={18} color={colors.textSecondary} />
           <TextInput
             style={s.searchInput}
-            placeholder={`Search places in ${city}...`}
+            placeholder={t('placeSearch.placeholder', { city })}
             placeholderTextColor={colors.textSecondary}
             value={query}
             onChangeText={handleQueryChange}
