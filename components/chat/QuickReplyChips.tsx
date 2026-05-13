@@ -48,23 +48,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   chip: {
-    backgroundColor: colors.bgCard,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 1.5,
-    borderColor: colors.electricBlue,
+    borderColor: 'rgba(255,255,255,0.5)',
     borderRadius: borderRadius.full,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
   chipDisabled: {
-    borderColor: colors.borderColor,
+    borderColor: 'rgba(255,255,255,0.2)',
     opacity: 0.5,
   },
   chipText: {
     fontFamily: fonts.bodyMedium,
     fontSize: 14,
-    color: colors.electricBlue,
+    color: colors.paperWhite,
   },
   chipTextDisabled: {
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.4)',
   },
 });

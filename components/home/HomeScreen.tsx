@@ -1,16 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, useWindowDimensions, StyleSheet, ActivityIndicator } from 'react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import { fonts, colors, borderRadius } from '../../lib/theme';
+import { router, Redirect } from 'expo-router';
+import { fonts, colors } from '../../lib/theme';
 import {
-  CITIES,
   STEPS,
   TOTAL_STEPS,
   WIZARD_ONLY,
@@ -18,7 +14,6 @@ import {
   COMPANY_SUBCATEGORIES,
 } from './constants';
 import { useWizard } from './useWizard';
-import { CityCard } from './CityCard';
 import { WizardStep } from './WizardStep';
 import { ChatStep } from './ChatStep';
 import { InterestsStep } from './InterestsStep';
@@ -29,6 +24,7 @@ import { RefineableStep } from './RefineableStep';
 // los emojis legacy del bg — el wizard se ve más editorial sin ellos.
 import { ProgressDots } from './ProgressDots';
 import { HeroSkiaBg } from './HeroSkiaBg';
+import { useTripContext } from '../../lib/trip-context-store';
 
 // ── Component ──
 
@@ -37,6 +33,7 @@ export const HomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const wizard = useWizard();
+  const { city: tripCity, loading: cityLoading } = useTripContext();
 
   // Animations stripped per Pablo 2026-04-26. Hero photo se renderiza
   // estático. Si Pablo cambia de opinión, el variant 'skia' o 'veo' siguen
@@ -48,6 +45,12 @@ export const HomeScreen: React.FC = () => {
   // probablemente OK, pero respetamos la directiva.
   const entering = undefined;
   const exiting = undefined;
+
+  // City must be selected before entering the wizard. If not yet initialized
+  // (loading), show nothing. If initialized with no city, redirect to home.
+  if (!cityLoading && !tripCity) {
+    return <Redirect href="/(tabs)/home" />;
+  }
 
   const isCityStep = wizard.step === 0;
   const stepIndexInSteps = wizard.step - 1; // 0..STEPS.length-1
@@ -82,25 +85,31 @@ export const HomeScreen: React.FC = () => {
 
       {/* Wizard */}
       <View style={[styles.fullAbsolute, { paddingTop: insets.top + 12 }]}>
-        {/* Header: back button (hidden on step 0) + progress dots */}
+        {/* Header: back button + progress dots + city pill */}
         <View style={styles.header}>
-          {wizard.step > 0 ? (
-            <TouchableOpacity
-              onPress={wizard.handleBack}
-              activeOpacity={0.7}
-              style={styles.backButton}
-              accessibilityLabel="Back"
-              accessibilityRole="button"
-            >
-              <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.headerSpacer} />
-          )}
+          <TouchableOpacity
+            onPress={wizard.handleBack}
+            activeOpacity={0.7}
+            style={styles.backButton}
+            accessibilityLabel="Back"
+            accessibilityRole="button"
+          >
+            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
           <View style={styles.dotsCenter}>
-            <ProgressDots current={wizard.step} total={TOTAL_STEPS} />
+            <ProgressDots current={wizard.step - 1} total={TOTAL_STEPS} />
           </View>
-          <View style={styles.headerSpacer} />
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/home')}
+            activeOpacity={0.75}
+            style={styles.cityPill}
+            accessibilityRole="button"
+            accessibilityLabel={`City: ${tripCity ?? ''}, tap to change`}
+          >
+            <Text style={styles.cityPillText} numberOfLines={1}>
+              {'\u{1F4CD}'} {tripCity}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Decorations layer eliminada — Pablo 2026-04-25: emojis flotando
@@ -114,65 +123,6 @@ export const HomeScreen: React.FC = () => {
         <View style={styles.stepContent}>
           {WIZARD_ONLY && (wizard.loading || wizard.error) ? null : (
           <>
-          {isCityStep && (
-            <Animated.View key="step-city" entering={entering} exiting={exiting} style={styles.stepFillTop}>
-              {/* Chat CTA — primary hero button */}
-              <TouchableOpacity
-                activeOpacity={0.88}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push('/chat');
-                }}
-                style={styles.chatCta}
-                accessibilityRole="button"
-              >
-                <LinearGradient
-                  colors={['#3b82f6', '#6366f1']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.chatCtaGradient}
-                >
-                  <Text style={styles.chatCtaIcon}>✦</Text>
-                  <View style={styles.chatCtaTextWrap}>
-                    <Text style={styles.chatCtaTitle}>{t('chat.planWithAi')}</Text>
-                    <Text style={styles.chatCtaSub}>{t('chat.planWithAiSub')}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" />
-                </LinearGradient>
-              </TouchableOpacity>
-
-              <Text style={styles.cityTitle}>{t('destination.title')}</Text>
-              <Text style={styles.citySubtitle}>{t('destination.subtitle')}</Text>
-              <View style={styles.cityList}>
-                {CITIES.map((city, index) => (
-                  <CityCard
-                    key={city.name}
-                    city={city}
-                    index={index}
-                    selected={wizard.city === city.name}
-                    onSelect={wizard.handleCitySelect}
-                  />
-                ))}
-              </View>
-              {/* Continue button — Pablo 2026-04-26: avance manual en cada step. */}
-              <View style={[styles.cityContinueWrap, { paddingBottom: insets.bottom + 20 }]}>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={wizard.advanceToNext}
-                  accessibilityRole="button"
-                  accessibilityLabel={wizard.city ? t('wizard.interestContinue') : t('wizard.skip')}
-                >
-                  <BlurView intensity={60} tint="light" style={styles.cityContinueBlur}>
-                    <Text style={styles.cityContinueText}>
-                      {wizard.city ? t('wizard.interestContinue') : t('wizard.skip')}
-                    </Text>
-                    <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                  </BlurView>
-                </TouchableOpacity>
-              </View>
-            </Animated.View>
-          )}
-
           {currentStepConfig && (
             <Animated.View key={`step-${wizard.step}`} entering={entering} exiting={exiting} style={styles.stepFill}>
               <WizardStep
@@ -325,8 +275,17 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
-  headerSpacer: {
-    width: 44,
+  cityPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    maxWidth: 120,
+  },
+  cityPillText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: '#FFFFFF',
   },
   stepContent: {
     flex: 1,
@@ -335,11 +294,6 @@ const styles = StyleSheet.create({
   stepFill: {
     flex: 1,
     justifyContent: 'center',
-  },
-  stepFillTop: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    paddingTop: 100,
   },
   cityTitle: {
     fontFamily: fonts.headingBold,
@@ -423,43 +377,5 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodySemiBold,
     fontSize: 15,
     color: '#FFFFFF',
-  },
-  chatCta: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    shadowColor: colors.electricBlue,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  chatCtaGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    gap: 14,
-  },
-  chatCtaIcon: {
-    fontSize: 22,
-    color: '#fff',
-  },
-  chatCtaTextWrap: {
-    flex: 1,
-  },
-  chatCtaTitle: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 17,
-    color: '#fff',
-    lineHeight: 22,
-  },
-  chatCtaSub: {
-    fontFamily: fonts.body,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    lineHeight: 18,
-    marginTop: 2,
   },
 });

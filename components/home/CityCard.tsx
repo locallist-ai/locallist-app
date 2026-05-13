@@ -12,7 +12,7 @@ import Animated, {
 import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, fonts } from '../../lib/theme';
-import type { City } from './constants';
+import type { City } from '../../lib/cities';
 
 // ── Types ──
 

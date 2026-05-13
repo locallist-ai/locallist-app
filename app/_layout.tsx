@@ -185,6 +185,7 @@ function AppStack() {
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="chat" options={{ headerShown: false }} />
       <Stack.Screen name="builder" options={{ headerShown: false }} />
       <Stack.Screen
         name="plan/[id]"

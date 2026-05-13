@@ -6,6 +6,7 @@ import { api } from '../../lib/api';
 import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan/plan-store';
 import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX, tierFromBudgetAmount } from './constants';
+import { useTripContext } from '../../lib/trip-context-store';
 import type { BuilderResponse } from '../../lib/types';
 
 // ── Return type ──
@@ -70,12 +71,14 @@ export interface UseWizardResult {
 export const useWizard = (): UseWizardResult => {
   const { t } = useTranslation();
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { city: tripCity } = useTripContext();
 
-  const [step, setStep] = useState(0);
+  // City is pre-selected via the city-picker home screen; wizard starts at step 1.
+  const [step, setStep] = useState(1);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   // Slot indices: 0=days, 1=company, 2=interests-marker (unused), 3=budget.
   const [selections, setSelections] = useState<(string | null)[]>([null, null, null, null]);
-  const [city, setCity] = useState<string | null>(null);
+  const [city, setCity] = useState<string | null>(tripCity);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +103,11 @@ export const useWizard = (): UseWizardResult => {
   // Drill-down state para Company. Solo se mantienen los subs del parent ACTIVO;
   // al cambiar parent se resetean (ver selectCompany).
   const [companySubs, setCompanySubs] = useState<string[]>([]);
+
+  // Sync city from trip context store (in case it loads after hook mounts).
+  useEffect(() => {
+    if (tripCity && !city) setCity(tripCity);
+  }, [tripCity, city]);
 
   // Show bubble text after a delay when reaching the chat step.
   // En WIZARD_ONLY no entramos a step 4 (chat legacy), este efecto queda dormido.
@@ -137,24 +145,28 @@ export const useWizard = (): UseWizardResult => {
   }, []);
 
   const handleReset = useCallback(() => {
-    setStep(0);
+    setStep(1);
     setDirection('forward');
     setSelections([null, null, null, null]);
-    setCity(null);
+    setCity(tripCity);
     setMessage('');
     setError(null);
     setInterests([]);
     setSubcategoryPicks({});
     setBudgetAmountState(null);
     setCompanySubs([]);
-  }, []);
+  }, [tripCity]);
 
   const handleBack = useCallback(() => {
-    if (step === 0) return;
+    if (step <= 1) {
+      // At the first wizard step, go back to city picker instead of stepping back
+      router.push('/(tabs)/home');
+      return;
+    }
     hapticImpact(ImpactFeedbackStyle.Light);
     setDirection('back');
     setError(null);
-    setStep((s) => Math.max(s - 1, 0));
+    setStep((s) => Math.max(s - 1, 1));
   }, [step]);
 
   const handleCitySelect = useCallback((cityName: string) => {
