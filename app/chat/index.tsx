@@ -22,6 +22,10 @@ import { getSavedSessionId, saveSessionId, clearSessionId } from '../../lib/chat
 import { MessageBubble } from '../../components/chat/MessageBubble';
 import { QuickReplyChips } from '../../components/chat/QuickReplyChips';
 import { SlotBadges } from '../../components/chat/SlotBadges';
+import { SaveProfileSheet } from '../../components/chat/SaveProfileSheet';
+import { upsertProfile } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
+import { track, countFilledSlots } from '../../lib/analytics';
 import type { ChatMessage, ChatSlots, QuickReply, BuilderResponse } from '../../lib/types';
 
 const EMPTY_SLOTS: ChatSlots = {
@@ -32,6 +36,7 @@ const EMPTY_SLOTS: ChatSlots = {
 export default function ChatScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { isAuthenticated } = useAuth();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [slots, setSlots] = useState<ChatSlots>(EMPTY_SLOTS);
@@ -42,6 +47,8 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [turnCount, setTurnCount] = useState(0);
+  const [saveSheetVisible, setSaveSheetVisible] = useState(false);
+  const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
 
   const listRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
@@ -51,7 +58,7 @@ export default function ChatScreen() {
     getSavedSessionId().then((saved) => {
       if (saved) setSessionId(saved);
     });
-    // Show welcome message
+    track({ event: 'chat_started', sessionId: null });
     appendAiMessage(t('chat.welcomeMessage'), []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -96,6 +103,16 @@ export default function ChatScreen() {
         setSlots(data.slots);
         setReady(data.ready);
         setTurnCount(data.turnCount);
+        track({
+          event: 'chat_turn',
+          sessionId: newSessionId,
+          turnCount: data.turnCount,
+          slotsFilled: countFilledSlots(data.slots),
+          totalSlots: 9,
+        });
+        if (data.ready) {
+          track({ event: 'chat_ready', sessionId: newSessionId, turnCount: data.turnCount });
+        }
         appendAiMessage(data.aiMessage, data.ready ? [] : data.quickReplies);
       } finally {
         setLoading(false);
@@ -138,12 +155,20 @@ export default function ChatScreen() {
       }
 
       const plan = (result.data as BuilderResponse).plan;
+      track({ event: 'chat_generated', sessionId: sessionId!, planId: plan.id, turnCount });
       await clearSessionId();
-      router.push(`/plan/${plan.id}`);
+
+      // Offer to save profile preferences if user is authenticated and has meaningful slots
+      if (isAuthenticated && (slots.groupType || slots.pace || slots.budget || slots.dietary?.length)) {
+        setPendingPlanId(plan.id);
+        setSaveSheetVisible(true);
+      } else {
+        router.push(`/plan/${plan.id}`);
+      }
     } finally {
       setGenerating(false);
     }
-  }, [sessionId, generating, t]);
+  }, [sessionId, generating, slots, isAuthenticated, t]);
 
   const handleReset = useCallback(async () => {
     Alert.alert(t('chat.resetTitle'), t('chat.resetBody'), [
@@ -153,6 +178,7 @@ export default function ChatScreen() {
         style: 'destructive',
         onPress: async () => {
           if (sessionId) {
+            track({ event: 'chat_abandoned', sessionId, turnCount });
             await deleteChatSession(sessionId).catch(() => null);
             await clearSessionId();
           }
@@ -169,11 +195,36 @@ export default function ChatScreen() {
   }, [sessionId, appendAiMessage, t]);
 
   const handleUseWizard = useCallback(() => {
+    track({ event: 'chat_to_wizard_escape', sessionId, turnCount });
     router.push('/builder/custom');
-  }, []);
+  }, [sessionId, turnCount]);
+
+  const handleProfileSave = async (fields: {
+    groupType?: string; pace?: string; budget?: string; dietary?: string[];
+  }) => {
+    await upsertProfile({
+      defaultGroupType: fields.groupType,
+      pacePreference: fields.pace,
+      defaultBudgetTier: fields.budget,
+      dietaryRestrictions: fields.dietary,
+    });
+    setSaveSheetVisible(false);
+    if (pendingPlanId) router.push(`/plan/${pendingPlanId}`);
+  };
+
+  const handleProfileSkip = () => {
+    setSaveSheetVisible(false);
+    if (pendingPlanId) router.push(`/plan/${pendingPlanId}`);
+  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
+      <SaveProfileSheet
+        visible={saveSheetVisible}
+        slots={slots}
+        onSave={handleProfileSave}
+        onSkip={handleProfileSkip}
+      />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn} accessibilityRole="button">
