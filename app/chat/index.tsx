@@ -233,7 +233,7 @@ export default function ChatScreen() {
 
   const handleUseWizard = useCallback(() => {
     track({ event: 'chat_to_wizard_escape', sessionId, turnCount });
-    router.push('/builder/custom');
+    router.push('/builder/wizard');
   }, [sessionId, turnCount]);
 
   const handleProfileSave = async (fields: {
