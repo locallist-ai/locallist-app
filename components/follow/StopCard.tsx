@@ -9,6 +9,7 @@ import { PhotoHero, type Category } from '../ui/PhotoHero';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
+import { formatPriceLabel } from '../../lib/helpers/price';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 
 interface Stop {
@@ -130,7 +131,9 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
             )}
             {stop.priceRange && (
               <View style={[styles.infoPill, styles.pricePill]}>
-                <Text style={styles.pricePillText}>{stop.priceRange}</Text>
+                <Text style={styles.pricePillText}>
+                  {formatPriceLabel(stop.priceRange, t)}
+                </Text>
               </View>
             )}
             {typeof stop.googleRating === 'number' && stop.googleRating > 0 && (

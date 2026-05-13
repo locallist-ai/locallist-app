@@ -122,6 +122,7 @@ export default {
     neighborhood: 'Barrio',
     openInMaps: 'Abrir en Mapas',
     source: 'Fuente',
+    priceFree: 'Gratis',
     priceBudget: 'Económico',
     priceModerate: 'Moderado',
     priceUpscale: 'Alta gama',

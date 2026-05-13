@@ -21,6 +21,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
+import { formatPriceLabel } from '../../lib/helpers/price';
 import { api } from '../../lib/api';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
 import type { Place } from '../../lib/types';
@@ -31,6 +32,7 @@ const HERO_MAX = 280;
 const HERO_MIN = 120;
 
 const PRICE_KEYS = {
+  FREE: 'place.priceFree',
   $: 'place.priceBudget',
   $$: 'place.priceModerate',
   $$$: 'place.priceUpscale',
@@ -172,8 +174,10 @@ export default function PlaceDetailScreen() {
             <Text style={s.badgeText}>{place.category}</Text>
           </View>
           {place.priceRange && (
-            <View style={s.badge}>
-              <Text style={s.badgeText}>{place.priceRange}</Text>
+            <View style={[s.badge, place.priceRange === 'FREE' && s.freeBadge]}>
+              <Text style={[s.badgeText, place.priceRange === 'FREE' && s.freeBadgeText]}>
+                {formatPriceLabel(place.priceRange, t)}
+              </Text>
             </View>
           )}
           {place.googleRating && (
@@ -256,7 +260,9 @@ export default function PlaceDetailScreen() {
               <View style={s.detailContent}>
                 <Text style={s.detailLabel}>{t('place.priceRange')}</Text>
                 <Text style={s.detailValue}>
-                  {place.priceRange} {(place.priceRange as keyof typeof PRICE_KEYS) in PRICE_KEYS ? `\u2014 ${t(PRICE_KEYS[place.priceRange as keyof typeof PRICE_KEYS])}` : ''}
+                  {place.priceRange === 'FREE'
+                    ? formatPriceLabel(place.priceRange, t)
+                    : `${place.priceRange}${(place.priceRange as keyof typeof PRICE_KEYS) in PRICE_KEYS ? ` \u2014 ${t(PRICE_KEYS[place.priceRange as keyof typeof PRICE_KEYS])}` : ''}`}
                 </Text>
               </View>
             </View>
@@ -358,6 +364,8 @@ const s = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.50)',
   },
   badgeText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.deepOcean },
+  freeBadge: { backgroundColor: colors.successEmerald, borderColor: colors.successEmerald },
+  freeBadgeText: { color: '#fff' },
 
   // Cards
   card: {
