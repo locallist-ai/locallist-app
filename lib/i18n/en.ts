@@ -15,6 +15,8 @@ export default {
   },
   home: {
     createPlan: 'Create a Plan',
+    whereToNext: 'Where to next?',
+    pickCitySubtitle: 'Pick a city to start planning',
   },
   wizard: {
     continue: 'Continue',

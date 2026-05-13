@@ -26,6 +26,7 @@ import { SaveProfileSheet } from '../../components/chat/SaveProfileSheet';
 import { upsertProfile } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { track, countFilledSlots } from '../../lib/analytics';
+import { useTripContext } from '../../lib/trip-context-store';
 import type { ChatMessage, ChatSlots, QuickReply, BuilderResponse } from '../../lib/types';
 
 const EMPTY_SLOTS: ChatSlots = {
@@ -37,6 +38,7 @@ export default function ChatScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { isAuthenticated } = useAuth();
+  const { city: preSeededCity } = useTripContext();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [slots, setSlots] = useState<ChatSlots>(EMPTY_SLOTS);
@@ -53,13 +55,45 @@ export default function ChatScreen() {
   const listRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
 
-  // Resume prior session on mount
+  // Resume prior session on mount; if city was pre-selected, seed it on first turn
   useEffect(() => {
-    getSavedSessionId().then((saved) => {
-      if (saved) setSessionId(saved);
-    });
     track({ event: 'chat_started', sessionId: null });
-    appendAiMessage(t('chat.welcomeMessage'), []);
+    (async () => {
+      const saved = await getSavedSessionId();
+      if (saved) {
+        setSessionId(saved);
+        appendAiMessage(t('chat.welcomeMessage'), []);
+        return;
+      }
+      if (preSeededCity) {
+        // New session with pre-selected city: send preSeededSlots so backend
+        // fills city slot and returns a greeting without user typing the city
+        setLoading(true);
+        try {
+          const result = await chatTurn({
+            sessionId: null,
+            message: '',
+            quickReplyId: null,
+            preSeededSlots: { city: preSeededCity },
+          });
+          if (result.data) {
+            const data = result.data;
+            setSessionId(data.sessionId);
+            await saveSessionId(data.sessionId);
+            setSlots(data.slots);
+            setReady(data.ready);
+            setTurnCount(data.turnCount);
+            setMessages([{ role: 'ai', text: data.aiMessage, quickReplies: data.quickReplies }]);
+            setQuickReplies(data.quickReplies);
+            setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+            return;
+          }
+        } finally {
+          setLoading(false);
+        }
+      }
+      appendAiMessage(t('chat.welcomeMessage'), []);
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

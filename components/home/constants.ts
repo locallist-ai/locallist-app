@@ -2,6 +2,8 @@ import { ImageSourcePropType, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { MaterialCommunityIcons } from '@expo/vector-icons';
 import type en from '../../lib/i18n/en';
+export type { City } from '../../lib/cities';
+export { CITIES } from '../../lib/cities';
 
 // ── i18n helper type ──
 
@@ -13,14 +15,6 @@ type FlatKeys<T, Prefix extends string = ''> = T extends Record<string, unknown>
 export type TKeys = FlatKeys<typeof en>;
 
 // ── Domain types ──
-
-export interface City {
-  name: string;
-  emoji: string;
-  color: string;
-  /** Branded MCI icon (Pablo 2026-04-27: sustituye al emoji de la palmera). */
-  iconName?: keyof typeof MaterialCommunityIcons.glyphMap;
-}
 
 export interface StepOption {
   id: string;
@@ -38,12 +32,6 @@ export interface WizardStepConfig {
   subtitleKey: TKeys;
   options: StepOption[];
 }
-
-// ── City data ──
-
-export const CITIES: City[] = [
-  { name: 'Miami', emoji: '\u{1F334}', color: '#f97316', iconName: 'palm-tree' },
-];
 
 // ── Step option data ──
 
@@ -258,8 +246,8 @@ export const hapticImpact = (style: Haptics.ImpactFeedbackStyle = Haptics.Impact
  */
 export const WIZARD_ONLY = true;
 
-/** Total number of progress dots — city + 4 prefs (incluye interests). */
-export const TOTAL_STEPS = WIZARD_ONLY ? 5 : 6;
+/** Total number of progress dots — 4 prefs (city is a separate pre-step). */
+export const TOTAL_STEPS = WIZARD_ONLY ? 4 : 5;
 
 /** Última step index del flujo interactivo (después → generar). step=4 = budget. */
 export const LAST_STEP_INDEX = WIZARD_ONLY ? 4 : 5;

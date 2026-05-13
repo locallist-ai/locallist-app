@@ -130,6 +130,7 @@ export type ChatTurnRequest = {
   sessionId: string | null;
   message: string;
   quickReplyId: string | null;
+  preSeededSlots?: { city?: string };
 };
 
 export type ChatTurnResponse = {
