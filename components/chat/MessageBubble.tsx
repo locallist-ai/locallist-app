@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: colors.electricBlue,
+    backgroundColor: colors.sunsetOrange,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   bubbleAi: {
-    backgroundColor: colors.bgCard,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderBottomLeftRadius: 4,
   },
   bubbleUser: {
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 15,
     lineHeight: 22,
-    color: colors.textMain,
+    color: colors.paperWhite,
   },
   textUser: {
     color: '#fff',

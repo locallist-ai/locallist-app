@@ -35,7 +35,7 @@ export default function HomeTab() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 32 },
+          { paddingTop: insets.top + 140, paddingBottom: insets.bottom + 32 },
         ]}
         showsVerticalScrollIndicator={false}
       >

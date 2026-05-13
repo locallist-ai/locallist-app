@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
+  Image,
   TextInput,
   TouchableOpacity,
   FlatList,
@@ -10,8 +11,10 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -23,6 +26,8 @@ import { MessageBubble } from '../../components/chat/MessageBubble';
 import { QuickReplyChips } from '../../components/chat/QuickReplyChips';
 import { SlotBadges } from '../../components/chat/SlotBadges';
 import { SaveProfileSheet } from '../../components/chat/SaveProfileSheet';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { HeroSkiaBg } from '../../components/home/HeroSkiaBg';
 import { upsertProfile } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { track, countFilledSlots } from '../../lib/analytics';
@@ -37,6 +42,7 @@ const EMPTY_SLOTS: ChatSlots = {
 export default function ChatScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { isAuthenticated } = useAuth();
   const { city: preSeededCity } = useTripContext();
 
@@ -51,6 +57,7 @@ export default function ChatScreen() {
   const [turnCount, setTurnCount] = useState(0);
   const [saveSheetVisible, setSaveSheetVisible] = useState(false);
   const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
+  const [resetConfirmVisible, setResetConfirmVisible] = useState(false);
 
   const listRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
@@ -204,29 +211,25 @@ export default function ChatScreen() {
     }
   }, [sessionId, generating, slots, isAuthenticated, t]);
 
-  const handleReset = useCallback(async () => {
-    Alert.alert(t('chat.resetTitle'), t('chat.resetBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('chat.resetConfirm'),
-        style: 'destructive',
-        onPress: async () => {
-          if (sessionId) {
-            track({ event: 'chat_abandoned', sessionId, turnCount });
-            await deleteChatSession(sessionId).catch(() => null);
-            await clearSessionId();
-          }
-          setSessionId(null);
-          setMessages([]);
-          setSlots(EMPTY_SLOTS);
-          setQuickReplies([]);
-          setReady(false);
-          setTurnCount(0);
-          appendAiMessage(t('chat.welcomeMessage'), []);
-        },
-      },
-    ]);
-  }, [sessionId, appendAiMessage, t]);
+  const handleReset = useCallback(() => {
+    setResetConfirmVisible(true);
+  }, []);
+
+  const executeReset = useCallback(async () => {
+    setResetConfirmVisible(false);
+    if (sessionId) {
+      track({ event: 'chat_abandoned', sessionId, turnCount });
+      await deleteChatSession(sessionId).catch(() => null);
+      await clearSessionId();
+    }
+    setSessionId(null);
+    setMessages([]);
+    setSlots(EMPTY_SLOTS);
+    setQuickReplies([]);
+    setReady(false);
+    setTurnCount(0);
+    appendAiMessage(t('chat.welcomeMessage'), []);
+  }, [sessionId, turnCount, appendAiMessage, t]);
 
   const handleUseWizard = useCallback(() => {
     track({ event: 'chat_to_wizard_escape', sessionId, turnCount });
@@ -252,33 +255,77 @@ export default function ChatScreen() {
   };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+    <View style={styles.root}>
+      <StatusBar style="light" />
       <SaveProfileSheet
         visible={saveSheetVisible}
         slots={slots}
         onSave={handleProfileSave}
         onSkip={handleProfileSkip}
       />
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn} accessibilityRole="button">
-          <Ionicons name="chevron-back" size={22} color={colors.deepOcean} />
+      <ConfirmModal
+        visible={resetConfirmVisible}
+        icon="refresh-outline"
+        iconColor={colors.sunsetOrange}
+        title={t('chat.resetTitle')}
+        body={t('chat.resetBody')}
+        cancelLabel={t('common.cancel')}
+        confirmLabel={t('chat.resetConfirm')}
+        confirmDestructive
+        onCancel={() => setResetConfirmVisible(false)}
+        onConfirm={executeReset}
+      />
+
+      {/* Background — matching home tab */}
+      <Image
+        source={require('../../assets/images/hero-bg.jpg')}
+        style={[styles.bgImage, { width: screenWidth + 200, height: screenHeight + 300 }]}
+        resizeMode="cover"
+      />
+      <HeroSkiaBg />
+      <View style={styles.bgOverlay} />
+
+      {/* Floating header */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.headerBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{t('chat.title')}</Text>
-          {turnCount > 0 && (
-            <Text style={styles.headerSub}>{t('chat.turnCount', { count: turnCount, limit: 6 })}</Text>
-          )}
+          {preSeededCity ? (
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/home')}
+              style={styles.cityPill}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={`City: ${preSeededCity}, tap to change`}
+            >
+              <Text style={styles.cityPillText} numberOfLines={1}>
+                {preSeededCity}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
-        <TouchableOpacity onPress={handleReset} style={styles.headerBtn} accessibilityRole="button">
-          <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
+        <TouchableOpacity
+          onPress={handleReset}
+          style={styles.headerBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Reset conversation"
+        >
+          <Ionicons name="refresh-outline" size={20} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>
 
-      {/* Slot badges pinned below header */}
+      {/* Slot badges */}
       <SlotBadges slots={slots} />
 
-      {/* Message list */}
+      {/* Message list + input */}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -298,7 +345,7 @@ export default function ChatScreen() {
         {loading && (
           <View style={styles.typingRow}>
             <View style={styles.typingBubble}>
-              <ActivityIndicator size="small" color={colors.electricBlue} />
+              <ActivityIndicator size="small" color={colors.paperWhite} />
               <Text style={styles.typingText}>{t('chat.typing')}</Text>
             </View>
           </View>
@@ -335,7 +382,7 @@ export default function ChatScreen() {
             ref={inputRef}
             style={styles.input}
             placeholder={t('chat.inputPlaceholder')}
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255,255,255,0.4)"
             value={inputText}
             onChangeText={setInputText}
             multiline
@@ -361,13 +408,23 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </KeyboardAvoidingView>
     </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bgMain,
+  },
+  bgImage: {
+    position: 'absolute',
+    top: -50,
+    left: -100,
+    opacity: 0.55,
+  },
+  bgOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15,23,42,0.55)',
   },
   flex: {
     flex: 1,
@@ -375,33 +432,35 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    backgroundColor: colors.bgCard,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderColor,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   headerBtn: {
-    padding: 8,
-    width: 40,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
   },
-  headerTitle: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 16,
-    color: colors.deepOcean,
+  cityPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    maxWidth: 160,
   },
-  headerSub: {
-    fontFamily: fonts.body,
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 1,
+  cityPillText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: '#FFFFFF',
   },
   messageList: {
-    paddingTop: 16,
+    paddingTop: 8,
     paddingBottom: 8,
   },
   typingRow: {
@@ -413,7 +472,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.bgCard,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: borderRadius.lg,
     borderBottomLeftRadius: 4,
     paddingHorizontal: 14,
@@ -422,7 +481,7 @@ const styles = StyleSheet.create({
   typingText: {
     fontFamily: fonts.body,
     fontSize: 14,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
   },
   buildBtn: {
     marginHorizontal: 16,
@@ -446,16 +505,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     gap: spacing.sm,
-    backgroundColor: colors.bgCard,
+    backgroundColor: 'rgba(15,23,42,0.6)',
     borderTopWidth: 1,
-    borderTopColor: colors.borderColor,
+    borderTopColor: 'rgba(255,255,255,0.1)',
   },
   input: {
     flex: 1,
     fontFamily: fonts.body,
     fontSize: 15,
-    color: colors.textMain,
-    backgroundColor: colors.bgMain,
+    color: colors.paperWhite,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: borderRadius.md,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -471,18 +530,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendBtnDisabled: {
-    backgroundColor: colors.textSecondary,
-    opacity: 0.4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    opacity: 0.5,
   },
   wizardLink: {
     alignItems: 'center',
     paddingVertical: 10,
-    backgroundColor: colors.bgCard,
+    backgroundColor: 'rgba(15,23,42,0.6)',
   },
   wizardLinkText: {
     fontFamily: fonts.body,
     fontSize: 13,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.45)',
     textDecorationLine: 'underline',
   },
 });

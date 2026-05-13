@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   badge: {
-    backgroundColor: colors.electricBlueLight,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: borderRadius.full,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -58,6 +58,6 @@ const styles = StyleSheet.create({
   badgeText: {
     fontFamily: fonts.bodyMedium,
     fontSize: 12,
-    color: colors.electricBlue,
+    color: 'rgba(255,255,255,0.9)',
   },
 });
