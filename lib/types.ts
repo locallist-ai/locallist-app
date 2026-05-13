@@ -106,3 +106,70 @@ export type CityDto = {
   country?: string | null;
   source: 'seed' | 'user';
 };
+
+// ─── Chat ────────────────────────────────────────────────────────────────────
+
+export type ChatSlots = {
+  city: string | null;
+  days: number | null;
+  groupType: string | null;
+  categories: string[] | null;
+  budget: string | null;
+  pace: string | null;
+  dietary: string[] | null;
+  exclusions: string[] | null;
+  vibesPrimary: string | null;
+};
+
+export type QuickReply = {
+  id: string;
+  label: string;
+};
+
+export type ChatTurnRequest = {
+  sessionId: string | null;
+  message: string;
+  quickReplyId: string | null;
+};
+
+export type ChatTurnResponse = {
+  sessionId: string;
+  aiMessage: string;
+  slots: ChatSlots;
+  missingCritical: string[];
+  quickReplies: QuickReply[];
+  ready: boolean;
+  turnCount: number;
+  turnLimit: number;
+};
+
+export type ChatGenerateRequest = {
+  sessionId: string;
+};
+
+export type ChatMessage = {
+  role: 'user' | 'ai';
+  text: string;
+  quickReplies?: QuickReply[];
+};
+
+// ─── Profile ─────────────────────────────────────────────────────────────────
+
+export type UserProfile = {
+  defaultGroupType: string | null;
+  companionTags: string[];
+  dietaryRestrictions: string[];
+  pacePreference: string | null;
+  defaultBudgetTier: string | null;
+  favoriteCity: string | null;
+  updatedAt: string;
+};
+
+export type UpsertProfileRequest = {
+  defaultGroupType?: string | null;
+  companionTags?: string[] | null;
+  dietaryRestrictions?: string[] | null;
+  pacePreference?: string | null;
+  defaultBudgetTier?: string | null;
+  favoriteCity?: string | null;
+};

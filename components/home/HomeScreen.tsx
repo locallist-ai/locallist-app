@@ -5,7 +5,10 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { fonts } from '../../lib/theme';
+import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import { fonts, colors, borderRadius } from '../../lib/theme';
 import {
   CITIES,
   STEPS,
@@ -113,6 +116,31 @@ export const HomeScreen: React.FC = () => {
           <>
           {isCityStep && (
             <Animated.View key="step-city" entering={entering} exiting={exiting} style={styles.stepFillTop}>
+              {/* Chat CTA — primary hero button */}
+              <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/chat');
+                }}
+                style={styles.chatCta}
+                accessibilityRole="button"
+              >
+                <LinearGradient
+                  colors={['#3b82f6', '#6366f1']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.chatCtaGradient}
+                >
+                  <Text style={styles.chatCtaIcon}>✦</Text>
+                  <View style={styles.chatCtaTextWrap}>
+                    <Text style={styles.chatCtaTitle}>{t('chat.planWithAi')}</Text>
+                    <Text style={styles.chatCtaSub}>{t('chat.planWithAiSub')}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" />
+                </LinearGradient>
+              </TouchableOpacity>
+
               <Text style={styles.cityTitle}>{t('destination.title')}</Text>
               <Text style={styles.citySubtitle}>{t('destination.subtitle')}</Text>
               <View style={styles.cityList}>
@@ -395,5 +423,43 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodySemiBold,
     fontSize: 15,
     color: '#FFFFFF',
+  },
+  chatCta: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    shadowColor: colors.electricBlue,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  chatCtaGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    gap: 14,
+  },
+  chatCtaIcon: {
+    fontSize: 22,
+    color: '#fff',
+  },
+  chatCtaTextWrap: {
+    flex: 1,
+  },
+  chatCtaTitle: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 17,
+    color: '#fff',
+    lineHeight: 22,
+  },
+  chatCtaSub: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    lineHeight: 18,
+    marginTop: 2,
   },
 });
