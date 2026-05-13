@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
+import { formatPriceLabel } from '../../lib/helpers/price';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import type { PlanStop } from '../../lib/types';
 
@@ -242,7 +243,9 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
             )}
             {place.priceRange && (
               <View style={[styles.metaPill, styles.pricePill]}>
-                <Text style={styles.pricePillText}>{place.priceRange}</Text>
+                <Text style={styles.pricePillText}>
+                  {formatPriceLabel(place.priceRange, t)}
+                </Text>
               </View>
             )}
           </View>

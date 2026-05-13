@@ -122,6 +122,7 @@ export default {
     neighborhood: 'Neighborhood',
     openInMaps: 'Open in Maps',
     source: 'Source',
+    priceFree: 'Free',
     priceBudget: 'Budget-friendly',
     priceModerate: 'Moderate',
     priceUpscale: 'Upscale',

@@ -105,6 +105,7 @@ export const SUBCATEGORIES_BY_INTEREST: Record<string, SubcategoryOption[]> = {
     { id: 'vegan', label: 'Vegan', emoji: '\u{1F96C}', iconName: 'leaf' },
   ],
   nightlife: [
+    { id: 'pub', label: 'Pub', emoji: '\u{1F37A}', iconName: 'beer' },
     { id: 'cocktail', label: 'Cocktail Bar', emoji: '\u{1F378}', iconName: 'glass-cocktail' },
     { id: 'speakeasy', label: 'Speakeasy', emoji: '\u{1F943}', iconName: 'glass-tulip' },
     { id: 'rooftop', label: 'Rooftop Bar', emoji: '\u{1F306}', iconName: 'city-variant-outline' },
