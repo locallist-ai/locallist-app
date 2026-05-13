@@ -329,5 +329,7 @@ export default {
     budgetBudget: 'Budget',
     budgetModerate: 'Moderate',
     budgetPremium: 'Premium',
+    saveSheetTitle: 'Save for next time?',
+    saveSheetSub: 'We\'ll pre-fill these in your next chat so you can skip straight to planning.',
   },
 } as const;

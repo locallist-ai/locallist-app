@@ -329,5 +329,7 @@ export default {
     budgetBudget: 'Económico',
     budgetModerate: 'Moderado',
     budgetPremium: 'Premium',
+    saveSheetTitle: '¿Guardar para la próxima vez?',
+    saveSheetSub: 'Las rellenaremos automáticamente en tu próxima conversación para que puedas planificar directamente.',
   },
 } as const;
