@@ -33,6 +33,7 @@ import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/api';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useProfile } from '../../lib/use-profile';
+import { track } from '../../lib/analytics';
 
 const LANGUAGES = [
   { code: 'en', flag: '\u{1F1FA}\u{1F1F8}', labelKey: 'account.languageEnglish' as const },
@@ -223,8 +224,12 @@ export default function AccountScreen() {
     pacePreference?: string | null;
     defaultBudgetTier?: string | null;
   }) => {
+    const savedFields = Object.entries(fields)
+      .filter(([, v]) => v != null)
+      .map(([k]) => k);
     const ok = await saveProfile(fields);
     if (ok) {
+      track({ event: 'profile_saved', fields: savedFields });
       setPrefSaved(true);
       setTimeout(() => setPrefSaved(false), 2500);
     }
@@ -233,7 +238,14 @@ export default function AccountScreen() {
   const handleResetPrefs = async () => {
     Alert.alert(t('profile.reset'), t('profile.resetConfirm'), [
       { text: t('common.cancel'), style: 'cancel' },
-      { text: t('common.delete'), style: 'destructive', onPress: () => removeProfile() },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: () => {
+          track({ event: 'profile_reset' });
+          removeProfile();
+        },
+      },
     ]);
   };
 

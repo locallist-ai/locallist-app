@@ -25,6 +25,7 @@ import { SlotBadges } from '../../components/chat/SlotBadges';
 import { SaveProfileSheet } from '../../components/chat/SaveProfileSheet';
 import { upsertProfile } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { track, countFilledSlots } from '../../lib/analytics';
 import type { ChatMessage, ChatSlots, QuickReply, BuilderResponse } from '../../lib/types';
 
 const EMPTY_SLOTS: ChatSlots = {
@@ -57,7 +58,7 @@ export default function ChatScreen() {
     getSavedSessionId().then((saved) => {
       if (saved) setSessionId(saved);
     });
-    // Show welcome message
+    track({ event: 'chat_started', sessionId: null });
     appendAiMessage(t('chat.welcomeMessage'), []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -102,6 +103,16 @@ export default function ChatScreen() {
         setSlots(data.slots);
         setReady(data.ready);
         setTurnCount(data.turnCount);
+        track({
+          event: 'chat_turn',
+          sessionId: newSessionId,
+          turnCount: data.turnCount,
+          slotsFilled: countFilledSlots(data.slots),
+          totalSlots: 9,
+        });
+        if (data.ready) {
+          track({ event: 'chat_ready', sessionId: newSessionId, turnCount: data.turnCount });
+        }
         appendAiMessage(data.aiMessage, data.ready ? [] : data.quickReplies);
       } finally {
         setLoading(false);
@@ -144,6 +155,7 @@ export default function ChatScreen() {
       }
 
       const plan = (result.data as BuilderResponse).plan;
+      track({ event: 'chat_generated', sessionId: sessionId!, planId: plan.id, turnCount });
       await clearSessionId();
 
       // Offer to save profile preferences if user is authenticated and has meaningful slots
@@ -166,6 +178,7 @@ export default function ChatScreen() {
         style: 'destructive',
         onPress: async () => {
           if (sessionId) {
+            track({ event: 'chat_abandoned', sessionId, turnCount });
             await deleteChatSession(sessionId).catch(() => null);
             await clearSessionId();
           }
@@ -182,8 +195,9 @@ export default function ChatScreen() {
   }, [sessionId, appendAiMessage, t]);
 
   const handleUseWizard = useCallback(() => {
+    track({ event: 'chat_to_wizard_escape', sessionId, turnCount });
     router.push('/builder/custom');
-  }, []);
+  }, [sessionId, turnCount]);
 
   const handleProfileSave = async (fields: {
     groupType?: string; pace?: string; budget?: string; dietary?: string[];

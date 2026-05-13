@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { api, setTokens, clearTokens, getAccessToken } from './api';
 import { logger } from './logger';
+import { setAnalyticsUserId } from './analytics';
 
 interface User {
   id: string;
@@ -55,11 +56,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (userData: User, accessToken: string, refreshToken: string) => {
     await setTokens(accessToken, refreshToken);
+    setAnalyticsUserId(userData.id);
     setUser(userData);
   }, []);
 
   const logout = useCallback(async () => {
     await clearTokens();
+    setAnalyticsUserId(null);
     setUser(null);
     setTierOverride(null);
   }, []);
@@ -75,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         const res = await api<{ user: User }>('/account');
         if (res.data?.user) {
+          setAnalyticsUserId(res.data.user.id);
           setUser(res.data.user);
         }
       } catch (error) {
