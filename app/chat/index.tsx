@@ -22,6 +22,9 @@ import { getSavedSessionId, saveSessionId, clearSessionId } from '../../lib/chat
 import { MessageBubble } from '../../components/chat/MessageBubble';
 import { QuickReplyChips } from '../../components/chat/QuickReplyChips';
 import { SlotBadges } from '../../components/chat/SlotBadges';
+import { SaveProfileSheet } from '../../components/chat/SaveProfileSheet';
+import { upsertProfile } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import type { ChatMessage, ChatSlots, QuickReply, BuilderResponse } from '../../lib/types';
 
 const EMPTY_SLOTS: ChatSlots = {
@@ -32,6 +35,7 @@ const EMPTY_SLOTS: ChatSlots = {
 export default function ChatScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { isAuthenticated } = useAuth();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [slots, setSlots] = useState<ChatSlots>(EMPTY_SLOTS);
@@ -42,6 +46,8 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [turnCount, setTurnCount] = useState(0);
+  const [saveSheetVisible, setSaveSheetVisible] = useState(false);
+  const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
 
   const listRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
@@ -139,11 +145,18 @@ export default function ChatScreen() {
 
       const plan = (result.data as BuilderResponse).plan;
       await clearSessionId();
-      router.push(`/plan/${plan.id}`);
+
+      // Offer to save profile preferences if user is authenticated and has meaningful slots
+      if (isAuthenticated && (slots.groupType || slots.pace || slots.budget || slots.dietary?.length)) {
+        setPendingPlanId(plan.id);
+        setSaveSheetVisible(true);
+      } else {
+        router.push(`/plan/${plan.id}`);
+      }
     } finally {
       setGenerating(false);
     }
-  }, [sessionId, generating, t]);
+  }, [sessionId, generating, slots, isAuthenticated, t]);
 
   const handleReset = useCallback(async () => {
     Alert.alert(t('chat.resetTitle'), t('chat.resetBody'), [
@@ -172,8 +185,32 @@ export default function ChatScreen() {
     router.push('/builder/custom');
   }, []);
 
+  const handleProfileSave = async (fields: {
+    groupType?: string; pace?: string; budget?: string; dietary?: string[];
+  }) => {
+    await upsertProfile({
+      defaultGroupType: fields.groupType,
+      pacePreference: fields.pace,
+      defaultBudgetTier: fields.budget,
+      dietaryRestrictions: fields.dietary,
+    });
+    setSaveSheetVisible(false);
+    if (pendingPlanId) router.push(`/plan/${pendingPlanId}`);
+  };
+
+  const handleProfileSkip = () => {
+    setSaveSheetVisible(false);
+    if (pendingPlanId) router.push(`/plan/${pendingPlanId}`);
+  };
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
+      <SaveProfileSheet
+        visible={saveSheetVisible}
+        slots={slots}
+        onSave={handleProfileSave}
+        onSkip={handleProfileSkip}
+      />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn} accessibilityRole="button">

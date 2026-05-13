@@ -32,6 +32,7 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/api';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { useProfile } from '../../lib/use-profile';
 
 const LANGUAGES = [
   { code: 'en', flag: '\u{1F1FA}\u{1F1F8}', labelKey: 'account.languageEnglish' as const },
@@ -131,11 +132,13 @@ function PlusUpsellCard({ t }: { t: ReturnType<typeof useTranslation>['t'] }) {
 export default function AccountScreen() {
   const { t, i18n } = useTranslation();
   const { user, isAuthenticated, isPro, isAdmin, logout, setTierOverride } = useAuth();
-const [langPickerVisible, setLangPickerVisible] = useState(false);
+  const [langPickerVisible, setLangPickerVisible] = useState(false);
   const [pendingLang, setPendingLang] = useState<string | null>(null);
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [prefSaved, setPrefSaved] = useState(false);
+  const { profile, saving: prefSaving, save: saveProfile, remove: removeProfile } = useProfile(!isAuthenticated);
 
   const currentLang = i18n.language.startsWith('es') ? 'es' : 'en';
   const currentLangLabel = currentLang === 'es' ? t('account.languageSpanish') : t('account.languageEnglish');
@@ -198,6 +201,42 @@ const [langPickerVisible, setLangPickerVisible] = useState(false);
     setPendingLang(null);
   };
 
+  const GROUP_TYPES = [
+    { value: 'solo', label: t('wizard.companySolo') },
+    { value: 'couple', label: t('wizard.companyCouple') },
+    { value: 'family', label: t('wizard.companyFamily') },
+    { value: 'friends', label: t('wizard.companyFriends') },
+  ] as const;
+  const PACES = [
+    { value: 'slow', label: t('profile.paceSlow') },
+    { value: 'normal', label: t('profile.paceNormal') },
+    { value: 'fast', label: t('profile.paceFast') },
+  ] as const;
+  const BUDGETS = [
+    { value: 'budget', label: t('profile.budgetBudget') },
+    { value: 'moderate', label: t('profile.budgetModerate') },
+    { value: 'premium', label: t('profile.budgetPremium') },
+  ] as const;
+
+  const handleSavePrefs = async (fields: {
+    defaultGroupType?: string | null;
+    pacePreference?: string | null;
+    defaultBudgetTier?: string | null;
+  }) => {
+    const ok = await saveProfile(fields);
+    if (ok) {
+      setPrefSaved(true);
+      setTimeout(() => setPrefSaved(false), 2500);
+    }
+  };
+
+  const handleResetPrefs = async () => {
+    Alert.alert(t('profile.reset'), t('profile.resetConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => removeProfile() },
+    ]);
+  };
+
   return (
     <View style={s.root}>
       <ScrollView style={s.scrollContent} contentContainerStyle={s.scrollContentInner} showsVerticalScrollIndicator={false}>
@@ -218,6 +257,76 @@ const [langPickerVisible, setLangPickerVisible] = useState(false);
               {isPro ? t('account.pro') : t('account.free')}
             </Text>
           </View>
+        </View>
+
+        {/* Travel Preferences */}
+        <View style={s.prefHeader}>
+          <Text style={s.prefHeaderTitle}>{t('profile.title')}</Text>
+          <Text style={s.prefHeaderSub}>{t('profile.subtitle')}</Text>
+        </View>
+        <View style={s.section}>
+          {/* Group type */}
+          <View style={s.prefRow}>
+            <Text style={s.prefLabel}>{t('profile.groupType')}</Text>
+            <View style={s.chipRow}>
+              {GROUP_TYPES.map(({ value, label }) => (
+                <TouchableOpacity
+                  key={value}
+                  style={[s.prefChip, profile?.defaultGroupType === value && s.prefChipOn]}
+                  onPress={() => handleSavePrefs({ defaultGroupType: profile?.defaultGroupType === value ? null : value })}
+                >
+                  <Text style={[s.prefChipText, profile?.defaultGroupType === value && s.prefChipTextOn]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          {/* Pace */}
+          <View style={s.prefRow}>
+            <Text style={s.prefLabel}>{t('profile.pace')}</Text>
+            <View style={s.chipRow}>
+              {PACES.map(({ value, label }) => (
+                <TouchableOpacity
+                  key={value}
+                  style={[s.prefChip, profile?.pacePreference === value && s.prefChipOn]}
+                  onPress={() => handleSavePrefs({ pacePreference: profile?.pacePreference === value ? null : value })}
+                >
+                  <Text style={[s.prefChipText, profile?.pacePreference === value && s.prefChipTextOn]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          {/* Budget */}
+          <View style={[s.prefRow, s.prefRowLast]}>
+            <Text style={s.prefLabel}>{t('profile.budget')}</Text>
+            <View style={s.chipRow}>
+              {BUDGETS.map(({ value, label }) => (
+                <TouchableOpacity
+                  key={value}
+                  style={[s.prefChip, profile?.defaultBudgetTier === value && s.prefChipOn]}
+                  onPress={() => handleSavePrefs({ defaultBudgetTier: profile?.defaultBudgetTier === value ? null : value })}
+                >
+                  <Text style={[s.prefChipText, profile?.defaultBudgetTier === value && s.prefChipTextOn]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {/* Saved feedback + reset */}
+        <View style={s.prefActions}>
+          {prefSaved && <Text style={s.prefSaved}>{t('profile.saved')}</Text>}
+          {prefSaving && <Text style={s.prefSaving}>Saving…</Text>}
+          {profile && (
+            <TouchableOpacity onPress={handleResetPrefs} style={s.prefReset}>
+              <Text style={s.prefResetText}>{t('profile.reset')}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Settings */}
@@ -783,5 +892,92 @@ const s = StyleSheet.create({
     fontFamily: fonts.bodySemiBold,
     fontSize: 16,
     color: '#FFFFFF',
+  },
+
+  // Travel preferences
+  prefHeader: {
+    marginBottom: 10,
+  },
+  prefHeaderTitle: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  prefHeaderSub: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  prefRow: {
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderColor,
+  },
+  prefRowLast: {
+    borderBottomWidth: 0,
+  },
+  prefLabel: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  prefChip: {
+    borderWidth: 1.5,
+    borderColor: colors.borderColor,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: colors.bgMain,
+  },
+  prefChipOn: {
+    borderColor: colors.electricBlue,
+    backgroundColor: colors.electricBlueLight,
+  },
+  prefChipText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  prefChipTextOn: {
+    color: colors.electricBlue,
+  },
+  prefActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: -8,
+    marginBottom: spacing.lg,
+    paddingHorizontal: 2,
+  },
+  prefSaved: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.successEmerald,
+  },
+  prefSaving: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  prefReset: {
+    paddingVertical: 4,
+  },
+  prefResetText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textDecorationLine: 'underline',
   },
 });
