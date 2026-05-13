@@ -2,6 +2,11 @@ import * as SecureStore from './safe-store';
 import { Platform } from 'react-native';
 import { logger } from './logger';
 import i18n from './i18n';
+import type {
+  ChatTurnRequest, ChatTurnResponse,
+  ChatGenerateRequest, BuilderResponse,
+  UserProfile, UpsertProfileRequest,
+} from './types';
 
 function getApiUrl(): string {
   const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -186,4 +191,32 @@ async function tryRefreshToken(): Promise<boolean> {
   })();
 
   return refreshInProgress;
+}
+
+// ─── Chat API ─────────────────────────────────────────────────────────────────
+
+export async function chatTurn(req: ChatTurnRequest) {
+  return api<ChatTurnResponse>('/chat/turn', { method: 'POST', body: req });
+}
+
+export async function chatGenerate(req: ChatGenerateRequest) {
+  return api<BuilderResponse>('/chat/generate', { method: 'POST', body: req });
+}
+
+export async function deleteChatSession(sessionId: string) {
+  return api<void>(`/chat/session/${sessionId}`, { method: 'DELETE' });
+}
+
+// ─── Profile API ─────────────────────────────────────────────────────────────
+
+export async function getProfile() {
+  return api<UserProfile>('/me/profile');
+}
+
+export async function upsertProfile(req: UpsertProfileRequest) {
+  return api<UserProfile>('/me/profile', { method: 'PUT', body: req });
+}
+
+export async function deleteProfile() {
+  return api<void>('/me/profile', { method: 'DELETE' });
 }
