@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
 import DraggableFlatList, {
   ScaleDecorator,
   RenderItemParams,
@@ -20,6 +20,11 @@ type Props = {
   onReplaceStop?: (stopIndex: number) => void;
   onAddPress: () => void;
   onStopPress?: (stopIndex: number) => void;
+  ListHeaderComponent?: React.ReactElement | null;
+  ListFooterComponent?: React.ReactElement | null;
+  ListEmptyComponent?: React.ReactElement | null;
+  style?: StyleProp<ViewStyle>;
+  contentContainerStyle?: StyleProp<ViewStyle>;
 };
 
 export function DaySection({
@@ -31,43 +36,35 @@ export function DaySection({
   onReplaceStop,
   onAddPress,
   onStopPress,
+  ListHeaderComponent,
+  ListFooterComponent,
+  ListEmptyComponent,
+  style,
+  contentContainerStyle,
 }: Props) {
   const { t } = useTranslation();
+
   const renderItem = ({ item, drag, isActive, getIndex }: RenderItemParams<PlanStop & { id?: string }>) => {
     const index = getIndex() ?? 0;
     return (
-      <ScaleDecorator activeScale={1.03}>
-        <SwipeableStopCard
-          stop={item}
-          onDelete={() => onDeleteStop(index)}
-          onMovePress={onMoveStop ? () => onMoveStop(index) : undefined}
-          onReplacePress={onReplaceStop ? () => onReplaceStop(index) : undefined}
-          drag={drag}
-          isActive={isActive}
-          onPress={onStopPress ? () => onStopPress(index) : undefined}
-        />
-      </ScaleDecorator>
+      <View style={s.row}>
+        <ScaleDecorator activeScale={1.03}>
+          <SwipeableStopCard
+            stop={item}
+            onDelete={() => onDeleteStop(index)}
+            onMovePress={onMoveStop ? () => onMoveStop(index) : undefined}
+            onReplacePress={onReplaceStop ? () => onReplaceStop(index) : undefined}
+            drag={drag}
+            isActive={isActive}
+            onPress={onStopPress ? () => onStopPress(index) : undefined}
+          />
+        </ScaleDecorator>
+      </View>
     );
   };
 
-  return (
-    <View style={s.section}>
-      {/* Draggable list */}
-      <DraggableFlatList
-        data={stops}
-        keyExtractor={(item, idx) => item.placeId + '-' + idx}
-        renderItem={renderItem}
-        onDragBegin={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }}
-        onDragEnd={({ from, to }) => {
-          if (from !== to) onReorder(from, to);
-        }}
-        scrollEnabled={false}
-        containerStyle={s.listContainer}
-      />
-
-      {/* Add stop button */}
+  const listFooter = (
+    <View style={s.footerWrap}>
       <TouchableOpacity
         style={s.addBtn}
         onPress={onAddPress}
@@ -78,16 +75,43 @@ export function DaySection({
         <Ionicons name="add-circle-outline" size={18} color={colors.sunsetOrange} />
         <Text style={s.addText}>{t('plan.addStop')}</Text>
       </TouchableOpacity>
+      {ListFooterComponent}
     </View>
+  );
+
+  return (
+    <DraggableFlatList
+      data={stops}
+      keyExtractor={(item) => item.id ?? item.placeId}
+      renderItem={renderItem}
+      onDragBegin={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }}
+      onDragEnd={({ from, to }) => {
+        if (from !== to) onReorder(from, to);
+      }}
+      animationConfig={{
+        damping: 30,
+        stiffness: 350,
+        mass: 0.15,
+        overshootClamping: true,
+      }}
+      style={style}
+      contentContainerStyle={contentContainerStyle}
+      showsVerticalScrollIndicator={false}
+      ListHeaderComponent={ListHeaderComponent}
+      ListEmptyComponent={ListEmptyComponent}
+      ListFooterComponent={listFooter}
+    />
   );
 }
 
 const s = StyleSheet.create({
-  section: {
-    marginBottom: spacing.lg,
+  row: {
+    paddingHorizontal: spacing.lg,
   },
-  listContainer: {
-    minHeight: 1,
+  footerWrap: {
+    paddingHorizontal: spacing.lg,
   },
   addBtn: {
     flexDirection: 'row',
@@ -101,6 +125,7 @@ const s = StyleSheet.create({
     borderRadius: borderRadius.md,
     backgroundColor: colors.sunsetOrange + '08',
     marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
   addText: {
     fontFamily: fonts.bodySemiBold,
