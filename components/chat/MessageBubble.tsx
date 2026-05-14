@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { colors, fonts, borderRadius } from '../../lib/theme';
 import type { ChatMessage } from '../../lib/types';
 
@@ -13,13 +14,21 @@ export function MessageBubble({ message }: Props) {
     <View style={[styles.row, isUser && styles.rowUser]}>
       {!isUser && (
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>✦</Text>
+          <Image source={require('../../assets/images/icon.png')} style={styles.avatarIcon} resizeMode="contain" />
         </View>
       )}
-      <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAi]}>
-        {/* aiMessage MUST render as plain Text — XSS defense (no Markdown, no WebView) */}
-        <Text style={[styles.text, isUser && styles.textUser]}>{message.text}</Text>
-      </View>
+      {isUser ? (
+        <View style={[styles.bubble, styles.bubbleUser]}>
+          <Text style={styles.textUser}>{message.text}</Text>
+        </View>
+      ) : (
+        <View style={styles.bubbleAiOuter}>
+          <BlurView intensity={70} tint="light" style={styles.bubbleAiInner}>
+            {/* aiMessage MUST render as plain Text — XSS defense (no Markdown, no WebView) */}
+            <Text style={styles.text}>{message.text}</Text>
+          </BlurView>
+        </View>
+      )}
     </View>
   );
 }
@@ -35,29 +44,41 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.sunsetOrange,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(249, 115, 22, 0.09)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
     marginBottom: 2,
   },
-  avatarText: {
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: fonts.bodySemiBold,
+  avatarIcon: {
+    width: 18,
+    height: 22,
+  },
+  bubbleAiOuter: {
+    maxWidth: '75%',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderBottomLeftRadius: 4,
+    overflow: 'hidden',
+    shadowColor: 'rgba(0, 0, 0, 0.12)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  bubbleAiInner: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   bubble: {
     maxWidth: '75%',
     borderRadius: borderRadius.lg,
     paddingHorizontal: 14,
     paddingVertical: 10,
-  },
-  bubbleAi: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderBottomLeftRadius: 4,
   },
   bubbleUser: {
     backgroundColor: colors.electricBlue,
@@ -67,9 +88,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 15,
     lineHeight: 22,
-    color: colors.paperWhite,
+    color: colors.deepOcean,
   },
   textUser: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    lineHeight: 22,
     color: '#fff',
   },
 });
