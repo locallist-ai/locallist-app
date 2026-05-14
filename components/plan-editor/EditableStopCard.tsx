@@ -130,7 +130,6 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
-    transform: [{ scale: 1.03 }],
   },
   dragHandle: {
     padding: 4,
