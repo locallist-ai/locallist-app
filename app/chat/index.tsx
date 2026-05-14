@@ -22,17 +22,16 @@ import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { chatTurn, chatGenerate, deleteChatSession } from '../../lib/api';
 import { getSavedSessionId, saveSessionId, clearSessionId } from '../../lib/chat-store';
+import { BlurView } from 'expo-blur';
 import { MessageBubble } from '../../components/chat/MessageBubble';
-import { QuickReplyChips } from '../../components/chat/QuickReplyChips';
-import { SlotBadges } from '../../components/chat/SlotBadges';
 import { SaveProfileSheet } from '../../components/chat/SaveProfileSheet';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
-import { HeroSkiaBg } from '../../components/home/HeroSkiaBg';
+import { TypingDots } from '../../components/home/TypingDots';
 import { upsertProfile } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { track, countFilledSlots } from '../../lib/analytics';
 import { useTripContext } from '../../lib/trip-context-store';
-import type { ChatMessage, ChatSlots, QuickReply, BuilderResponse } from '../../lib/types';
+import type { ChatMessage, ChatSlots, BuilderResponse } from '../../lib/types';
 
 const EMPTY_SLOTS: ChatSlots = {
   city: null, days: null, groupType: null, categories: null,
@@ -48,7 +47,6 @@ export default function ChatScreen() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [slots, setSlots] = useState<ChatSlots>(EMPTY_SLOTS);
-  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -61,15 +59,18 @@ export default function ChatScreen() {
 
   const listRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
+  const initRef = useRef(false);
 
   // Resume prior session on mount; if city was pre-selected, seed it on first turn
   useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
     track({ event: 'chat_started', sessionId: null });
     (async () => {
       const saved = await getSavedSessionId();
       if (saved) {
         setSessionId(saved);
-        appendAiMessage(t('chat.welcomeMessage'), []);
+        appendAiMessage(t('chat.welcomeMessage'));
         return;
       }
       if (preSeededCity) {
@@ -90,8 +91,7 @@ export default function ChatScreen() {
             setSlots(data.slots);
             setReady(data.ready);
             setTurnCount(data.turnCount);
-            setMessages([{ role: 'ai', text: data.aiMessage, quickReplies: data.quickReplies }]);
-            setQuickReplies(data.quickReplies);
+            setMessages([{ role: 'ai', text: data.aiMessage }]);
             setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
             return;
           }
@@ -99,14 +99,13 @@ export default function ChatScreen() {
           setLoading(false);
         }
       }
-      appendAiMessage(t('chat.welcomeMessage'), []);
+      appendAiMessage(t('chat.welcomeMessage'));
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const appendAiMessage = useCallback((text: string, replies: QuickReply[]) => {
-    setMessages((prev) => [...prev, { role: 'ai', text, quickReplies: replies }]);
-    setQuickReplies(replies);
+  const appendAiMessage = useCallback((text: string) => {
+    setMessages((prev) => [...prev, { role: 'ai', text }]);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   }, []);
 
@@ -116,19 +115,18 @@ export default function ChatScreen() {
   }, []);
 
   const sendTurn = useCallback(
-    async (message: string, quickReplyId: string | null) => {
+    async (message: string) => {
       if (loading || generating) return;
       setLoading(true);
-      setQuickReplies([]);
 
       try {
-        const result = await chatTurn({ sessionId, message, quickReplyId });
+        const result = await chatTurn({ sessionId, message, quickReplyId: null });
 
         if (result.error || !result.data) {
           if (result.status === 429) {
-            appendAiMessage(t('chat.rateLimited'), []);
+            appendAiMessage(t('chat.rateLimited'));
           } else {
-            appendAiMessage(t('chat.errorRetry'), []);
+            appendAiMessage(t('chat.errorRetry'));
           }
           return;
         }
@@ -154,7 +152,7 @@ export default function ChatScreen() {
         if (data.ready) {
           track({ event: 'chat_ready', sessionId: newSessionId, turnCount: data.turnCount });
         }
-        appendAiMessage(data.aiMessage, data.ready ? [] : data.quickReplies);
+        appendAiMessage(data.aiMessage);
       } finally {
         setLoading(false);
       }
@@ -167,16 +165,8 @@ export default function ChatScreen() {
     if (!text || loading || generating) return;
     setInputText('');
     appendUserMessage(text);
-    sendTurn(text, null);
+    sendTurn(text);
   }, [inputText, loading, generating, appendUserMessage, sendTurn]);
-
-  const handleChipSelect = useCallback(
-    (reply: QuickReply) => {
-      appendUserMessage(reply.label);
-      sendTurn(reply.label, reply.id);
-    },
-    [appendUserMessage, sendTurn],
-  );
 
   const handleGenerate = useCallback(async () => {
     if (!sessionId || generating) return;
@@ -225,10 +215,9 @@ export default function ChatScreen() {
     setSessionId(null);
     setMessages([]);
     setSlots(EMPTY_SLOTS);
-    setQuickReplies([]);
     setReady(false);
     setTurnCount(0);
-    appendAiMessage(t('chat.welcomeMessage'), []);
+    appendAiMessage(t('chat.welcomeMessage'));
   }, [sessionId, turnCount, appendAiMessage, t]);
 
   const handleUseWizard = useCallback(() => {
@@ -278,14 +267,13 @@ export default function ChatScreen() {
         onConfirm={executeReset}
       />
 
-      {/* Background — matching home tab */}
+      {/* Background — idéntico al wizard (HomeScreen) */}
       <Image
         source={require('../../assets/images/hero-bg.jpg')}
         style={[styles.bgImage, { width: screenWidth + 200, height: screenHeight + 300 }]}
         resizeMode="cover"
       />
-      <HeroSkiaBg />
-      <View style={styles.bgOverlay} />
+<View style={styles.bgOverlay} />
 
       {/* Floating header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -322,9 +310,6 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Slot badges */}
-      <SlotBadges slots={slots} />
-
       {/* Message list + input */}
       <KeyboardAvoidingView
         style={styles.flex}
@@ -336,6 +321,7 @@ export default function ChatScreen() {
           data={messages}
           keyExtractor={(_, i) => String(i)}
           renderItem={({ item }) => <MessageBubble message={item} />}
+          style={styles.list}
           contentContainerStyle={styles.messageList}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
@@ -344,9 +330,13 @@ export default function ChatScreen() {
         {/* Typing indicator */}
         {loading && (
           <View style={styles.typingRow}>
-            <View style={styles.typingBubble}>
-              <ActivityIndicator size="small" color={colors.paperWhite} />
-              <Text style={styles.typingText}>{t('chat.typing')}</Text>
+            <View style={styles.typingAvatar}>
+              <Image source={require('../../assets/images/icon.png')} style={styles.typingAvatarIcon} resizeMode="contain" />
+            </View>
+            <View style={styles.typingBubbleOuter}>
+              <BlurView intensity={70} tint="light" style={styles.typingBubbleInner}>
+                <TypingDots />
+              </BlurView>
             </View>
           </View>
         )}
@@ -362,36 +352,32 @@ export default function ChatScreen() {
             {generating ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buildBtnText}>{t('chat.buildPlan')}</Text>
+              <>
+                <Ionicons name="sparkles" size={20} color="#fff" />
+                <Text style={styles.buildBtnText}>{t('chat.buildPlan')}</Text>
+              </>
             )}
           </TouchableOpacity>
         )}
 
-        {/* Quick reply chips */}
-        {!ready && !loading && quickReplies.length > 0 && (
-          <QuickReplyChips
-            replies={quickReplies}
-            onSelect={handleChipSelect}
-            disabled={loading || generating}
-          />
-        )}
-
         {/* Input row */}
         <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            placeholder={t('chat.inputPlaceholder')}
-            placeholderTextColor="rgba(255,255,255,0.4)"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            maxLength={500}
-            returnKeyType="send"
-            blurOnSubmit={false}
-            onSubmitEditing={handleSend}
-            editable={!loading && !generating && !ready}
-          />
+          <BlurView intensity={60} tint="light" style={styles.inputBlur}>
+            <TextInput
+              ref={inputRef}
+              style={styles.input}
+              placeholder={t('chat.inputPlaceholder')}
+              placeholderTextColor={colors.textSecondary}
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              maxLength={500}
+              returnKeyType="send"
+              blurOnSubmit={false}
+              onSubmitEditing={handleSend}
+              editable={!loading && !generating && !ready}
+            />
+          </BlurView>
           <TouchableOpacity
             onPress={handleSend}
             disabled={!inputText.trim() || loading || generating || ready}
@@ -418,13 +404,14 @@ const styles = StyleSheet.create({
   },
   bgImage: {
     position: 'absolute',
-    top: -50,
+    top: -100,
     left: -100,
-    opacity: 0.55,
+    right: -100,
+    bottom: -200,
   },
   bgOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15,23,42,0.55)',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   flex: {
     flex: 1,
@@ -459,6 +446,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#FFFFFF',
   },
+  list: {
+    flex: 1,
+  },
   messageList: {
     paddingTop: 8,
     paddingBottom: 8,
@@ -467,32 +457,51 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 8,
     flexDirection: 'row',
+    alignItems: 'flex-end',
   },
-  typingBubble: {
-    flexDirection: 'row',
+  typingAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(249, 115, 22, 0.09)',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: borderRadius.lg,
-    borderBottomLeftRadius: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    justifyContent: 'center',
+    marginRight: 8,
+    marginBottom: 2,
   },
-  typingText: {
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+  typingAvatarIcon: {
+    width: 18,
+    height: 22,
+  },
+  typingBubbleOuter: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderBottomLeftRadius: 4,
+    overflow: 'hidden',
+  },
+  typingBubbleInner: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   buildBtn: {
     marginHorizontal: 16,
     marginVertical: 8,
-    backgroundColor: colors.electricBlue,
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.sunsetOrange,
+    borderRadius: 20,
     paddingVertical: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    shadowColor: colors.sunsetOrange,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
   },
   buildBtnDisabled: {
-    opacity: 0.6,
+    opacity: 0.7,
   },
   buildBtnText: {
     fontFamily: fonts.bodySemiBold,
@@ -505,43 +514,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     gap: spacing.sm,
-    backgroundColor: 'rgba(15,23,42,0.6)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  inputBlur: {
+    flex: 1,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    minHeight: 44,
+    maxHeight: 120,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   input: {
-    flex: 1,
     fontFamily: fonts.body,
     fontSize: 15,
-    color: colors.paperWhite,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: borderRadius.md,
+    color: colors.textMain,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    maxHeight: 120,
-    minHeight: 44,
   },
   sendBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.electricBlue,
+    backgroundColor: colors.sunsetOrange,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.sunsetOrange,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
   },
   sendBtnDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    opacity: 0.5,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   wizardLink: {
     alignItems: 'center',
     paddingVertical: 10,
-    backgroundColor: 'rgba(15,23,42,0.6)',
   },
   wizardLinkText: {
     fontFamily: fonts.body,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.45)',
+    color: 'rgba(255,255,255,0.55)',
     textDecorationLine: 'underline',
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 });
