@@ -1,5 +1,21 @@
 // API response types — mirrors backend schemas
 
+export type OpeningTime = {
+  day: number;
+  hour: number;
+  minute: number;
+};
+
+export type OpeningPeriod = {
+  open: OpeningTime | null;
+  close: OpeningTime | null;
+};
+
+export type OpeningHours = {
+  periods: OpeningPeriod[];
+  weekdayDescriptions: string[];
+};
+
 export type Place = {
   id: string;
   name: string;
@@ -18,6 +34,7 @@ export type Place = {
   googleRating: number | null;
   googleReviewCount: number | null;
   source: string;
+  openingHours: OpeningHours | null;
 };
 
 export type PlanStop = {

@@ -24,6 +24,7 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { formatPriceLabel } from '../../lib/helpers/price';
 import { api } from '../../lib/api';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
+import { getOpenState } from '../../lib/openingHours';
 import type { Place } from '../../lib/types';
 
 // ── Constants ──
@@ -144,6 +145,7 @@ export default function PlaceDetailScreen() {
   const heroSubtitle = [place.neighborhood, place.city].filter(Boolean).join(' \u00B7 ');
   const bestTimeInfo = place.bestTime ? TIME_BLOCK_KEYS[place.bestTime as keyof typeof TIME_BLOCK_KEYS] : null;
   const hasCoords = place.latitude && place.longitude;
+  const openStatus = getOpenState(place.openingHours);
 
   // ── Render ──
 
@@ -264,6 +266,35 @@ export default function PlaceDetailScreen() {
                     ? formatPriceLabel(place.priceRange, t)
                     : `${place.priceRange}${(place.priceRange as keyof typeof PRICE_KEYS) in PRICE_KEYS ? ` \u2014 ${t(PRICE_KEYS[place.priceRange as keyof typeof PRICE_KEYS])}` : ''}`}
                 </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Opening hours */}
+          {place.openingHours && place.openingHours.periods.length > 0 && (
+            <View style={s.detailRow}>
+              <Ionicons name="time-outline" size={18} color={colors.textSecondary} />
+              <View style={s.detailContent}>
+                <View style={s.hoursHeaderRow}>
+                  <Text style={s.detailLabel}>{t('place.hours')}</Text>
+                  <View style={[
+                    s.openBadge,
+                    openStatus.state === 'open' ? s.openBadgeOpen : s.openBadgeClosed,
+                  ]}>
+                    <Text style={[
+                      s.openBadgeText,
+                      openStatus.state === 'open' ? s.openBadgeTextOpen : s.openBadgeTextClosed,
+                    ]}>
+                      {openStatus.state === 'open' ? t('place.openNow') : t('place.closedNow')}
+                    </Text>
+                  </View>
+                </View>
+                {openStatus.hint && (
+                  <Text style={s.detailValueSecondary}>{openStatus.hint}</Text>
+                )}
+                {place.openingHours.weekdayDescriptions.map((line, i) => (
+                  <Text key={i} style={s.hoursLine}>{line}</Text>
+                ))}
               </View>
             </View>
           )}
@@ -416,6 +447,34 @@ const s = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 15,
     color: colors.textMain,
+  },
+  detailValueSecondary: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  hoursHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  openBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+  },
+  openBadgeOpen: { backgroundColor: colors.successEmerald + '20' },
+  openBadgeClosed: { backgroundColor: colors.error + '18' },
+  openBadgeText: { fontFamily: fonts.bodySemiBold, fontSize: 11 },
+  openBadgeTextOpen: { color: colors.successEmerald },
+  openBadgeTextClosed: { color: colors.error },
+  hoursLine: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
 
   // Chips
