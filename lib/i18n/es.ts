@@ -334,4 +334,10 @@ export default {
     saveSheetTitle: '¿Guardar para la próxima vez?',
     saveSheetSub: 'Las rellenaremos automáticamente en tu próxima conversación para que puedas planificar directamente.',
   },
+  stop: {
+    visitDuration: 'Visita ~{{min}} min',
+    visitDurationLong: 'Visita ~{{h}}h',
+    travelFromPrev: '{{min}} min desde el anterior',
+    arrival: 'Llegada {{time}}',
+  },
 } as const;

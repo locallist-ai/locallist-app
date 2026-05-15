@@ -75,10 +75,20 @@ export function EditableStopCard({ stop, onMovePress, onReplacePress, drag, isAc
                 <Text style={s.categoryText}>{t(`category.${place.category}`, { defaultValue: place.category })}</Text>
               </View>
             )}
+            {stop.suggestedArrival && (
+              <View style={s.durationChip}>
+                <Ionicons name="time-outline" size={11} color={colors.textSecondary} />
+                <Text style={s.durationText}>{t('stop.arrival', { time: stop.suggestedArrival })}</Text>
+              </View>
+            )}
             {stop.suggestedDurationMin != null && (
               <View style={s.durationChip}>
                 <Ionicons name="time-outline" size={11} color={colors.electricBlue} />
-                <Text style={s.durationText}>~{stop.suggestedDurationMin}m</Text>
+                <Text style={s.durationText}>
+                  {stop.suggestedDurationMin >= 60
+                    ? t('stop.visitDurationLong', { h: Math.round(stop.suggestedDurationMin / 60) })
+                    : t('stop.visitDuration', { min: stop.suggestedDurationMin })}
+                </Text>
               </View>
             )}
           </View>
