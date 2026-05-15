@@ -805,7 +805,11 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total, isOw
             {stop.suggestedDurationMin != null && (
               <View style={styles.infoPill}>
                 <MaterialCommunityIcons name="clock-outline" size={14} color={colors.electricBlue} />
-                <Text style={styles.infoPillText}>~{stop.suggestedDurationMin}m</Text>
+                <Text style={styles.infoPillText}>
+                  {stop.suggestedDurationMin >= 60
+                    ? t('stop.visitDurationLong', { h: Math.round(stop.suggestedDurationMin / 60) })
+                    : t('stop.visitDuration', { min: stop.suggestedDurationMin })}
+                </Text>
               </View>
             )}
             {place?.priceRange && (
@@ -834,7 +838,7 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total, isOw
                   color="#0369a1"
                 />
                 <Text style={styles.travelPillText}>
-                  {Math.round(stop.travelFromPrevious.duration_min)}m
+                  {t('stop.travelFromPrev', { min: Math.round(stop.travelFromPrevious.duration_min) })}
                 </Text>
               </View>
             )}

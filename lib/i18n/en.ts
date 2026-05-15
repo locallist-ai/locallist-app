@@ -334,4 +334,10 @@ export default {
     saveSheetTitle: 'Save for next time?',
     saveSheetSub: 'We\'ll pre-fill these in your next chat so you can skip straight to planning.',
   },
+  stop: {
+    visitDuration: 'Stay ~{{min}}m',
+    visitDurationLong: 'Stay ~{{h}}h',
+    travelFromPrev: '{{min}}m from prev',
+    arrival: 'Arrival {{time}}',
+  },
 } as const;

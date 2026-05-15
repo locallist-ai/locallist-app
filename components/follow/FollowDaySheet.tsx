@@ -235,9 +235,9 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
               <View style={styles.metaPill}>
                 <MaterialCommunityIcons name="clock-outline" size={13} color={colors.deepOcean} />
                 <Text style={styles.metaPillText}>
-                  {currentStop.suggestedDurationMin < 60
-                    ? `${currentStop.suggestedDurationMin}m`
-                    : `${Math.floor(currentStop.suggestedDurationMin / 60)}h`}
+                  {currentStop.suggestedDurationMin >= 60
+                    ? t('stop.visitDurationLong', { h: Math.floor(currentStop.suggestedDurationMin / 60) })
+                    : t('stop.visitDuration', { min: currentStop.suggestedDurationMin })}
                 </Text>
               </View>
             )}

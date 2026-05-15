@@ -98,7 +98,7 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
                   color="#0369a1"
                 />
                 <Text style={styles.travelPillText}>
-                  {Math.round(travel.duration_min)}m from prev
+                  {t('stop.travelFromPrev', { min: Math.round(travel.duration_min) })}
                 </Text>
               </View>
             )}
