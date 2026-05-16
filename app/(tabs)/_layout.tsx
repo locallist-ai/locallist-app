@@ -3,9 +3,11 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts } from '../../lib/theme';
+import { useResponsive } from '../../lib/responsive';
 
 export default function TabsLayout() {
   const { t } = useTranslation();
+  const { compact } = useResponsive();
 
   return (
     <Tabs
@@ -14,7 +16,7 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.bgCard,
           borderTopColor: colors.borderColor,
-          paddingTop: 6,
+          paddingTop: compact ? 3 : 6,
         },
         tabBarActiveTintColor: colors.sunsetOrange,
         // Pablo 2026-04-27: tabs en mismo color paleta wizard. Inactive ahora
@@ -23,13 +25,13 @@ export default function TabsLayout() {
         tabBarShowLabel: true,
         tabBarLabelStyle: {
           fontFamily: fonts.bodySemiBold,
-          fontSize: 10,
-          letterSpacing: 0.6,
+          fontSize: compact ? 9 : 10,
+          letterSpacing: compact ? 0.3 : 0.6,
           textTransform: 'uppercase',
-          marginTop: 2,
+          marginTop: compact ? 1 : 2,
         },
         tabBarIconStyle: {
-          marginTop: 2,
+          marginTop: compact ? 1 : 2,
         },
         headerStyle: { backgroundColor: colors.bgMain },
         headerTintColor: colors.deepOcean,

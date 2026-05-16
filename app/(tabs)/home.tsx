@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Image, StyleSheet, useWindowDimensions, ScrollView } from 'react-native';
+import { View, Image, StyleSheet, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../../lib/theme';
+import { useResponsive } from '../../lib/responsive';
 import { CITIES } from '../../lib/cities';
 import { setSelectedCity } from '../../lib/trip-context-store';
 import { CityCard } from '../../components/home/CityCard';
@@ -14,7 +15,7 @@ import { StepSubtitle } from '../../components/ui/design-system/StepSubtitle';
 export default function HomeTab() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight, compact } = useResponsive();
 
   const handleCitySelect = async (cityName: string) => {
     await setSelectedCity(cityName);
@@ -35,13 +36,13 @@ export default function HomeTab() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 140, paddingBottom: insets.bottom + 32 },
+          { paddingTop: insets.top + (compact ? 80 : 140), paddingBottom: insets.bottom + 32 },
         ]}
         showsVerticalScrollIndicator={false}
       >
         <EditorialTitle
           text={t('home.whereToNext')}
-          size="lg"
+          size={compact ? 'md' : 'lg'}
           color={colors.paperWhite}
           withShadow
         />

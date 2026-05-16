@@ -5,6 +5,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts } from '../../../lib/theme';
+import { useResponsive } from '../../../lib/responsive';
 
 // Design system — ChoiceChip.
 // Componente base del "lenguaje wizard". Grandes tarjetas con emoji + label +
@@ -47,6 +48,7 @@ export const ChoiceChip: React.FC<ChoiceChipProps> = React.memo(function ChoiceC
   // Pablo 2026-04-26: animaciones eliminadas. ChoiceChip queda estático.
   // Solo se mantiene el ZoomIn del checkmark cuando el chip se selecciona,
   // que es feedback de tap inmediato (no infinite animation).
+  const { pick, ms } = useResponsive();
 
   const handlePress = () => {
     if (haptics) {
@@ -55,8 +57,10 @@ export const ChoiceChip: React.FC<ChoiceChipProps> = React.memo(function ChoiceC
     onPress();
   };
 
+  const bubbleSize = pick(48, 40);
+
   return (
-    <View>
+    <View style={{ marginBottom: pick(12, 8) }}>
       <TouchableOpacity
         activeOpacity={0.85}
         onPress={handlePress}
@@ -71,9 +75,26 @@ export const ChoiceChip: React.FC<ChoiceChipProps> = React.memo(function ChoiceC
             selected ? styles.cardSelected : styles.cardIdle,
           ]}
         >
-          <BlurView intensity={selected ? 70 : 50} tint="light" style={styles.blur}>
+          <BlurView
+            intensity={selected ? 70 : 50}
+            tint="light"
+            style={[
+              styles.blur,
+              {
+                paddingHorizontal: pick(20, 16),
+                paddingVertical: pick(18, 12),
+                gap: pick(16, 10),
+              },
+            ]}
+          >
               {iconName ? (
-                <View style={[styles.iconBubble, selected && styles.iconBubbleSelected]}>
+                <View
+                  style={[
+                    styles.iconBubble,
+                    selected && styles.iconBubbleSelected,
+                    { width: bubbleSize, height: bubbleSize, borderRadius: bubbleSize / 2 },
+                  ]}
+                >
                   <MaterialCommunityIcons
                     name={iconName}
                     size={26}
@@ -81,10 +102,10 @@ export const ChoiceChip: React.FC<ChoiceChipProps> = React.memo(function ChoiceC
                   />
                 </View>
               ) : (
-                <Text style={styles.emoji}>{emoji}</Text>
+                <Text style={[styles.emoji, { fontSize: ms(32) }]}>{emoji}</Text>
               )}
               <View style={styles.labelContainer}>
-                <Text style={[styles.label, selected && styles.labelSelected]}>
+                <Text style={[styles.label, selected && styles.labelSelected, { fontSize: ms(22) }]}>
                   {label}
                 </Text>
               </View>
@@ -108,7 +129,6 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     overflow: 'hidden',
     borderWidth: 1.5,
-    marginBottom: 12,
   },
   cardIdle: {
     borderColor: 'rgba(255, 255, 255, 0.3)',
@@ -122,19 +142,11 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   blur: {
-    paddingHorizontal: 20,
-    paddingVertical: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
   },
-  emoji: {
-    fontSize: 32,
-  },
+  emoji: {},
   iconBubble: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(242, 239, 233, 0.85)', // paperWhite tinted
@@ -150,7 +162,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: fonts.headingSemiBold,
-    fontSize: 22,
     color: 'rgba(15, 23, 42, 0.8)',
   },
   labelSelected: {

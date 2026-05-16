@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   Text,
   ViewStyle,
-  Dimensions,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -20,6 +19,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import { StopCard } from './StopCard';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, borderRadius, spacing } from '../../lib/theme';
+import { useResponsive } from '../../lib/responsive';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export interface Stop {
@@ -55,9 +55,6 @@ interface BottomSheetStopProps {
 
 const SWIPE_THRESHOLD = 60;
 const EXPAND_THRESHOLD = 40;
-const COLLAPSED_HEIGHT = 360;
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const EXPANDED_HEIGHT = Math.round(SCREEN_HEIGHT * 0.78);
 
 export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
   stop,
@@ -71,6 +68,9 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
 }) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { height: screenHeight, short } = useResponsive();
+  const COLLAPSED_HEIGHT = short ? 280 : 360;
+  const EXPANDED_HEIGHT = Math.round(screenHeight * 0.78);
   const translateX = useSharedValue(0);
   const startX = useSharedValue(0);
   const sheetHeight = useSharedValue(COLLAPSED_HEIGHT);

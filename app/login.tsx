@@ -16,6 +16,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../lib/theme';
+import { useResponsive } from '../lib/responsive';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { AuthResponse } from '../lib/types';
@@ -38,6 +39,7 @@ const PASSWORD_CHECKS: Array<{ key: 'auth.passwordRuleLength' | 'auth.passwordRu
 export default function LoginScreen() {
   const { t } = useTranslation();
   const { login } = useAuth();
+  const { compact } = useResponsive();
   const [step, setStep] = useState<AuthStep>('choose');
   const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [credentialsMode, setCredentialsMode] = useState<CredentialsMode>('login');
@@ -269,7 +271,12 @@ export default function LoginScreen() {
       >
         <Image
           source={require('../assets/images/icon.png')}
-          style={{ width: 180, height: 180, marginTop: spacing.xxl, marginBottom: spacing.sm }}
+          style={{
+            width: compact ? 120 : 180,
+            height: compact ? 120 : 180,
+            marginTop: compact ? spacing.md : spacing.xxl,
+            marginBottom: spacing.sm,
+          }}
           resizeMode="contain"
         />
         <Text
