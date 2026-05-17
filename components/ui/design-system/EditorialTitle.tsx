@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, StyleSheet, type TextStyle, type StyleProp } from 'react-native';
 import { colors, fonts } from '../../../lib/theme';
+import { useResponsive } from '../../../lib/responsive';
 
 // Design system — EditorialTitle.
 // Title serif (Playfair Display Bold) con line-break narrativo. Soporta shadow
@@ -21,7 +22,7 @@ export interface EditorialTitleProps {
   style?: StyleProp<TextStyle>;
 }
 
-const SIZE_TO_STYLE: Record<
+const BASE_SIZE: Record<
   NonNullable<EditorialTitleProps['size']>,
   { fontSize: number; lineHeight: number }
 > = {
@@ -38,16 +39,23 @@ export const EditorialTitle: React.FC<EditorialTitleProps> = ({
   withShadow = false,
   style,
 }) => {
+  const { ms } = useResponsive();
+  const base = BASE_SIZE[size];
+  const sizeStyle = {
+    fontSize: ms(base.fontSize),
+    lineHeight: ms(base.lineHeight),
+  };
   return (
     <Text
       style={[
         styles.base,
-        SIZE_TO_STYLE[size],
+        sizeStyle,
         { color, textAlign: align },
         withShadow && styles.shadow,
         style,
       ]}
       allowFontScaling
+      maxFontSizeMultiplier={1.2}
     >
       {text}
     </Text>

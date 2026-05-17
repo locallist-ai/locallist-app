@@ -21,6 +21,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
+import { useResponsive } from '../../lib/responsive';
 import { formatPriceLabel } from '../../lib/helpers/price';
 import { api } from '../../lib/api';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
@@ -29,7 +30,6 @@ import type { Place } from '../../lib/types';
 
 // ── Constants ──
 
-const HERO_MAX = 280;
 const HERO_MIN = 120;
 
 const PRICE_KEYS = {
@@ -54,6 +54,8 @@ export default function PlaceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { short } = useResponsive();
+  const HERO_MAX = short ? 220 : 280;
 
   const [place, setPlace] = useState<Place | null>(null);
   const [loading, setLoading] = useState(true);
