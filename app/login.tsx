@@ -17,8 +17,9 @@ import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../lib/theme';
 import { useResponsive } from '../lib/responsive';
-import { api } from '../lib/api';
+import { api, getAccessToken } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { track } from '../lib/analytics';
 import type { AuthResponse } from '../lib/types';
 
 // Required for Google Auth redirect to close the browser on web
@@ -35,6 +36,11 @@ const PASSWORD_CHECKS: Array<{ key: 'auth.passwordRuleLength' | 'auth.passwordRu
   { key: 'auth.passwordRuleDigit', check: (p: string) => /[0-9]/.test(p) },
   { key: 'auth.passwordRuleSpecial', check: (p: string) => /[^A-Za-z0-9]/.test(p) },
 ];
+
+async function trackAuthEvent(provider: 'apple' | 'google' | 'email') {
+  const hadToken = await getAccessToken();
+  track({ event: hadToken ? 'sign_in' : 'sign_up', provider });
+}
 
 export default function LoginScreen() {
   const { t } = useTranslation();
@@ -105,6 +111,7 @@ export default function LoginScreen() {
       );
 
       if (res.data) {
+        await trackAuthEvent('google');
         await login(res.data.user, res.data.accessToken, res.data.refreshToken);
       } else {
         setError(res.error ?? t('auth.errorGoogleFailed'));
@@ -141,6 +148,7 @@ export default function LoginScreen() {
       );
 
       if (res.data) {
+        await trackAuthEvent('apple');
         await login(res.data.user, res.data.accessToken, res.data.refreshToken);
       } else {
         setError(res.error ?? t('auth.errorLoginFailed'));
@@ -207,6 +215,7 @@ export default function LoginScreen() {
     setLoading(null);
 
     if (res.data) {
+      track({ event: 'sign_up', provider: 'email' });
       await login(res.data.user, res.data.accessToken, res.data.refreshToken);
     } else {
       setError(res.error ?? t('auth.errorRegistrationFailed'));
@@ -242,6 +251,7 @@ export default function LoginScreen() {
     setLoading(null);
 
     if (res.data) {
+      await trackAuthEvent('email');
       await login(res.data.user, res.data.accessToken, res.data.refreshToken);
     } else {
       setError(res.error ?? t('auth.errorLoginFailed'));

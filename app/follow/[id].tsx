@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
+import { track } from '../../lib/analytics';
 import { useAuth } from '../../lib/auth';
 import { PlanMap } from '../../components/map/PlanMap';
 import { FollowDaySheet } from '../../components/follow/FollowDaySheet';
@@ -127,6 +128,7 @@ export default function FollowModeScreen() {
     if (sessionRes.data) {
       setSession(sessionRes.data);
     }
+    track({ event: 'follow_started', planId: id });
     setLoading(false);
   };
 
@@ -166,6 +168,7 @@ export default function FollowModeScreen() {
       await api(`/follow/${session.id}/complete`, { method: 'PATCH' });
     }
     void clearResume(id);
+    track({ event: 'follow_completed', planId: id, stopsCompleted: allStops.length });
     Alert.alert(t('follow.tripCompleteTitle'), t('follow.tripCompleteBody'), [
       { text: t('follow.done'), onPress: () => router.back() },
     ]);

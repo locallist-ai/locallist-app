@@ -24,6 +24,7 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { useResponsive } from '../../lib/responsive';
 import { formatPriceLabel } from '../../lib/helpers/price';
 import { api } from '../../lib/api';
+import { track } from '../../lib/analytics';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
 import { getOpenState } from '../../lib/openingHours';
 import type { Place } from '../../lib/types';
@@ -78,6 +79,10 @@ export default function PlaceDetailScreen() {
     );
     return { height };
   });
+
+  useEffect(() => {
+    if (id) track({ event: 'place_viewed', placeId: id });
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
