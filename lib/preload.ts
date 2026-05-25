@@ -6,6 +6,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { api } from './api';
 import { getCached, setCache } from './api-cache';
 import { logger } from './logger';
+import { loadTaxonomy } from './taxonomy';
 import type { Plan } from './types';
 
 // Local cover images to decode during splash
@@ -31,7 +32,10 @@ export async function preloadPlans(): Promise<void> {
 
   try {
     await Promise.all([
-      // 1. Fetch plans data from API and cache it
+      // 1. Load taxonomy in background (non-blocking for splash)
+      loadTaxonomy().catch(() => {}),
+
+      // 2. Fetch plans data from API and cache it
       (async () => {
         if (getCached<Plan[]>(PLANS_CACHE_KEY)) return; // already cached
         const res = await api<{ plans: Plan[] }>('/plans?showcase=true');
@@ -46,7 +50,7 @@ export async function preloadPlans(): Promise<void> {
         }
       })(),
 
-      // 2. Prefetch local cover images so they're decoded and ready
+      // 3. Prefetch local cover images so they're decoded and ready
       ...COVER_SOURCES.map((src) =>
         ExpoImage.prefetch(src).catch(() => {}),
       ),

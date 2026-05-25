@@ -205,13 +205,15 @@ export default function PlaceDetailScreen() {
         </View>
 
         {/* Why This Place */}
-        <View style={s.card}>
-          <View style={s.cardHeader}>
-            <Ionicons name="sparkles" size={18} color={colors.sunsetOrange} />
-            <Text style={s.cardTitle}>{t('place.whyThisPlace')}</Text>
+        {place.whyThisPlace?.trim() ? (
+          <View style={s.card}>
+            <View style={s.cardHeader}>
+              <Ionicons name="sparkles" size={18} color={colors.sunsetOrange} />
+              <Text style={s.cardTitle}>{t('place.whyThisPlace')}</Text>
+            </View>
+            <Text style={s.whyText}>{place.whyThisPlace}</Text>
           </View>
-          <Text style={s.whyText}>{place.whyThisPlace}</Text>
-        </View>
+        ) : null}
 
         {/* Details section */}
         <View style={s.card}>
