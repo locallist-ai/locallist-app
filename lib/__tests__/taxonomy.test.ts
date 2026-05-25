@@ -1,6 +1,6 @@
 process.env.EXPO_PUBLIC_API_URL = 'https://api.test.local';
 
-jest.mock('expo-file-system', () => ({
+jest.mock('expo-file-system/legacy', () => ({
     cacheDirectory: '/mock-cache/',
     getInfoAsync: jest.fn(),
     readAsStringAsync: jest.fn(),
@@ -17,7 +17,7 @@ beforeEach(() => {
 
 describe('getTaxonomy', () => {
     it('returns fallback when cache is empty and no network', async () => {
-        const FileSystem = require('expo-file-system');
+        const FileSystem = require('expo-file-system/legacy');
         FileSystem.getInfoAsync.mockResolvedValue({ exists: false });
         FileSystem.writeAsStringAsync.mockResolvedValue(undefined);
         global.fetch = jest.fn().mockRejectedValue(new Error('No network'));
@@ -31,7 +31,7 @@ describe('getTaxonomy', () => {
     });
 
     it('stores fetched data in memory cache', async () => {
-        const FileSystem = require('expo-file-system');
+        const FileSystem = require('expo-file-system/legacy');
         FileSystem.getInfoAsync.mockResolvedValue({ exists: false });
         FileSystem.writeAsStringAsync.mockResolvedValue(undefined);
 
@@ -55,7 +55,7 @@ describe('getTaxonomy', () => {
     });
 
     it('uses file cache when fresh', async () => {
-        const FileSystem = require('expo-file-system');
+        const FileSystem = require('expo-file-system/legacy');
         const cachedData = {
             categories: ['Food'],
             subcategoriesByCategory: { Food: ['cached-sub'] },
