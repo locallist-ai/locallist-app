@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ImpactFeedbackStyle } from 'expo-haptics';
 import { api } from '../../lib/api';
+import { track } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan/plan-store';
 import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX, tierFromBudgetAmount } from './constants';
@@ -307,6 +308,7 @@ export const useWizard = (): UseWizardResult => {
       logger.debug('[builder/chat] RESPONSE status', res.status);
       if (res.data) {
         logger.debug('[builder/chat] RESPONSE body', res.data);
+        track({ event: 'wizard_completed', planId: res.data.plan.id, city: res.data.plan.city, days: res.data.plan.durationDays });
         setPreviewPlan(res.data);
         router.push('/plan/preview');
       } else {

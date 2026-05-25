@@ -16,17 +16,34 @@ export function setAnalyticsUserId(id: string | null) {
   _distinctId = id;
 }
 
-export type ChatEvent =
+export type AppEvent =
+  // Auth
+  | { event: 'sign_up'; provider: 'apple' | 'google' | 'email' }
+  | { event: 'sign_in'; provider: 'apple' | 'google' | 'email' }
+  // Content
+  | { event: 'plan_viewed'; planId: string; source?: 'feed' | 'builder' | 'deep_link' }
+  | { event: 'place_viewed'; placeId: string; planId?: string }
+  // Builder
+  | { event: 'wizard_started'; city?: string }
+  | { event: 'wizard_completed'; planId: string; city: string; days: number }
+  // Follow Mode
+  | { event: 'follow_started'; planId: string }
+  | { event: 'follow_completed'; planId: string; stopsCompleted: number }
+  // Chat builder
   | { event: 'chat_started'; sessionId: string | null }
   | { event: 'chat_turn'; sessionId: string; turnCount: number; slotsFilled: number; totalSlots: number }
   | { event: 'chat_ready'; sessionId: string; turnCount: number }
   | { event: 'chat_generated'; sessionId: string; planId: string; turnCount: number }
   | { event: 'chat_abandoned'; sessionId: string; turnCount: number }
   | { event: 'chat_to_wizard_escape'; sessionId: string | null; turnCount: number }
+  // Profile
   | { event: 'profile_saved'; fields: string[] }
   | { event: 'profile_reset' };
 
-export function track(payload: ChatEvent): void {
+/** @deprecated Use AppEvent */
+export type ChatEvent = AppEvent;
+
+export function track(payload: AppEvent): void {
   if (!POSTHOG_KEY) return;
   const { event, ...properties } = payload;
   const body = JSON.stringify({

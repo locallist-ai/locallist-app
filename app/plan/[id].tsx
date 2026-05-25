@@ -19,6 +19,7 @@ import { getPreviewPlan } from '../../lib/plan/plan-store';
 import { PlanCardPager } from '../../components/plan/PlanCardPager';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { usePlanEditor } from '../../lib/plan/use-plan-editor';
+import { track } from '../../lib/analytics';
 import type { Plan, PlanStop, PlanDetailResponse } from '../../lib/types';
 import type { DayGroup } from '../../lib/plan/use-plan-editor';
 
@@ -115,6 +116,12 @@ export default function PlanDetailScreen() {
   useEffect(() => {
     if (isNew && editorPlan) setLoading(false);
   }, [isNew, editorPlan]);
+
+  useEffect(() => {
+    if (id && id !== 'new' && id !== 'preview') {
+      track({ event: 'plan_viewed', planId: id });
+    }
+  }, [id]);
 
   // Fetch plan data (preview store or API).
   useEffect(() => {
