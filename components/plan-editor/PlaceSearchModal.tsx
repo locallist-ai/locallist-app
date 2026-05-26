@@ -49,10 +49,13 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
   const searchInputRef = useRef<TextInput>(null);
 
-  // Client-side subcategory filter: use id (lowercase) with includes() to match
-  // both canonical ("Ramen") and legacy free-text ("ramen / japanese") subcategories
+  // Client-side subcategory filter: match against any element of subcategories[]
   const results = subcategory
-    ? allResults.filter((p) => p.subcategory?.toLowerCase().includes(subcategory))
+    ? allResults.filter((p) =>
+        (p.subcategories ?? (p.subcategory ? [p.subcategory] : [])).some((s) =>
+          s.toLowerCase().includes(subcategory)
+        )
+      )
     : allResults;
 
   const search = useCallback(

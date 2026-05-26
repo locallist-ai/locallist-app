@@ -197,11 +197,11 @@ export default function PlaceDetailScreen() {
               </Text>
             </View>
           )}
-          {place.subcategory && (
-            <View style={s.badge}>
-              <Text style={s.badgeText}>{place.subcategory}</Text>
+          {(place.subcategories ?? (place.subcategory ? [place.subcategory] : [])).map((sub) => (
+            <View key={sub} style={s.badge}>
+              <Text style={s.badgeText}>{sub}</Text>
             </View>
-          )}
+          ))}
         </View>
 
         {/* Why This Place */}
