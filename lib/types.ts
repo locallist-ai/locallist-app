@@ -20,7 +20,8 @@ export type Place = {
   id: string;
   name: string;
   category: string;
-  subcategory: string | null;
+  subcategories: string[];
+  subcategory?: string | null;  // deprecated adapter — first element of subcategories
   neighborhood: string | null;
   city: string;
   whyThisPlace: string;
