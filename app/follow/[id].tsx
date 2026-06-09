@@ -97,42 +97,45 @@ export default function FollowModeScreen() {
       router.replace('/login');
       return;
     }
-    startSession();
-  }, [id, isAuthenticated]);
+    let cancelled = false;
+    (async () => {
+      const planRes = await api<PlanDetailResponse>(`/plans/${id}`);
+      if (cancelled) return;
+      if (!planRes.data) {
+        setError(planRes.error ?? 'Failed to load plan');
+        setLoading(false);
+        return;
+      }
 
-  const startSession = async () => {
-    const planRes = await api<PlanDetailResponse>(`/plans/${id}`);
-    if (!planRes.data) {
-      setError(planRes.error ?? 'Failed to load plan');
+      setPlanName(planRes.data.name);
+      setRouteSegments(planRes.data.routeSegments ?? []);
+      const stops = planRes.data.days
+        .sort((a, b) => a.dayNumber - b.dayNumber)
+        .flatMap((d) => d.stops.sort((a, b) => a.orderIndex - b.orderIndex));
+      setAllStops(stops);
+
+      const resume = await getResume(id);
+      if (cancelled) return;
+      if (resume) {
+        const resumeIdx = stops.findIndex(
+          (s) => s.dayNumber === resume.dayNumber && s.orderIndex === resume.orderIndex,
+        );
+        if (resumeIdx >= 0) setCurrentIndex(resumeIdx);
+      }
+
+      const sessionRes = await api<FollowSession>('/follow/start', {
+        method: 'POST',
+        body: { planId: id },
+      });
+      if (cancelled) return;
+      if (sessionRes.data) {
+        setSession(sessionRes.data);
+      }
+      track({ event: 'follow_started', planId: id });
       setLoading(false);
-      return;
-    }
-
-    setPlanName(planRes.data.name);
-    setRouteSegments(planRes.data.routeSegments ?? []);
-    const stops = planRes.data.days
-      .sort((a, b) => a.dayNumber - b.dayNumber)
-      .flatMap((d) => d.stops.sort((a, b) => a.orderIndex - b.orderIndex));
-    setAllStops(stops);
-
-    const resume = await getResume(id);
-    if (resume) {
-      const resumeIdx = stops.findIndex(
-        (s) => s.dayNumber === resume.dayNumber && s.orderIndex === resume.orderIndex,
-      );
-      if (resumeIdx >= 0) setCurrentIndex(resumeIdx);
-    }
-
-    const sessionRes = await api<FollowSession>('/follow/start', {
-      method: 'POST',
-      body: { planId: id },
-    });
-    if (sessionRes.data) {
-      setSession(sessionRes.data);
-    }
-    track({ event: 'follow_started', planId: id });
-    setLoading(false);
-  };
+    })();
+    return () => { cancelled = true; };
+  }, [id, isAuthenticated]);
 
   const goTo = (nextIndex: number) => {
     if (nextIndex < 0 || nextIndex >= allStops.length) return;
