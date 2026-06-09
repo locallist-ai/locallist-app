@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { track } from '../../lib/analytics';
+import { logger } from '../../lib/logger';
 import { useAuth } from '../../lib/auth';
 import { PlanMap } from '../../components/map/PlanMap';
 import { FollowDaySheet } from '../../components/follow/FollowDaySheet';
@@ -98,73 +99,65 @@ export default function FollowModeScreen() {
       return;
     }
     let cancelled = false;
-    (async () => {
-      const planRes = await api<PlanDetailResponse>(`/plans/${id}`);
-      if (cancelled) return;
-      if (!planRes.data) {
-        setError(planRes.error ?? 'Failed to load plan');
+    const abortController = new AbortController();
+    void (async () => {
+      try {
+        const planRes = await api<PlanDetailResponse>(`/plans/${id}`, {
+          signal: abortController.signal,
+        });
+        if (cancelled) return;
+        if (!planRes.data) {
+          setError(planRes.error ?? t('follow.loadError'));
+          setLoading(false);
+          return;
+        }
+
+        setPlanName(planRes.data.name);
+        setRouteSegments(planRes.data.routeSegments ?? []);
+        const stops = [...planRes.data.days]
+          .sort((a, b) => a.dayNumber - b.dayNumber)
+          .flatMap((d) => [...d.stops].sort((a, b) => a.orderIndex - b.orderIndex));
+        setAllStops(stops);
+
+        const resume = await getResume(id);
+        if (cancelled) return;
+        if (resume) {
+          const resumeIdx = stops.findIndex(
+            (s) => s.dayNumber === resume.dayNumber && s.orderIndex === resume.orderIndex,
+          );
+          if (resumeIdx >= 0) setCurrentIndex(resumeIdx);
+        }
+
+        const sessionRes = await api<FollowSession>('/follow/start', {
+          method: 'POST',
+          body: { planId: id },
+          signal: abortController.signal,
+        });
+        if (cancelled) return;
+        if (sessionRes.data) {
+          setSession(sessionRes.data);
+          track({ event: 'follow_started', planId: id });
+        }
         setLoading(false);
-        return;
+      } catch (err) {
+        logger.error('Follow Mode init failed', err);
+        if (!cancelled) {
+          setError(t('follow.loadError'));
+          setLoading(false);
+        }
       }
-
-      setPlanName(planRes.data.name);
-      setRouteSegments(planRes.data.routeSegments ?? []);
-      const stops = planRes.data.days
-        .sort((a, b) => a.dayNumber - b.dayNumber)
-        .flatMap((d) => d.stops.sort((a, b) => a.orderIndex - b.orderIndex));
-      setAllStops(stops);
-
-      const resume = await getResume(id);
-      if (cancelled) return;
-      if (resume) {
-        const resumeIdx = stops.findIndex(
-          (s) => s.dayNumber === resume.dayNumber && s.orderIndex === resume.orderIndex,
-        );
-        if (resumeIdx >= 0) setCurrentIndex(resumeIdx);
-      }
-
-      const sessionRes = await api<FollowSession>('/follow/start', {
-        method: 'POST',
-        body: { planId: id },
-      });
-      if (cancelled) return;
-      if (sessionRes.data) {
-        setSession(sessionRes.data);
-      }
-      track({ event: 'follow_started', planId: id });
-      setLoading(false);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      abortController.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t es estable; re-ejecutar al cambiar idioma crearía otra FollowSession
   }, [id, isAuthenticated]);
 
   const goTo = (nextIndex: number) => {
     if (nextIndex < 0 || nextIndex >= allStops.length) return;
     setCurrentIndex(nextIndex);
     Haptics.selectionAsync();
-  };
-
-  const advanceLinear = (nextIndex: number) => {
-    if (nextIndex >= allStops.length) {
-      handleComplete();
-      return;
-    }
-    const nextStop = allStops[nextIndex];
-    const nextDay = nextStop?.dayNumber ?? 1;
-    if (nextDay !== currentDay) {
-      Alert.alert(
-        t('follow.dayCompleteTitle', { day: currentDay }),
-        t('follow.dayCompleteBody', { nextDay }),
-        [
-          { text: t('follow.dayCompleteStay'), style: 'cancel' },
-          {
-            text: t('follow.dayCompleteContinue'),
-            onPress: () => setCurrentIndex(nextIndex),
-          },
-        ],
-      );
-      return;
-    }
-    setCurrentIndex(nextIndex);
   };
 
   const handleComplete = () => {
