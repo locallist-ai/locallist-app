@@ -17,6 +17,7 @@ import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { getPreviewPlan } from '../../lib/plan/plan-store';
 import { PlanCardPager } from '../../components/plan/PlanCardPager';
+import { PlanEditorProvider } from '../../components/plan/PlanEditorContext';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { usePlanEditor } from '../../lib/plan/use-plan-editor';
 import { track } from '../../lib/analytics';
@@ -279,26 +280,29 @@ export default function PlanDetailScreen() {
 
   return (
     <View style={[s.root, { paddingTop: 0 }]}>
-      <PlanCardPager
-        plan={visiblePlan}
-        stops={visibleStops}
-        totalStops={visibleStops.length}
-        message={message}
-        isAuthenticated={isAuthenticated}
-        isOwner={isOwner}
-        isNew={isNew}
-        heroPhotos={heroPhotos}
-        onFollow={handleFollow}
-        onDelete={!isNew && effectivePlanId && isOwner ? handleDelete : undefined}
-        onBack={() => router.back()}
-        editorDays={editorDays}
-        editorIsDirty={editorIsDirty}
-        editorIsSaving={editorIsSaving}
-        totalDays={visiblePlan.durationDays ?? editorDays.length}
-        onEditorDispatch={editorDispatch}
-        onEditorSave={handleEditorSave}
-        safeAreaTop={insets.top}
-      />
+      <PlanEditorProvider
+        days={editorDays}
+        isDirty={editorIsDirty}
+        isSaving={editorIsSaving}
+        dispatch={editorDispatch}
+        save={handleEditorSave}
+      >
+        <PlanCardPager
+          plan={visiblePlan}
+          stops={visibleStops}
+          totalStops={visibleStops.length}
+          message={message}
+          isAuthenticated={isAuthenticated}
+          isOwner={isOwner}
+          isNew={isNew}
+          heroPhotos={heroPhotos}
+          onFollow={handleFollow}
+          onDelete={!isNew && effectivePlanId && isOwner ? handleDelete : undefined}
+          onBack={() => router.back()}
+          totalDays={visiblePlan.durationDays ?? editorDays.length}
+          safeAreaTop={insets.top}
+        />
+      </PlanEditorProvider>
 
       {/* Discard changes confirm */}
       <ConfirmModal

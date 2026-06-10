@@ -5,15 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Dimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, {
-  FadeInDown,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -23,19 +20,14 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { PhotoHero, type Category } from '../ui/PhotoHero';
-import { PhotoMosaic } from '../ui/PhotoMosaic';
-import { CategoryBadge } from '../ui/CategoryBadge';
-import { ProgressDots } from '../ui/design-system';
 import { useTranslation } from 'react-i18next';
+import { ProgressDots } from '../ui/design-system';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { formatPriceLabel } from '../../lib/helpers/price';
-import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
-import { DaySection } from '../plan-editor/DaySection';
-import { MoveToDay } from '../plan-editor/MoveToDay';
-import { PlaceSearchModal } from '../plan-editor/PlaceSearchModal';
+import { usePlanEditorContext } from './PlanEditorContext';
+import { PlanEditorModalsHost } from './PlanEditorModals';
+import { PlanOverview } from './PlanOverview';
+import { DayStopsCarousel } from './DayStopsCarousel';
 import type { Plan, PlanStop } from '../../lib/types';
-import type { DayGroup } from '../../lib/plan/use-plan-editor';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -51,11 +43,6 @@ interface PlanCardPagerProps {
   onFollow: () => void;
   onDelete?: () => void;
   onBack?: () => void;
-  editorDays?: DayGroup[];
-  editorIsDirty?: boolean;
-  editorIsSaving?: boolean;
-  onEditorDispatch?: (action: any) => void;
-  onEditorSave?: () => Promise<void>;
   totalDays?: number;
   safeAreaTop?: number;
 }
@@ -72,15 +59,11 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   onFollow,
   onDelete,
   onBack,
-  editorDays = [],
-  editorIsDirty = false,
-  editorIsSaving = false,
-  onEditorDispatch,
-  onEditorSave,
   totalDays,
   safeAreaTop = 0,
 }) => {
   const { t } = useTranslation();
+  const { days: editorDays } = usePlanEditorContext();
   const [slide, setSlide] = useState(0);
   const [hintVisible, setHintVisible] = useState(true);
   const scrollRef = useRef<ScrollView>(null);
@@ -105,14 +88,8 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
     [stops, currentDay],
   );
 
-  // Modals hoisted here so they render above the horizontal pager
-  const [moveState, setMoveState] = useState({ visible: false, fromDay: 0, stopIndex: 0 });
-  const [addState, setAddState] = useState({ visible: false, dayNumber: 1 });
-  const [replaceState, setReplaceState] = useState({ visible: false, dayNumber: 1, stopIndex: 0 });
-
   const slotCount = 1 + stopsForDay.length;
   const hasMoreSlides = slotCount > 1;
-  const isMultiDay = stops.some((s) => s.dayNumber !== stops[0]?.dayNumber);
 
   useEffect(() => {
     if (!hasMoreSlides || isOwner) return;
@@ -196,680 +173,71 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
 
   return (
     <View style={styles.root}>
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        scrollEnabled={!isOwner}
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onMomentumScrollEnd}
-        scrollEventThrottle={16}
-        style={styles.scroll}
-      >
-        <OverviewSlot
-          plan={plan}
-          stops={stops}
-          totalStops={totalStops}
-          message={message}
-          heroPhotos={heroPhotos}
-          isAuthenticated={isAuthenticated}
-          isOwner={isOwner}
-          isNew={isNew}
-          onFollow={onFollow}
-          onDelete={onDelete}
-          editorDays={editorDays}
-          editorIsDirty={editorIsDirty}
-          editorIsSaving={editorIsSaving}
-          onEditorDispatch={onEditorDispatch}
-          onEditorSave={onEditorSave}
-          onRequestMove={(fromDay, stopIndex) => setMoveState({ visible: true, fromDay, stopIndex })}
-          onRequestAdd={(dayNumber) => setAddState({ visible: true, dayNumber })}
-          onRequestReplace={(dayNumber, stopIndex) => setReplaceState({ visible: true, dayNumber, stopIndex })}
-          onScrollToStop={handleScrollToStop}
-          currentDay={currentDay}
-          allDays={allDays}
-          onDayChange={handleDayChange}
-        />
-        {stopsForDay.map((stop, idx) => (
-          <StopSlot
-            key={`${stop.placeId}-${idx}`}
-            stop={stop}
-            index={idx}
-            total={stopsForDay.length}
+      <PlanEditorModalsHost city={plan.city} totalDays={effectiveTotalDays}>
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          pagingEnabled
+          scrollEnabled={!isOwner}
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={onMomentumScrollEnd}
+          scrollEventThrottle={16}
+          style={styles.scroll}
+        >
+          <PlanOverview
+            plan={plan}
+            stops={stops}
+            totalStops={totalStops}
+            message={message}
+            heroPhotos={heroPhotos}
+            isAuthenticated={isAuthenticated}
             isOwner={isOwner}
-            dayNumber={currentDay}
-            stopIndex={idx}
-            onRequestReplace={isOwner ? (dayNumber, stopIndex) => setReplaceState({ visible: true, dayNumber, stopIndex }) : undefined}
+            isNew={isNew}
+            onFollow={onFollow}
+            onDelete={onDelete}
+            onScrollToStop={handleScrollToStop}
+            currentDay={currentDay}
+            allDays={allDays}
+            onDayChange={handleDayChange}
           />
-        ))}
-      </ScrollView>
+          <DayStopsCarousel stops={stopsForDay} dayNumber={currentDay} isOwner={isOwner} />
+        </ScrollView>
 
-      <View style={styles.footer} pointerEvents="box-none">
-        <View style={styles.footerCenter}>
-          <ProgressDots
-            total={slotCount}
-            current={slide}
-            size="sm"
-            colorPending="rgba(15, 23, 42, 0.18)"
-          />
-          <Text style={styles.slideLabel}>{slideLabel}</Text>
+        <View style={styles.footer} pointerEvents="box-none">
+          <View style={styles.footerCenter}>
+            <ProgressDots
+              total={slotCount}
+              current={slide}
+              size="sm"
+              colorPending="rgba(15, 23, 42, 0.18)"
+            />
+            <Text style={styles.slideLabel}>{slideLabel}</Text>
+          </View>
+
+          {hintVisible && hasMoreSlides && slide === 0 && !isOwner && (
+            <Animated.View pointerEvents="none" style={[styles.swipeHint, hintAnimStyle]}>
+              <Text style={styles.swipeHintText}>Swipe</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.sunsetOrange} />
+              <Ionicons name="chevron-forward" size={16} color={colors.sunsetOrange} style={styles.swipeHintSecondChevron} />
+            </Animated.View>
+          )}
         </View>
 
-        {hintVisible && hasMoreSlides && slide === 0 && !isOwner && (
-          <Animated.View pointerEvents="none" style={[styles.swipeHint, hintAnimStyle]}>
-            <Text style={styles.swipeHintText}>Swipe</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.sunsetOrange} />
-            <Ionicons name="chevron-forward" size={16} color={colors.sunsetOrange} style={styles.swipeHintSecondChevron} />
-          </Animated.View>
+        {onBack && (
+          <TouchableOpacity
+            style={[styles.backPill, { top: safeAreaTop + spacing.xs }]}
+            onPress={handleBackPress}
+            accessibilityRole="button"
+            accessibilityLabel={slide > 0 ? t('plan.backToOverview') : t('plan.goBack')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.deepOcean} />
+          </TouchableOpacity>
         )}
-      </View>
-
-      {onBack && (
-        <TouchableOpacity
-          style={[styles.backPill, { top: safeAreaTop + spacing.xs }]}
-          onPress={handleBackPress}
-          accessibilityRole="button"
-          accessibilityLabel={slide > 0 ? t('plan.backToOverview') : t('plan.goBack')}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.deepOcean} />
-        </TouchableOpacity>
-      )}
-
-      {/* Modals rendered above the pager */}
-      <MoveToDay
-        visible={moveState.visible}
-        currentDay={moveState.fromDay}
-        totalDays={effectiveTotalDays}
-        onSelect={(toDay) => {
-          onEditorDispatch?.({
-            type: 'MOVE_TO_DAY',
-            fromDay: moveState.fromDay,
-            stopIndex: moveState.stopIndex,
-            toDay,
-          });
-          setMoveState({ ...moveState, visible: false });
-        }}
-        onClose={() => setMoveState({ ...moveState, visible: false })}
-      />
-      <PlaceSearchModal
-        visible={addState.visible}
-        city={plan.city}
-        onSelect={(place) => {
-          onEditorDispatch?.({ type: 'ADD_STOP', dayNumber: addState.dayNumber, place });
-          setAddState({ ...addState, visible: false });
-        }}
-        onClose={() => setAddState({ ...addState, visible: false })}
-      />
-      <PlaceSearchModal
-        visible={replaceState.visible}
-        city={plan.city}
-        onSelect={(place) => {
-          onEditorDispatch?.({ type: 'REPLACE_STOP', dayNumber: replaceState.dayNumber, stopIndex: replaceState.stopIndex, place });
-          setReplaceState({ ...replaceState, visible: false });
-        }}
-        onClose={() => setReplaceState({ ...replaceState, visible: false })}
-      />
+      </PlanEditorModalsHost>
     </View>
   );
 };
-
-/* ───── Overview Slot ───── */
-
-interface OverviewSlotProps {
-  plan: Plan;
-  stops: PlanStop[];
-  totalStops: number;
-  message?: string | null;
-  heroPhotos: string[];
-  isAuthenticated: boolean;
-  isOwner: boolean;
-  isNew: boolean;
-  onFollow: () => void;
-  onDelete?: () => void;
-  editorDays: DayGroup[];
-  editorIsDirty: boolean;
-  editorIsSaving: boolean;
-  onEditorDispatch?: (action: any) => void;
-  onEditorSave?: () => Promise<void>;
-  onRequestMove: (fromDay: number, stopIndex: number) => void;
-  onRequestAdd: (dayNumber: number) => void;
-  onRequestReplace: (dayNumber: number, stopIndex: number) => void;
-  onScrollToStop: (globalStopIndex: number) => void;
-  // read-only (non-owner)
-  currentDay: number;
-  allDays: number[];
-  onDayChange: (day: number) => void;
-}
-
-const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
-  plan,
-  stops,
-  totalStops,
-  message,
-  heroPhotos,
-  isAuthenticated,
-  isOwner,
-  isNew,
-  onFollow,
-  onDelete,
-  editorDays,
-  editorIsDirty,
-  editorIsSaving,
-  onEditorDispatch,
-  onEditorSave,
-  onRequestMove,
-  onRequestAdd,
-  onRequestReplace,
-  onScrollToStop,
-  currentDay,
-  allDays,
-  onDayChange,
-}) => {
-  const { t } = useTranslation();
-  const heroFallback = (plan.category ?? plan.type ?? 'Culture') as Category;
-  const heroSubtitle = `${plan.city} · ${t('common.dayCount', { count: plan.durationDays })}`;
-
-  const stopsForCurrentDay = useMemo(
-    () =>
-      stops
-        .filter((s) => (s.dayNumber || 1) === currentDay)
-        .slice()
-        .sort((a, b) => a.orderIndex - b.orderIndex),
-    [stops, currentDay],
-  );
-
-  const dispatch = onEditorDispatch ?? (() => {});
-
-  /* ── Owner: DraggableFlatList as root scroller (no nesting conflict) ── */
-  if (isOwner) {
-    const editorDay = editorDays.find((d) => d.dayNumber === currentDay);
-    const dayOffset = editorDays
-      .filter((d) => d.dayNumber < currentDay)
-      .reduce((sum, d) => sum + d.stops.length, 0);
-
-    const dayChips = allDays.length > 1 ? (
-      <View style={styles.summaryDayChips}>
-        {allDays.map((d) => {
-          const active = d === currentDay;
-          return (
-            <TouchableOpacity
-              key={d}
-              onPress={() => onDayChange(d)}
-              activeOpacity={0.85}
-              style={[styles.summaryDayChip, active && styles.summaryDayChipActive]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={`Day ${d}`}
-            >
-              <Text style={[styles.summaryDayChipText, active && styles.summaryDayChipTextActive]}>
-                Day {d}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    ) : null;
-
-    const listHeader = (
-      <>
-        <PhotoMosaic
-          photos={heroPhotos}
-          fallbackCategory={heroFallback}
-          height={280}
-        />
-        <View style={styles.editorHeader}>
-          <Text style={styles.overviewTitle}>{plan.name}</Text>
-          <Text style={styles.overviewSubtitle}>{heroSubtitle}</Text>
-
-          <View style={styles.pillsRow}>
-            <View style={styles.pill}>
-              <Ionicons name="location-outline" size={14} color={colors.sunsetOrange} />
-              <Text style={styles.pillText}>{plan.city}</Text>
-            </View>
-            <View style={styles.pill}>
-              <Ionicons name="calendar-outline" size={14} color={colors.sunsetOrange} />
-              <Text style={styles.pillText}>
-                {t('common.dayCount', { count: plan.durationDays })}
-              </Text>
-            </View>
-            <View style={styles.pill}>
-              <Ionicons name="flag-outline" size={14} color={colors.sunsetOrange} />
-              <Text style={styles.pillText}>{t('common.stopCount', { count: totalStops })}</Text>
-            </View>
-            {plan.type && (
-              <View style={styles.typePill}>
-                <Text style={styles.typePillText}>{t(`planType.${plan.type}`, { defaultValue: plan.type })}</Text>
-              </View>
-            )}
-          </View>
-
-          {plan.description && (
-            <Text style={styles.description}>{plan.description}</Text>
-          )}
-
-          {message && (
-            <View style={styles.messageCard}>
-              <View style={styles.messageHeader}>
-                <Ionicons name="sparkles" size={16} color={colors.sunsetOrange} />
-                <Text style={styles.messageLabel}>{t('plan.aiCurator')}</Text>
-              </View>
-              <Text style={styles.messageText}>{message}</Text>
-            </View>
-          )}
-
-          <View style={styles.summaryHeader}>
-            <Ionicons name="list-outline" size={16} color={colors.sunsetOrange} />
-            <Text style={styles.summaryLabel}>{t('plan.whatsInside')}</Text>
-          </View>
-
-          {dayChips}
-        </View>
-      </>
-    );
-
-    const listEmpty = (
-      <View style={styles.editorEmptyWrap}>
-        <Animated.View entering={FadeInDown.duration(400).springify().damping(16)} style={styles.editorEmpty}>
-          <View style={styles.editorEmptyIcon}>
-            <Ionicons name="compass-outline" size={32} color={colors.sunsetOrange} />
-          </View>
-          <Text style={styles.editorEmptyTitle}>{t('plan.noStopsYet')}</Text>
-          <Text style={styles.editorEmptyBody}>{t('plan.noStopsYetHint')}</Text>
-        </Animated.View>
-      </View>
-    );
-
-    const listFooter = (
-      <View style={styles.editorFooter}>
-        <View style={styles.ownerActions}>
-          <TouchableOpacity
-            style={[
-              styles.saveBtn,
-              styles.ownerActionBtn,
-              ((!editorIsDirty && !isNew) || editorIsSaving) && styles.saveBtnDisabled,
-            ]}
-            disabled={(!editorIsDirty && !isNew) || editorIsSaving}
-            onPress={onEditorSave}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel={isNew ? t('plan.createPlan') : t('plan.saveChanges')}
-          >
-            {editorIsSaving ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.saveBtnText}>{isNew ? t('plan.createPlan') : t('plan.saveChanges')}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {!isNew && onDelete && (
-            <TouchableOpacity
-              style={[styles.deleteBtn, styles.ownerActionBtn]}
-              onPress={onDelete}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Delete this plan"
-            >
-              <Ionicons name="trash-outline" size={16} color={colors.error} />
-              <Text style={styles.deleteBtnText}>{t('common.delete')}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {editorIsDirty && (
-          <View style={styles.dirtyBadge}>
-            <Ionicons name="alert-circle" size={14} color={colors.sunsetOrange} />
-            <Text style={styles.dirtyBadgeText}>{t('plan.unsavedChanges')}</Text>
-          </View>
-        )}
-
-        {!isNew && (
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={onFollow}
-            style={styles.ctaWrap}
-            accessibilityRole="button"
-            accessibilityLabel={isAuthenticated ? t('plan.followThisPlan') : t('plan.signInToFollow')}
-          >
-            <LinearGradient
-              colors={[colors.electricBlue, '#2563eb']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.cta}
-            >
-              <Ionicons name="navigate-outline" size={20} color="#FFFFFF" />
-              <Text style={styles.ctaText}>
-                {isAuthenticated ? t('plan.startFollowMode') : t('plan.signInToFollow')}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-
-    return (
-      <DaySection
-        dayNumber={currentDay}
-        stops={editorDay?.stops ?? []}
-        onReorder={(from, to) =>
-          dispatch({ type: 'REORDER', dayNumber: currentDay, from, to })
-        }
-        onDeleteStop={(stopIndex) =>
-          dispatch({ type: 'DELETE_STOP', dayNumber: currentDay, stopIndex })
-        }
-        onMoveStop={editorDays.length > 1 ? (stopIndex) => onRequestMove(currentDay, stopIndex) : undefined}
-        onReplaceStop={(stopIndex) => onRequestReplace(currentDay, stopIndex)}
-        onAddPress={() => onRequestAdd(currentDay)}
-        onStopPress={(localIdx) => onScrollToStop(dayOffset + localIdx)}
-        style={styles.slot}
-        contentContainerStyle={styles.slotContent}
-        ListHeaderComponent={listHeader}
-        ListEmptyComponent={listEmpty}
-        ListFooterComponent={listFooter}
-      />
-    );
-  }
-
-  /* ── Non-owner: read-only ScrollView (original, unchanged) ── */
-  return (
-    <ScrollView
-      style={styles.slot}
-      contentContainerStyle={styles.slotContent}
-      showsVerticalScrollIndicator={false}
-    >
-      <PhotoMosaic
-        photos={heroPhotos}
-        fallbackCategory={heroFallback}
-        height={280}
-      />
-
-      <View style={styles.overviewPanel}>
-        <Text style={styles.overviewTitle}>{plan.name}</Text>
-        <Text style={styles.overviewSubtitle}>{heroSubtitle}</Text>
-
-        <View style={styles.pillsRow}>
-          <View style={styles.pill}>
-            <Ionicons name="location-outline" size={14} color={colors.sunsetOrange} />
-            <Text style={styles.pillText}>{plan.city}</Text>
-          </View>
-          <View style={styles.pill}>
-            <Ionicons name="calendar-outline" size={14} color={colors.sunsetOrange} />
-            <Text style={styles.pillText}>
-              {t('common.dayCount', { count: plan.durationDays })}
-            </Text>
-          </View>
-          <View style={styles.pill}>
-            <Ionicons name="flag-outline" size={14} color={colors.sunsetOrange} />
-            <Text style={styles.pillText}>{t('common.stopCount', { count: totalStops })}</Text>
-          </View>
-          {plan.type && (
-            <View style={styles.typePill}>
-              <Text style={styles.typePillText}>{t(`planType.${plan.type}`, { defaultValue: plan.type })}</Text>
-            </View>
-          )}
-        </View>
-
-        {plan.description && (
-          <Text style={styles.description}>{plan.description}</Text>
-        )}
-
-        {message && (
-          <View style={styles.messageCard}>
-            <View style={styles.messageHeader}>
-              <Ionicons name="sparkles" size={16} color={colors.sunsetOrange} />
-              <Text style={styles.messageLabel}>{t('plan.aiCurator')}</Text>
-            </View>
-            <Text style={styles.messageText}>{message}</Text>
-          </View>
-        )}
-
-        {/* What's inside */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryHeader}>
-            <Ionicons name="list-outline" size={16} color={colors.sunsetOrange} />
-            <Text style={styles.summaryLabel}>{t('plan.whatsInside')}</Text>
-          </View>
-
-          {allDays.length > 1 && (
-            <View style={styles.summaryDayChips}>
-              {allDays.map((d) => {
-                const active = d === currentDay;
-                return (
-                  <TouchableOpacity
-                    key={d}
-                    onPress={() => onDayChange(d)}
-                    activeOpacity={0.85}
-                    style={[styles.summaryDayChip, active && styles.summaryDayChipActive]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={`Day ${d}`}
-                  >
-                    <Text style={[styles.summaryDayChipText, active && styles.summaryDayChipTextActive]}>
-                      Day {d}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-          {stopsForCurrentDay.map((s, idx) => {
-            const rowIcon = s.timeBlock ? TIME_BLOCK_ICON[s.timeBlock] ?? DEFAULT_STOP_ICON : DEFAULT_STOP_ICON;
-            const arrival = s.suggestedArrival ? ` · ${s.suggestedArrival}` : '';
-            return (
-              <View key={`${s.placeId}-${idx}`} style={styles.summaryRow}>
-                <View style={styles.summaryRowBubble}>
-                  <MaterialCommunityIcons name={rowIcon} size={14} color={colors.sunsetOrange} />
-                </View>
-                <View style={styles.summaryRowText}>
-                  <Text style={styles.summaryRowName} numberOfLines={1}>
-                    {s.place?.name ?? 'Unknown'}
-                  </Text>
-                  <Text style={styles.summaryRowMeta} numberOfLines={1}>
-                    {s.place?.category ? t(`category.${s.place.category}`, { defaultValue: s.place.category }) : ''}
-                    {arrival}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-
-        {!isNew && (
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={onFollow}
-            style={styles.ctaWrap}
-            accessibilityRole="button"
-            accessibilityLabel={isAuthenticated ? t('plan.followThisPlan') : t('plan.signInToFollow')}
-          >
-            <LinearGradient
-              colors={[colors.electricBlue, '#2563eb']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.cta}
-            >
-              <Ionicons name="navigate-outline" size={20} color="#FFFFFF" />
-              <Text style={styles.ctaText}>
-                {isAuthenticated ? t('plan.startFollowMode') : t('plan.signInToFollow')}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        )}
-      </View>
-    </ScrollView>
-  );
-});
-OverviewSlot.displayName = 'OverviewSlot';
-
-/* ───── Stop Slot ───── */
-
-interface StopSlotProps {
-  stop: PlanStop;
-  index: number;
-  total: number;
-  isOwner?: boolean;
-  dayNumber?: number;
-  stopIndex?: number;
-  onRequestReplace?: (dayNumber: number, stopIndex: number) => void;
-}
-
-const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total, isOwner, dayNumber, stopIndex, onRequestReplace }) => {
-  const { t } = useTranslation();
-  const [photoIdx, setPhotoIdx] = useState(0);
-  const place = stop.place;
-  const photos = place?.photos ?? [];
-  const activePhoto = photos[photoIdx];
-  const fallbackCategory = (place?.category ?? 'Culture') as Category;
-  const timeIcon = stop.timeBlock ? TIME_BLOCK_ICON[stop.timeBlock] ?? null : null;
-  const why = place?.whyThisPlace ?? '';
-
-  const chipTokens = useMemo(() => {
-    const tokens: string[] = [];
-    if (place?.bestTime) tokens.push(place.bestTime);
-    if (place?.suitableFor) tokens.push(...place.suitableFor.slice(0, 3));
-    if (place?.bestFor) tokens.push(...place.bestFor.slice(0, 2));
-    return Array.from(new Set(tokens)).slice(0, 5);
-  }, [place]);
-
-  return (
-    <ScrollView
-      style={styles.slot}
-      contentContainerStyle={styles.slotContent}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.stopHeroWrap}>
-        <PhotoHero
-          imageUrl={activePhoto}
-          fallbackCategory={fallbackCategory}
-          height={260}
-          blurBackdrop
-        />
-        {timeIcon && (
-          <View style={styles.timeOverlay}>
-            <View style={styles.timeOverlayBubble}>
-              <MaterialCommunityIcons name={timeIcon} size={12} color={colors.sunsetOrange} />
-            </View>
-            {stop.suggestedArrival && (
-              <Text style={styles.timeOverlayText}>{stop.suggestedArrival}</Text>
-            )}
-          </View>
-        )}
-        <View style={styles.stopCounterOverlay}>
-          <Text style={styles.stopCounterText}>
-            {index + 1} / {total}
-          </Text>
-        </View>
-        {photos.length > 1 && (
-          <View style={styles.photoDots}>
-            {photos.slice(0, 6).map((url, i) => (
-              <TouchableOpacity
-                key={`${stop.placeId}-photo-${url ?? i}`}
-                onPress={() => setPhotoIdx(i)}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel={`Photo ${i + 1}`}
-                style={[styles.photoDot, i === photoIdx && styles.photoDotActive]}
-              />
-            ))}
-          </View>
-        )}
-      </View>
-
-      <View style={styles.body}>
-        <View style={styles.stopMetaTop}>
-          <CategoryBadge category={place?.category} size="sm" />
-          {place?.neighborhood && (
-            <View style={styles.neighRow}>
-              <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
-              <Text style={styles.neighText}>{place.neighborhood}</Text>
-            </View>
-          )}
-        </View>
-
-        <Text style={styles.stopName}>{place?.name ?? t('plan.unknownPlace')}</Text>
-
-        {chipTokens.length > 0 && (
-          <View style={styles.chipsRow}>
-            {chipTokens.map((t) => (
-              <View key={t} style={styles.chip}>
-                <Text style={styles.chipText}>{t}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {(stop.suggestedDurationMin || place?.priceRange || (place?.googleRating ?? 0) > 0 || stop.travelFromPrevious) && (
-          <View style={styles.infoRow}>
-            {stop.suggestedDurationMin != null && (
-              <View style={styles.infoPill}>
-                <MaterialCommunityIcons name="clock-outline" size={14} color={colors.electricBlue} />
-                <Text style={styles.infoPillText}>
-                  {stop.suggestedDurationMin >= 60
-                    ? t('stop.visitDurationLong', { h: Math.round(stop.suggestedDurationMin / 60) })
-                    : t('stop.visitDuration', { min: stop.suggestedDurationMin })}
-                </Text>
-              </View>
-            )}
-            {place?.priceRange && (
-              <View style={[styles.infoPill, styles.pricePill]}>
-                <Text style={styles.pricePillText}>
-                  {formatPriceLabel(place.priceRange, t)}
-                </Text>
-              </View>
-            )}
-            {typeof place?.googleRating === 'number' && place.googleRating > 0 && (
-              <View style={[styles.infoPill, styles.ratingPill]}>
-                <MaterialCommunityIcons name="star" size={13} color="#b45309" />
-                <Text style={styles.ratingPillText}>
-                  {place.googleRating.toFixed(1)}
-                  {typeof place.googleReviewCount === 'number' && place.googleReviewCount > 0
-                    ? ` · ${place.googleReviewCount}`
-                    : ''}
-                </Text>
-              </View>
-            )}
-            {stop.travelFromPrevious && stop.travelFromPrevious.duration_min > 0 && (
-              <View style={[styles.infoPill, styles.travelPill]}>
-                <MaterialCommunityIcons
-                  name={stop.travelFromPrevious.mode === 'walk' ? 'walk' : 'car'}
-                  size={13}
-                  color="#0369a1"
-                />
-                <Text style={styles.travelPillText}>
-                  {t('stop.travelFromPrev', { min: Math.round(stop.travelFromPrevious.duration_min) })}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {why.length > 0 && (
-          <View style={styles.whyBlock}>
-            <Text style={styles.sectionLabel}>{t('place.whyThisPlace')}</Text>
-            <Text style={styles.whyText}>{why}</Text>
-          </View>
-        )}
-
-        {isOwner && onRequestReplace && (
-          <TouchableOpacity
-            style={styles.replaceBtn}
-            onPress={() => onRequestReplace(dayNumber!, stopIndex!)}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Replace this stop"
-          >
-            <Ionicons name="swap-horizontal-outline" size={15} color={colors.sunsetOrange} />
-            <Text style={styles.replaceBtnText}>{t('plan.replaceStop')}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </ScrollView>
-  );
-});
-StopSlot.displayName = 'StopSlot';
 
 /* ───── Styles ───── */
 
@@ -881,419 +249,6 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
   },
-  summaryDayChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 4,
-    marginTop: 2,
-  },
-  summaryDayChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(15, 23, 42, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(15, 23, 42, 0.10)',
-  },
-  summaryDayChipActive: {
-    backgroundColor: colors.sunsetOrange,
-    borderColor: colors.sunsetOrange,
-  },
-  summaryDayChipText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: colors.deepOcean,
-  },
-  summaryDayChipTextActive: {
-    color: '#FFFFFF',
-  },
-  slot: {
-    width: SCREEN_WIDTH,
-    backgroundColor: colors.bgCard,
-  },
-  slotContent: {
-    flexGrow: 1,
-    paddingBottom: 110,
-    backgroundColor: colors.bgCard,
-  },
-  body: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    gap: spacing.sm,
-    backgroundColor: colors.bgCard,
-  },
-
-  /* Overview — shared */
-  overviewPanel: {
-    marginTop: -24,
-    backgroundColor: colors.bgCard,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  overviewTitle: {
-    fontFamily: fonts.headingBold,
-    fontSize: 28,
-    lineHeight: 34,
-    color: colors.deepOcean,
-  },
-  overviewSubtitle: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: -4,
-  },
-  pillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: colors.sunsetOrange + '12',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: borderRadius.full,
-  },
-  pillText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: colors.deepOcean,
-  },
-  typePill: {
-    backgroundColor: colors.deepOcean,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: borderRadius.full,
-  },
-  typePillText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 11,
-    color: '#FFFFFF',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  description: {
-    fontFamily: fonts.body,
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textMain,
-  },
-  messageCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.sunsetOrange,
-  },
-  messageHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  messageLabel: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.sunsetOrange },
-  messageText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.textMain },
-  summaryCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderColor,
-    gap: spacing.sm,
-  },
-  summaryHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  summaryLabel: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: colors.sunsetOrange,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 4,
-  },
-  summaryRowBubble: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.paperWhite,
-    borderWidth: 1,
-    borderColor: 'rgba(249, 115, 22, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryRowText: { flex: 1 },
-  summaryRowName: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 14,
-    color: colors.deepOcean,
-  },
-  summaryRowMeta: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-
-  /* Editor owner header/footer (DraggableFlatList as root) */
-  editorHeader: {
-    marginTop: -24,
-    backgroundColor: colors.bgCard,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  editorFooter: {
-    backgroundColor: colors.bgCard,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  editorEmptyWrap: {
-    paddingHorizontal: spacing.lg,
-  },
-
-  /* Editor inline (kept for empty state) */
-  editorDays: {
-    gap: spacing.xs,
-  },
-  editorEmpty: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    gap: spacing.xs,
-  },
-  editorEmptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.sunsetOrange + '10',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-  },
-  editorEmptyTitle: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 15,
-    color: colors.deepOcean,
-  },
-  editorEmptyBody: {
-    fontFamily: fonts.body,
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
-    maxWidth: 240,
-  },
-
-  /* Owner actions */
-  ownerActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  ownerActionBtn: {
-    flex: 1,
-  },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 11,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.sunsetOrange,
-  },
-  saveBtnDisabled: {
-    opacity: 0.4,
-  },
-  saveBtnText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-  deleteBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 11,
-    borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.error + '40',
-    backgroundColor: colors.error + '08',
-  },
-  deleteBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.error },
-  dirtyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 2,
-  },
-  dirtyBadgeText: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
-    color: colors.sunsetOrange,
-  },
-  ctaWrap: { marginTop: spacing.xs },
-  cta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 15,
-    borderRadius: borderRadius.lg,
-  },
-  ctaText: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' },
-
-  /* Stop hero overlays */
-  stopHeroWrap: {
-    position: 'relative',
-  },
-  timeOverlay: {
-    position: 'absolute',
-    top: spacing.md,
-    left: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: borderRadius.full,
-  },
-  timeOverlayBubble: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.paperWhite,
-    borderWidth: 1,
-    borderColor: 'rgba(249, 115, 22, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timeOverlayText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.deepOcean },
-  stopCounterOverlay: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    backgroundColor: 'rgba(15,23,42,0.7)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-  },
-  stopCounterText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: '#FFFFFF' },
-  photoDots: {
-    position: 'absolute',
-    bottom: spacing.md,
-    left: 0, right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  photoDot: {
-    width: 6, height: 6, borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
-  photoDotActive: {
-    backgroundColor: '#FFFFFF',
-    width: 18,
-  },
-
-  /* Stop content */
-  stopMetaTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  neighRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  neighText: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary },
-  stopName: {
-    fontFamily: fonts.headingBold,
-    fontSize: 26,
-    lineHeight: 32,
-    color: colors.deepOcean,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  chip: {
-    backgroundColor: colors.bgCard,
-    borderWidth: 1,
-    borderColor: colors.sunsetOrange + '35',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-  },
-  chipText: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
-    color: colors.deepOcean,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  infoPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.electricBlue + '10',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: borderRadius.full,
-  },
-  infoPillText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: colors.electricBlue,
-  },
-  pricePill: { backgroundColor: colors.successEmerald + '15' },
-  pricePillText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: '#059669' },
-  ratingPill: { backgroundColor: '#fffbeb' },
-  ratingPillText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: '#b45309' },
-  travelPill: { backgroundColor: '#e0f2fe' },
-  travelPillText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: '#0369a1' },
-
-  replaceBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: colors.sunsetOrange + '40',
-    borderStyle: 'dashed',
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.sunsetOrange + '08',
-    marginTop: spacing.xs,
-  },
-  replaceBtnText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 13,
-    color: colors.sunsetOrange,
-  },
-  whyBlock: {
-    marginTop: 4,
-  },
-  sectionLabel: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 11,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-  whyText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.textMain },
 
   /* Footer */
   footer: {

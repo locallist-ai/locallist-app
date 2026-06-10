@@ -13,7 +13,7 @@ type State = {
   isSaving: boolean;
 };
 
-type Action =
+export type EditorAction =
   | { type: 'INIT'; days: DayGroup[] }
   | { type: 'REORDER'; dayNumber: number; from: number; to: number }
   | { type: 'DELETE_STOP'; dayNumber: number; stopIndex: number }
@@ -47,7 +47,7 @@ function padDaysTo(durationDays: number, apiDays: DayGroup[]): DayGroup[] {
   return days;
 }
 
-function reducer(state: State, action: Action): State {
+function reducer(state: State, action: EditorAction): State {
   switch (action.type) {
     case 'INIT':
       return { days: action.days, isDirty: false, isSaving: false };
