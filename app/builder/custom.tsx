@@ -112,17 +112,17 @@ export default function CustomBuilderScreen() {
       setCityAddError(null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
-      setCityAddError(res.error ?? 'Could not add city. Please try again.');
+      setCityAddError(res.error ?? t('builder.cityAddError'));
     }
   };
 
   const cityValidation = (() => {
     const trimmed = city.trim();
     if (trimmed.length === 0) return { ok: false, error: null };
-    if (trimmed.length < 2) return { ok: false, error: 'City name must be at least 2 characters' };
-    if (trimmed.length > 60) return { ok: false, error: 'City name is too long (max 60)' };
+    if (trimmed.length < 2) return { ok: false, error: t('builder.cityErrorTooShort') };
+    if (trimmed.length > 60) return { ok: false, error: t('builder.cityErrorTooLong') };
     if (!/^[\p{L}][\p{L}\s'\-.]*$/u.test(trimmed)) {
-      return { ok: false, error: 'City name has invalid characters.' };
+      return { ok: false, error: t('builder.cityErrorInvalidChars') };
     }
     return { ok: true, error: null };
   })();
@@ -130,9 +130,9 @@ export default function CustomBuilderScreen() {
   const cityError = cityValidation.error;
   const cityUnconfirmedError =
     !cityConfirmed && trimmedCity.length > 0 && cityValidation.ok
-      ? 'Select a city from the list or tap "Add" to register it.'
+      ? t('builder.cityErrorUnconfirmed')
       : null;
-  const nameError = nameTouched && name.trim().length === 0 ? 'Plan name is required' : null;
+  const nameError = nameTouched && name.trim().length === 0 ? t('builder.nameRequired') : null;
   const canCreate = name.trim().length > 0 && cityValidation.ok && cityConfirmed;
 
   const handleCreate = () => {

@@ -212,10 +212,10 @@ export const HomeScreen: React.FC = () => {
                   <Text style={styles.generatingError}>{wizard.error}</Text>
                   <TouchableOpacity
                     activeOpacity={0.8}
-                    onPress={wizard.handleReset}
+                    onPress={wizard.handleGenerate}
                     style={styles.retryBtn}
                     accessibilityRole="button"
-                    accessibilityLabel="Retry"
+                    accessibilityLabel={t('wizard.retry')}
                   >
                     <Text style={styles.retryBtnText}>{t('wizard.retry')}</Text>
                   </TouchableOpacity>

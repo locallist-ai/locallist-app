@@ -155,12 +155,13 @@ export default Sentry.wrap(RootLayout);
 // Shows login if not authenticated, app stack if authenticated
 function AuthGate() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { t } = useTranslation();
 
   // Still checking stored tokens
   if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bgMain, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Loading...</Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 14 }}>{t('common.loading')}</Text>
       </View>
     );
   }
