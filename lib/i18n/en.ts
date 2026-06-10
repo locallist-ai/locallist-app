@@ -90,6 +90,7 @@ export default {
     emptyCuratedNoCategoryBody: 'Create your first plan from the Home tab',
     emptyCuratedFilteredTitle: 'No plans in this category',
     emptyCuratedFilteredBody: 'Try another category',
+    loadError: 'Failed to load plans',
     selectionTitle_one: '{{count}} selected',
     selectionTitle_other: '{{count}} selected',
     selectionHint: 'Tap to add or remove. Long-press exits.',

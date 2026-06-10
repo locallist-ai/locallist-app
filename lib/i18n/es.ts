@@ -90,6 +90,7 @@ export default {
     emptyCuratedNoCategoryBody: 'Crea tu primer plan desde la pestaña Inicio',
     emptyCuratedFilteredTitle: 'No hay planes en esta categoría',
     emptyCuratedFilteredBody: 'Prueba con otra categoría',
+    loadError: 'No se han podido cargar los planes',
     selectionTitle_one: '{{count}} seleccionado',
     selectionTitle_other: '{{count}} seleccionados',
     selectionHint: 'Toca para añadir o quitar. Mantén pulsado para salir.',
