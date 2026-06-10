@@ -1,15 +1,5 @@
 import type { MaterialCommunityIcons } from '@expo/vector-icons';
 
-export const TIME_BLOCK_EMOJI: Record<string, string> = {
-  morning: '☀️',
-  lunch: '🍽️',
-  afternoon: '⛲',
-  dinner: '🍷',
-  evening: '🌙',
-};
-
-export const DEFAULT_STOP_EMOJI = '📍';
-
 type MciGlyph = keyof typeof MaterialCommunityIcons.glyphMap;
 
 // Branded MCI glyphs por time-block. Sustituye al emoji legacy en bubbles

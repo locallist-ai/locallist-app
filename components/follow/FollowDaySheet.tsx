@@ -253,7 +253,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
           {/* Why this place */}
           {place.whyThisPlace?.length > 0 && (
             <View style={styles.featuredWhy}>
-              <Text style={styles.featuredWhyText} numberOfLines={2}>{place.whyThisPlace}</Text>
+              <Text style={styles.featuredWhyText}>{place.whyThisPlace}</Text>
             </View>
           )}
         </View>

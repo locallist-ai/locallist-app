@@ -18,7 +18,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { useResponsive } from '../../lib/responsive';
@@ -28,6 +28,7 @@ import { useApiState } from '../../lib/use-api-state';
 import { track } from '../../lib/analytics';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
 import { getOpenState } from '../../lib/openingHours';
+import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import type { Place } from '../../lib/types';
 
 // ── Constants ──
@@ -42,13 +43,13 @@ const PRICE_KEYS = {
   $$$$: 'place.priceFineDining',
 } as const;
 
-const TIME_BLOCK_KEYS = {
-  morning: { icon: 'sunny-outline' as const, labelKey: 'place.timeMorning' as const },
-  lunch: { icon: 'restaurant-outline' as const, labelKey: 'place.timeLunch' as const },
-  afternoon: { icon: 'cafe-outline' as const, labelKey: 'place.timeAfternoon' as const },
-  dinner: { icon: 'moon-outline' as const, labelKey: 'place.timeDinner' as const },
-  evening: { icon: 'musical-notes-outline' as const, labelKey: 'place.timeEvening' as const },
-};
+const TIME_BLOCK_LABEL_KEYS = {
+  morning: 'place.timeMorning',
+  lunch: 'place.timeLunch',
+  afternoon: 'place.timeAfternoon',
+  dinner: 'place.timeDinner',
+  evening: 'place.timeEvening',
+} as const;
 
 // ── Component ──
 
@@ -133,7 +134,12 @@ export default function PlaceDetailScreen() {
   const heroImageUrl = place.photos?.[0] ?? undefined;
   const heroFallbackCategory = (place.category ?? 'Culture') as Category;
   const heroSubtitle = [place.neighborhood, place.city].filter(Boolean).join(' \u00B7 ');
-  const bestTimeInfo = place.bestTime ? TIME_BLOCK_KEYS[place.bestTime as keyof typeof TIME_BLOCK_KEYS] : null;
+  const bestTimeLabelKey = place.bestTime
+    ? TIME_BLOCK_LABEL_KEYS[place.bestTime as keyof typeof TIME_BLOCK_LABEL_KEYS]
+    : null;
+  const bestTimeInfo = place.bestTime && bestTimeLabelKey
+    ? { icon: TIME_BLOCK_ICON[place.bestTime] ?? DEFAULT_STOP_ICON, labelKey: bestTimeLabelKey }
+    : null;
   const hasCoords = place.latitude && place.longitude;
   const openStatus = getOpenState(place.openingHours);
 
@@ -239,7 +245,7 @@ export default function PlaceDetailScreen() {
           {/* Best Time */}
           {bestTimeInfo && (
             <View style={s.detailRow}>
-              <Ionicons name={bestTimeInfo.icon} size={18} color={colors.textSecondary} />
+              <MaterialCommunityIcons name={bestTimeInfo.icon} size={18} color={colors.sunsetOrange} />
               <View style={s.detailContent}>
                 <Text style={s.detailLabel}>{t('place.bestTime')}</Text>
                 <Text style={s.detailValue}>{t(bestTimeInfo.labelKey)}</Text>

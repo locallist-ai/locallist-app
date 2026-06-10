@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { chatTurn, chatGenerate, deleteChatSession } from '../../lib/api';
+import { chatTurn, chatGenerate, deleteChatSession, upsertProfile } from '../../lib/api';
 import { getSavedSessionId, saveSessionId, clearSessionId } from '../../lib/chat-store';
 import { BlurView } from 'expo-blur';
 import { MessageBubble } from '../../components/chat/MessageBubble';
@@ -28,7 +28,6 @@ import { QuickReplyChips } from '../../components/chat/QuickReplyChips';
 import { SaveProfileSheet } from '../../components/chat/SaveProfileSheet';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { TypingDots } from '../../components/home/TypingDots';
-import { upsertProfile } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { track, countFilledSlots } from '../../lib/analytics';
 import { useTripContext } from '../../lib/trip-context-store';
@@ -62,6 +61,10 @@ export default function ChatScreen() {
   const listRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
   const initRef = useRef(false);
+  // Guard síncrono contra doble-envío: el state `loading` no protege contra
+  // dos toques en el mismo batch (ambos handlers ven loading=false por
+  // closure stale); el ref se escribe síncronamente antes de cualquier await.
+  const pendingRef = useRef(false);
 
   // Resume prior session on mount; if city was pre-selected, seed it on first turn
   useEffect(() => {
@@ -119,7 +122,8 @@ export default function ChatScreen() {
 
   const sendTurn = useCallback(
     async (message: string, quickReplyId: string | null = null) => {
-      if (loading || generating) return;
+      if (pendingRef.current || loading || generating) return;
+      pendingRef.current = true;
       setLoading(true);
       const prevReplies = quickReplies;
       setQuickReplies([]);
@@ -163,6 +167,7 @@ export default function ChatScreen() {
         appendAiMessage(data.aiMessage);
         setQuickReplies(data.ready ? [] : data.quickReplies);
       } finally {
+        pendingRef.current = false;
         setLoading(false);
       }
     },
@@ -171,7 +176,7 @@ export default function ChatScreen() {
 
   const handleSend = useCallback(() => {
     const text = inputText.trim();
-    if (!text || loading || generating) return;
+    if (!text || pendingRef.current || loading || generating) return;
     setInputText('');
     appendUserMessage(text);
     sendTurn(text);
@@ -181,7 +186,7 @@ export default function ChatScreen() {
     (reply: QuickReply) => {
       // Mismo pre-guard que handleSend: sin él, un doble-tap appendea el
       // bubble del usuario y sendTurn descarta el envío en silencio.
-      if (loading || generating) return;
+      if (pendingRef.current || loading || generating) return;
       appendUserMessage(reply.label);
       sendTurn(reply.label, reply.id);
     },
@@ -189,7 +194,8 @@ export default function ChatScreen() {
   );
 
   const handleGenerate = useCallback(async () => {
-    if (!sessionId || generating) return;
+    if (!sessionId || pendingRef.current || generating) return;
+    pendingRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGenerating(true);
 
@@ -217,6 +223,7 @@ export default function ChatScreen() {
         router.push(`/plan/${plan.id}`);
       }
     } finally {
+      pendingRef.current = false;
       setGenerating(false);
     }
   }, [sessionId, generating, slots, isAuthenticated, t]);
@@ -302,7 +309,7 @@ export default function ChatScreen() {
           onPress={() => router.back()}
           style={styles.headerBtn}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('common.back')}
         >
           <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
@@ -313,7 +320,7 @@ export default function ChatScreen() {
               style={styles.cityPill}
               activeOpacity={0.75}
               accessibilityRole="button"
-              accessibilityLabel={`City: ${preSeededCity}, tap to change`}
+              accessibilityLabel={t('chat.cityPillA11y', { city: preSeededCity })}
             >
               <Text style={styles.cityPillText} numberOfLines={1}>
                 {preSeededCity}
@@ -325,7 +332,7 @@ export default function ChatScreen() {
           onPress={handleReset}
           style={styles.headerBtn}
           accessibilityRole="button"
-          accessibilityLabel="Reset conversation"
+          accessibilityLabel={t('chat.resetA11y')}
         >
           <Ionicons name="refresh-outline" size={20} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
@@ -405,6 +412,7 @@ export default function ChatScreen() {
             />
           </BlurView>
           <TouchableOpacity
+            testID="chat-send-btn"
             onPress={handleSend}
             disabled={!inputText.trim() || loading || generating}
             style={[styles.sendBtn, (!inputText.trim() || loading || generating) && styles.sendBtnDisabled]}

@@ -308,11 +308,22 @@ export default function LoginScreen() {
             fontSize: 15,
             color: colors.textSecondary,
             textAlign: 'center',
+            lineHeight: 22,
+          }}
+        >
+          {t('auth.taglineLine1')}
+        </Text>
+        <Text
+          style={{
+            fontFamily: fonts.body,
+            fontSize: 15,
+            color: colors.textSecondary,
+            textAlign: 'center',
             marginBottom: spacing.lg,
             lineHeight: 22,
           }}
         >
-          {t('auth.tagline')}
+          {t('auth.taglineLine2')}
         </Text>
 
         {error && (
