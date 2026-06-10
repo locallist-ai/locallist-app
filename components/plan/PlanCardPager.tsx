@@ -80,6 +80,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   totalDays,
   safeAreaTop = 0,
 }) => {
+  const { t } = useTranslation();
   const [slide, setSlide] = useState(0);
   const [hintVisible, setHintVisible] = useState(true);
   const scrollRef = useRef<ScrollView>(null);
@@ -268,7 +269,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
           style={[styles.backPill, { top: safeAreaTop + spacing.xs }]}
           onPress={handleBackPress}
           accessibilityRole="button"
-          accessibilityLabel={slide > 0 ? 'Back to overview' : 'Go back'}
+          accessibilityLabel={slide > 0 ? t('plan.backToOverview') : t('plan.goBack')}
           activeOpacity={0.7}
         >
           <Ionicons name="chevron-back" size={22} color={colors.deepOcean} />
@@ -367,7 +368,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
 }) => {
   const { t } = useTranslation();
   const heroFallback = (plan.category ?? plan.type ?? 'Culture') as Category;
-  const heroSubtitle = `${plan.city} · ${t('builder.day', { count: plan.durationDays })}`;
+  const heroSubtitle = `${plan.city} · ${t('common.dayCount', { count: plan.durationDays })}`;
 
   const stopsForCurrentDay = useMemo(
     () =>
@@ -429,12 +430,12 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
             <View style={styles.pill}>
               <Ionicons name="calendar-outline" size={14} color={colors.sunsetOrange} />
               <Text style={styles.pillText}>
-                {plan.durationDays} {plan.durationDays === 1 ? 'day' : 'days'}
+                {t('common.dayCount', { count: plan.durationDays })}
               </Text>
             </View>
             <View style={styles.pill}>
               <Ionicons name="flag-outline" size={14} color={colors.sunsetOrange} />
-              <Text style={styles.pillText}>{totalStops} stops</Text>
+              <Text style={styles.pillText}>{t('common.stopCount', { count: totalStops })}</Text>
             </View>
             {plan.type && (
               <View style={styles.typePill}>
@@ -531,7 +532,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
             onPress={onFollow}
             style={styles.ctaWrap}
             accessibilityRole="button"
-            accessibilityLabel={isAuthenticated ? 'Follow this plan' : 'Sign in to follow'}
+            accessibilityLabel={isAuthenticated ? t('plan.followThisPlan') : t('plan.signInToFollow')}
           >
             <LinearGradient
               colors={[colors.electricBlue, '#2563eb']}
@@ -541,7 +542,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
             >
               <Ionicons name="navigate-outline" size={20} color="#FFFFFF" />
               <Text style={styles.ctaText}>
-                {isAuthenticated ? 'Start Follow Mode' : 'Sign in to follow'}
+                {isAuthenticated ? t('plan.startFollowMode') : t('plan.signInToFollow')}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -597,12 +598,12 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
           <View style={styles.pill}>
             <Ionicons name="calendar-outline" size={14} color={colors.sunsetOrange} />
             <Text style={styles.pillText}>
-              {plan.durationDays} {plan.durationDays === 1 ? 'day' : 'days'}
+              {t('common.dayCount', { count: plan.durationDays })}
             </Text>
           </View>
           <View style={styles.pill}>
             <Ionicons name="flag-outline" size={14} color={colors.sunsetOrange} />
-            <Text style={styles.pillText}>{totalStops} stops</Text>
+            <Text style={styles.pillText}>{t('common.stopCount', { count: totalStops })}</Text>
           </View>
           {plan.type && (
             <View style={styles.typePill}>
@@ -682,7 +683,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
             onPress={onFollow}
             style={styles.ctaWrap}
             accessibilityRole="button"
-            accessibilityLabel={isAuthenticated ? 'Follow this plan' : 'Sign in to follow'}
+            accessibilityLabel={isAuthenticated ? t('plan.followThisPlan') : t('plan.signInToFollow')}
           >
             <LinearGradient
               colors={[colors.electricBlue, '#2563eb']}
@@ -692,7 +693,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
             >
               <Ionicons name="navigate-outline" size={20} color="#FFFFFF" />
               <Text style={styles.ctaText}>
-                {isAuthenticated ? 'Start Follow Mode' : 'Sign in to follow'}
+                {isAuthenticated ? t('plan.startFollowMode') : t('plan.signInToFollow')}
               </Text>
             </LinearGradient>
           </TouchableOpacity>

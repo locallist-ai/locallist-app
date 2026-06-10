@@ -19,6 +19,7 @@ import { track } from '../../lib/analytics';
 import { useAuth } from '../../lib/auth';
 import { PlanMap } from '../../components/map/PlanMap';
 import { FollowDaySheet } from '../../components/follow/FollowDaySheet';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { ProgressDots } from '../../components/ui/design-system';
 import { useOfflineTiles } from '../../components/map/useOfflineTiles';
 import { clearResume, getResume, setResume } from '../../lib/follow/resume-store';
@@ -53,6 +54,7 @@ export default function FollowModeScreen() {
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [completeConfirmVisible, setCompleteConfirmVisible] = useState(false);
 
   const currentStopRef = allStops[currentIndex];
   const currentDay = currentStopRef?.dayNumber ?? 1;
@@ -162,7 +164,12 @@ export default function FollowModeScreen() {
     setCurrentIndex(nextIndex);
   };
 
-  const handleComplete = async () => {
+  const handleComplete = () => {
+    setCompleteConfirmVisible(true);
+  };
+
+  const executeComplete = async () => {
+    setCompleteConfirmVisible(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (session) {
       await api(`/follow/${session.id}/complete`, { method: 'PATCH' });
@@ -269,6 +276,18 @@ export default function FollowModeScreen() {
           onComplete={handleComplete}
         />
       </View>
+
+      <ConfirmModal
+        visible={completeConfirmVisible}
+        icon="flag-outline"
+        iconColor={colors.sunsetOrange}
+        title={t('follow.completeConfirmTitle')}
+        body={t('follow.completeConfirmBody')}
+        cancelLabel={t('common.cancel')}
+        confirmLabel={t('follow.completeConfirmCta')}
+        onCancel={() => setCompleteConfirmVisible(false)}
+        onConfirm={executeComplete}
+      />
     </View>
   );
 }

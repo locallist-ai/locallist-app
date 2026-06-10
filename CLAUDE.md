@@ -2,7 +2,7 @@
 
 | | Details |
 |---|---|
-| **Tech** | Expo SDK 54, React Native, Expo Router 4, TypeScript |
+| **Tech** | Expo SDK 54, React Native 0.81, Expo Router 6, TypeScript |
 | **Deploy** | EAS Build (local) → TestFlight → App Store |
 | **Auth** | Apple Sign In + Google OAuth + email/password (HS256 JWT, auto-refresh) |
 | **Payments** | RevenueCat SDK (Apple IAP) — **planned, not yet installed** |
@@ -10,6 +10,9 @@
 | **iOS Target** | iOS 16.0+ |
 | **Privacy** | Privacy manifest configured (4 API types, 3 data types, no tracking) |
 | **i18n** | i18next + expo-localization. EN + ES (España). Parity test: `lib/i18n/__tests__/parity.test.ts` |
+| **Tests** | Jest (jest-expo) — `npm test`. Suites in `lib/__tests__/`, `lib/plan/__tests__/`, `lib/follow/__tests__/`, `components/map/__tests__/` |
+| **Analytics** | PostHog via REST (`lib/analytics.ts`) — no-op unless `EXPO_PUBLIC_POSTHOG_KEY` is set |
+| **Errors** | Sentry (`@sentry/react-native`), init in `lib/sentry.ts` |
 
 ## Running Locally
 
@@ -26,27 +29,33 @@ Requires a **development build** installed on device/simulator — Expo Go will 
 # Simulator debug build (fast, no signing)
 npx expo run:ios --configuration Debug
 
-# TestFlight build (requires signing)
-git add -A && git commit  # EAS reads git HEAD
+# Simulator release build via EAS (preview profile = iOS simulator, internal)
 eas build --platform ios --profile preview --local
+
+# TestFlight build (requires signing; production profile auto-increments buildNumber)
+git add -A && git commit  # EAS reads git HEAD
+eas build --platform ios --profile production --local
 ```
 
-Credentials live in EAS (never in repo). `eas.json` configures preview + production profiles.
+Credentials live in EAS (never in repo). `eas.json` configures development + preview (simulator) + production profiles; `submit.production` targets the "Friends Testing" TestFlight group.
 
 ## Key Screens (`app/`)
 
 | File | Description |
 |---|---|
-| `_layout.tsx` | Root layout: fonts, SafeAreaProvider, splash animation, AuthGate |
+| `_layout.tsx` | Root layout: Sentry init, fonts, SafeAreaProvider, animated splash, preload, AuthGate |
+| `index.tsx` | Redirect to `/(tabs)/home` |
 | `(tabs)/_layout.tsx` | Tab bar (Home, Plans, Account) |
-| `(tabs)/home.tsx` | Editorial hero, CTA, preference chips |
-| `(tabs)/plans.tsx` | Plans list: PhotoHero covers, filter chips, skeleton loading |
-| `(tabs)/account.tsx` | Profile, tier badge, language selector, sign out |
+| `(tabs)/home.tsx` | City picker: hero photo + Skia bg, CityCard grid → sets trip context, routes to `/chat` |
+| `(tabs)/plans.tsx` | Plans list: PhotoHero covers, category filter chips, skeleton loading; CTA → `/builder/custom` |
+| `(tabs)/account.tsx` | Profile (useProfile: pace/budget/dietary), tier badge, language selector, sign out |
 | `login.tsx` | Apple Sign In, Google OAuth, email/password, password strength rules |
-| `builder/custom.tsx` | AI plan wizard (5-step: city → days → group → preferences → budget) |
+| `chat/index.tsx` | **Main plan-creation flow**: conversational AI chat — slot extraction (SlotBadges), quick replies, `chatGenerate` → plan, SaveProfileSheet, escape hatch to wizard |
+| `builder/wizard.tsx` | AI plan wizard (renders `components/home/HomeScreen` step flow) — escape hatch from chat |
+| `builder/custom.tsx` | Manual plan builder: name + debounced city search + days (1–3) → opens `/plan/new` editor |
 | `builder/import-video.tsx` | Stub — import-from-video, not yet built |
-| `plan/[id].tsx` | Plan detail: parallax hero, day tabs, inline stop editor, Follow button |
-| `follow/[id].tsx` | Follow Mode: PlanMap fullscreen, BottomSheetStop, progress bar, day completion |
+| `plan/[id].tsx` | Plan detail + editor: PlanCardPager, inline editing via `usePlanEditor`, handles `/plan/new` and builder preview handoff, Follow button |
+| `follow/[id].tsx` | Follow Mode: PlanMap fullscreen, BottomSheetStop, progress bar, day completion, resume via `lib/follow/resume-store` |
 | `place/[id].tsx` | Place detail: parallax hero, ratings, Google Maps link |
 
 ## Key Components (`components/`)
@@ -54,8 +63,12 @@ Credentials live in EAS (never in repo). `eas.json` configures preview + product
 | Path | Description |
 |---|---|
 | `ui/PhotoHero.tsx` | Full-bleed image with gradient fallback by category |
+| `ui/PhotoMosaic.tsx` | Multi-photo mosaic with category gradient fallback |
 | `ui/SkeletonCard.tsx` | Shimmer skeleton loader |
+| `ui/CategoryBadge.tsx` | Category pill with per-category color |
+| `ui/ConfirmModal.tsx` | Reusable confirm/cancel modal |
 | `ui/design-system/` | ChoiceChip, EditorialTitle, StepSubtitle, ProgressDots — wizard design system |
+| `chat/` | Chat UI: MessageBubble, QuickReplyChips, SlotBadges, SaveProfileSheet |
 | `map/PlanMap.tsx` | MapLibre map: pins, route line, animated camera |
 | `map/useOfflineTiles.ts` | Offline tile caching hook |
 | `follow/StopCard.tsx` | Stop display card: photo, metadata, WhyThisPlace |
@@ -63,11 +76,13 @@ Credentials live in EAS (never in repo). `eas.json` configures preview + product
 | `follow/FollowDaySheet.tsx` | Day overview sheet inside Follow Mode |
 | `plan/PlanCardPager.tsx` | Swipeable plan overview + per-stop cards |
 | `plan-editor/DaySection.tsx` | Editable day section with add-stop affordance |
+| `plan-editor/EditableStopCard.tsx` | Inline-editable stop row |
 | `plan-editor/SwipeableStopCard.tsx` | Swipe-to-delete stop row |
 | `plan-editor/MoveToDay.tsx` | Move stop between days modal |
 | `plan-editor/PlaceSearchModal.tsx` | Search places to add to a plan |
-| `home/HomeV2.tsx` | Home screen component (rename to HomeScreen.tsx pending) |
-| `DestinationScreen.tsx` | **Dead code** — 0 imports, pending deletion (Fase 4 cleanup) |
+| `home/HomeScreen.tsx` | AI wizard step flow (used by `builder/wizard.tsx`): WizardStep, InterestsStep + SubcategorySheet, BudgetStep, RefineableStep, ChatStep (legacy), `useWizard` state hook, `useTaxonomy`, constants |
+| `home/CityCard.tsx` + `home/HeroSkiaBg.tsx` | City picker card + Skia hero background (home tab) |
+| `home/TypingDots.tsx` | Typing indicator (shared with chat) |
 
 ## Key Libs (`lib/`)
 
@@ -78,9 +93,19 @@ Credentials live in EAS (never in repo). `eas.json` configures preview + product
 | `theme.ts` | Brand tokens: colors, typography, spacing, borderRadius |
 | `types.ts` | Shared TypeScript types (Plan, Place, PlanStop, etc.) |
 | `i18n/` | i18next setup, EN/ES resources, parity test |
-| `plan-store.ts` | Zustand store for plan edit state |
-| `use-plan-editor.ts` | Hook: plan editor actions (add/move/delete stops) |
-| `bulk-ops.ts` | Batch stop reordering + persistence helpers |
+| `plan/plan-store.ts` | In-memory handoff of the builder preview plan (`BuilderResponse`) to `/plan/new` |
+| `plan/use-plan-editor.ts` | Hook + reducer: plan editor state and actions (add/move/delete stops, save) |
+| `plan/bulk-ops.ts` | Batch stop reordering + persistence helpers |
+| `chat-store.ts` | Chat session id persistence (SecureStore) |
+| `trip-context-store.ts` | Selected city store (module-level + SafeStore persistence, `useTripContext`) |
+| `use-profile.ts` | Hook: user profile CRUD (pace/budget/dietary) via API |
+| `analytics.ts` | PostHog REST capture, fire-and-forget `track()` — no-op without `EXPO_PUBLIC_POSTHOG_KEY` |
+| `taxonomy.ts` + `taxonomy-fallback.ts` | Interest taxonomy: API fetch with file cache (24h TTL, ETag) + bundled fallback |
+| `openingHours.ts` | Open/closed state + hint from `opening_hours` data |
+| `responsive.ts` | `useResponsive()`: compact/short flags, width-based `scale`/`scaleFont` |
+| `cities.ts` | Static city catalog for the home picker |
+| `follow/resume-store.ts` | Persisted Follow Mode resume position per plan |
+| `helpers/price.ts` | Price range label formatting |
 | `api-cache.ts` | Simple in-memory stale-while-revalidate cache |
 | `safe-store.ts` | SecureStore wrapper with web fallback |
 | `timeBlocks.ts` | Time block constants + icon map (Morning/Afternoon/Evening/Night) |
@@ -93,4 +118,5 @@ Credentials live in EAS (never in repo). `eas.json` configures preview + product
 - **i18n**: always use `t('key')` — never hardcode visible strings. Add keys to both `en.ts` and `es.ts`. Parity test will catch drift.
 - **Logging**: `logger.debug/info/warn/error(msg, obj)` — never `console.log`.
 - **`autoFocus` inside Animated.View**: use `ref + setTimeout` post-animation, not `autoFocus` prop directly (iOS crash).
+- **Analytics**: `track({ event, ... })` from `lib/analytics.ts` for funnel events — never call PostHog directly.
 - **Commits before EAS build**: EAS reads `git HEAD` — always commit local changes first.

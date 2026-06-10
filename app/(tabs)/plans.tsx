@@ -407,7 +407,7 @@ export default function PlansScreen() {
                       <View style={s.myPlanInfo}>
                         <Text style={s.myPlanName} numberOfLines={1}>{item.name}</Text>
                         <Text style={s.myPlanMeta}>
-                          {item.city} · {item.durationDays} {item.durationDays === 1 ? 'day' : 'days'}
+                          {item.city} · {t('common.dayCount', { count: item.durationDays })}
                         </Text>
                       </View>
                       {!selectionMode && (
@@ -592,7 +592,7 @@ export default function PlansScreen() {
                       style={{ marginLeft: 12 }}
                     />
                     <Text style={s.metaText}>
-                      {item.durationDays} {item.durationDays === 1 ? 'day' : 'days'}
+                      {t('common.dayCount', { count: item.durationDays })}
                     </Text>
                   </View>
 

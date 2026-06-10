@@ -24,6 +24,7 @@ import { chatTurn, chatGenerate, deleteChatSession } from '../../lib/api';
 import { getSavedSessionId, saveSessionId, clearSessionId } from '../../lib/chat-store';
 import { BlurView } from 'expo-blur';
 import { MessageBubble } from '../../components/chat/MessageBubble';
+import { QuickReplyChips } from '../../components/chat/QuickReplyChips';
 import { SaveProfileSheet } from '../../components/chat/SaveProfileSheet';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { TypingDots } from '../../components/home/TypingDots';
@@ -31,7 +32,7 @@ import { upsertProfile } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { track, countFilledSlots } from '../../lib/analytics';
 import { useTripContext } from '../../lib/trip-context-store';
-import type { ChatMessage, ChatSlots, BuilderResponse } from '../../lib/types';
+import type { ChatMessage, ChatSlots, QuickReply, BuilderResponse } from '../../lib/types';
 
 const EMPTY_SLOTS: ChatSlots = {
   city: null, days: null, groupType: null, categories: null,
@@ -47,6 +48,7 @@ export default function ChatScreen() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [slots, setSlots] = useState<ChatSlots>(EMPTY_SLOTS);
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -92,6 +94,7 @@ export default function ChatScreen() {
             setReady(data.ready);
             setTurnCount(data.turnCount);
             setMessages([{ role: 'ai', text: data.aiMessage }]);
+            setQuickReplies(data.ready ? [] : data.quickReplies);
             setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
             return;
           }
@@ -115,14 +118,19 @@ export default function ChatScreen() {
   }, []);
 
   const sendTurn = useCallback(
-    async (message: string) => {
+    async (message: string, quickReplyId: string | null = null) => {
       if (loading || generating) return;
       setLoading(true);
+      const prevReplies = quickReplies;
+      setQuickReplies([]);
 
       try {
-        const result = await chatTurn({ sessionId, message, quickReplyId: null });
+        const result = await chatTurn({ sessionId, message, quickReplyId });
 
         if (result.error || !result.data) {
+          // Error transitorio (429/red): LastOfferedChips sigue vigente en el
+          // server, así que los chips anteriores se restauran.
+          setQuickReplies(prevReplies);
           if (result.status === 429) {
             appendAiMessage(t('chat.rateLimited'));
           } else {
@@ -153,11 +161,12 @@ export default function ChatScreen() {
           track({ event: 'chat_ready', sessionId: newSessionId, turnCount: data.turnCount });
         }
         appendAiMessage(data.aiMessage);
+        setQuickReplies(data.ready ? [] : data.quickReplies);
       } finally {
         setLoading(false);
       }
     },
-    [sessionId, loading, generating, appendAiMessage, t],
+    [sessionId, loading, generating, quickReplies, appendAiMessage, t],
   );
 
   const handleSend = useCallback(() => {
@@ -167,6 +176,17 @@ export default function ChatScreen() {
     appendUserMessage(text);
     sendTurn(text);
   }, [inputText, loading, generating, appendUserMessage, sendTurn]);
+
+  const handleChipSelect = useCallback(
+    (reply: QuickReply) => {
+      // Mismo pre-guard que handleSend: sin él, un doble-tap appendea el
+      // bubble del usuario y sendTurn descarta el envío en silencio.
+      if (loading || generating) return;
+      appendUserMessage(reply.label);
+      sendTurn(reply.label, reply.id);
+    },
+    [loading, generating, appendUserMessage, sendTurn],
+  );
 
   const handleGenerate = useCallback(async () => {
     if (!sessionId || generating) return;
@@ -215,6 +235,7 @@ export default function ChatScreen() {
     setSessionId(null);
     setMessages([]);
     setSlots(EMPTY_SLOTS);
+    setQuickReplies([]);
     setReady(false);
     setTurnCount(0);
     appendAiMessage(t('chat.welcomeMessage'));
@@ -360,6 +381,11 @@ export default function ChatScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Quick reply chips */}
+        {!ready && !loading && quickReplies.length > 0 && (
+          <QuickReplyChips replies={quickReplies} onSelect={handleChipSelect} />
+        )}
+
         {/* Input row */}
         <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <BlurView intensity={60} tint="light" style={styles.inputBlur}>
@@ -375,13 +401,13 @@ export default function ChatScreen() {
               returnKeyType="send"
               blurOnSubmit={false}
               onSubmitEditing={handleSend}
-              editable={!loading && !generating && !ready}
+              editable={!loading && !generating}
             />
           </BlurView>
           <TouchableOpacity
             onPress={handleSend}
-            disabled={!inputText.trim() || loading || generating || ready}
-            style={[styles.sendBtn, (!inputText.trim() || loading || generating || ready) && styles.sendBtnDisabled]}
+            disabled={!inputText.trim() || loading || generating}
+            style={[styles.sendBtn, (!inputText.trim() || loading || generating) && styles.sendBtnDisabled]}
             activeOpacity={0.8}
           >
             <Ionicons name="send" size={18} color="#fff" />
