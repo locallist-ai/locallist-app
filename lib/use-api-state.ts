@@ -14,7 +14,11 @@ type UseApiStateOptions<T> = {
   deps?: DependencyList;
   /** Data inicial (ej. cache stale-while-revalidate). Evita el spinner inicial. */
   initialData?: T;
-  /** Salta el fetch automático (ej. cache fresca). `refresh()` sigue funcionando. */
+  /**
+   * Salta el fetch automático inicial (ej. cache fresca). Se captura al montar:
+   * un skip que cambia entre renders no dispara ni cancela refetches, y los
+   * cambios de deps siempre refetchean. `refresh()` sigue funcionando.
+   */
   skip?: boolean;
 };
 
@@ -31,10 +35,15 @@ export type UseApiState<T> = {
  *
  * Semántica:
  * - `loading` cubre el fetch automático mientras no hay data que mostrar.
- * - En fallo con data previa (cache o fetch anterior) se conserva la data y
- *   `error` no se setea: stale-while-revalidate silencioso.
+ * - En fallo con data previa de la MISMA key (initialData o fetch anterior) se
+ *   conserva la data y `error` no se setea: stale-while-revalidate silencioso.
+ * - Un cambio de deps es un cambio de key: resetea data/error, vuelve a
+ *   `loading` y nunca muestra la entidad anterior si el nuevo fetch falla.
  * - En fallo sin data, `error` recibe el mensaje del client.
  * - `refresh()` re-ejecuta el fetcher y expone `refreshing` (pull-to-refresh).
+ * - Fetch automático y refresh() comparten secuencia: solo se aplica el
+ *   resultado del último lanzado; respuestas out-of-order, de deps anteriores
+ *   o posteriores al unmount se descartan.
  */
 export function useApiState<T>(
   fetcher: ApiStateFetcher<T>,
@@ -52,7 +61,11 @@ export function useApiState<T>(
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
 
+  // skip e initialData solo aplican al primer fetch; capturados al montar.
+  const skipRef = useRef(skip);
   const dataRef = useRef<T | null>(initialData ?? null);
+  const firstRunRef = useRef(true);
+
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -61,8 +74,11 @@ export function useApiState<T>(
     };
   }, []);
 
+  // Secuencia compartida entre el fetch automático y refresh().
+  const generationRef = useRef(0);
+
   const applyResult = useCallback((res: ApiStateResult<T>) => {
-    if (!mountedRef.current) return;
+    setLoading(false);
     if (res.data !== null) {
       dataRef.current = res.data;
       setData(res.data);
@@ -72,34 +88,45 @@ export function useApiState<T>(
     }
   }, []);
 
+  /** Ejecuta el fetcher; devuelve null si el resultado quedó obsoleto. */
+  const runFetch = useCallback(async (): Promise<ApiStateResult<T> | null> => {
+    const generation = ++generationRef.current;
+    const res = await fetcherRef.current();
+    if (!mountedRef.current || generation !== generationRef.current) return null;
+    return res;
+  }, []);
+
   useEffect(() => {
-    if (skip) {
-      setLoading(false);
-      return;
+    if (firstRunRef.current) {
+      firstRunRef.current = false;
+      if (skipRef.current) {
+        setLoading(false);
+        return;
+      }
+    } else {
+      // Cambio de deps: la data anterior pertenece a otra key (otro id) y no
+      // puede quedarse como fallback silencioso si el nuevo fetch falla.
+      dataRef.current = null;
+      setData(null);
+      setError(null);
     }
-    let stale = false;
     setLoading(dataRef.current === null);
     (async () => {
-      const res = await fetcherRef.current();
-      if (stale) return;
-      applyResult(res);
-      if (mountedRef.current) setLoading(false);
+      const res = await runFetch();
+      if (res) applyResult(res);
     })();
-    return () => {
-      stale = true;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip, applyResult, ...deps]);
+  }, deps);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const res = await fetcherRef.current();
-      applyResult(res);
+      const res = await runFetch();
+      if (res) applyResult(res);
     } finally {
       if (mountedRef.current) setRefreshing(false);
     }
-  }, [applyResult]);
+  }, [runFetch, applyResult]);
 
   return { data, loading, refreshing, error, refresh };
 }

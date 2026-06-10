@@ -102,6 +102,108 @@ describe('useApiState', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it('al cambiar deps resetea data y muestra el error del nuevo fetch, no la entidad anterior', async () => {
+    const fetcher = jest
+      .fn<Promise<ApiStateResult<string>>, []>()
+      .mockResolvedValueOnce(ok('place-1'))
+      .mockResolvedValueOnce(fail('HTTP 404'));
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useApiState(fetcher, { deps: [id] }),
+      { initialProps: { id: '1' } },
+    );
+
+    await waitFor(() => expect(result.current.data).toBe('place-1'));
+
+    rerender({ id: '2' });
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(true);
+
+    await waitFor(() => expect(result.current.error).toBe('HTTP 404'));
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('descarta respuestas out-of-order de deps anteriores', async () => {
+    const resolvers: Record<string, (r: ApiStateResult<string>) => void> = {};
+    const fetcher = (id: string) =>
+      new Promise<ApiStateResult<string>>((resolve) => {
+        resolvers[id] = resolve;
+      });
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useApiState(() => fetcher(id), { deps: [id] }),
+      { initialProps: { id: '1' } },
+    );
+
+    // El fetch de id=1 sigue en vuelo cuando cambian las deps.
+    rerender({ id: '2' });
+
+    await act(async () => {
+      resolvers['2'](ok('place-2'));
+    });
+    await waitFor(() => expect(result.current.data).toBe('place-2'));
+
+    // La respuesta de id=1 llega tarde: se descarta.
+    await act(async () => {
+      resolvers['1'](ok('place-1'));
+    });
+    expect(result.current.data).toBe('place-2');
+    expect(result.current.error).toBeNull();
+  });
+
+  it('refresh concurrente: se aplica el último lanzado, el anterior se descarta', async () => {
+    const resolvers: ((r: ApiStateResult<string>) => void)[] = [];
+    const fetcher = jest.fn(
+      () =>
+        new Promise<ApiStateResult<string>>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const { result } = renderHook(() => useApiState<string>(fetcher, { skip: true }));
+
+    let first: Promise<void>;
+    let second: Promise<void>;
+    act(() => {
+      first = result.current.refresh();
+    });
+    act(() => {
+      second = result.current.refresh();
+    });
+
+    // El segundo refresh resuelve primero y se aplica.
+    await act(async () => {
+      resolvers[1](ok('second'));
+      await second!;
+    });
+    expect(result.current.data).toBe('second');
+
+    // El primero llega tarde: no pisa al más nuevo.
+    await act(async () => {
+      resolvers[0](ok('first'));
+      await first!;
+    });
+    expect(result.current.data).toBe('second');
+    expect(result.current.refreshing).toBe(false);
+  });
+
+  it('unmount con fetch en vuelo no aplica estado ni rompe', async () => {
+    let resolveFetch: (r: ApiStateResult<string>) => void;
+    const fetcher = jest.fn(
+      () =>
+        new Promise<ApiStateResult<string>>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    const { result, unmount } = renderHook(() => useApiState<string>(fetcher));
+
+    expect(result.current.loading).toBe(true);
+    unmount();
+
+    await act(async () => {
+      resolveFetch!(ok('late'));
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it('un refresh() con éxito tras un fallo limpia el error', async () => {
     const fetcher = jest
       .fn<Promise<ApiStateResult<string>>, []>()
