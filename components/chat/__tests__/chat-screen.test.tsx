@@ -16,8 +16,9 @@
 
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { router } from 'expo-router';
 import ChatScreen from '../../../app/chat/index';
-import { chatTurn } from '../../../lib/api';
+import { chatTurn, chatGenerate } from '../../../lib/api';
 import { getSavedSessionId, saveSessionId } from '../../../lib/chat-store';
 import { useTripContext } from '../../../lib/trip-context-store';
 import type { ChatSlots, ChatTurnResponse } from '../../../lib/types';
@@ -186,6 +187,43 @@ describe('chat — guard de doble-tap en QuickReplyChips', () => {
     // Tras resolver, sigue habiendo un único bubble y ningún turn extra
     expect(mockChatTurn).toHaveBeenCalledTimes(2);
     expect(screen.getAllByText('2 días')).toHaveLength(1);
+  });
+});
+
+describe('chat — guard de doble-tap en el CTA de generación', () => {
+  it('dos taps en el mismo batch disparan un único chatGenerate', async () => {
+    mockGetSavedSessionId.mockResolvedValue(null);
+    mockUseTripContext.mockReturnValue({ city: 'Madrid' });
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({ aiMessage: 'Listo para generar tu plan.', ready: true, quickReplies: [] }),
+    );
+    render(<ChatScreen />);
+    await waitFor(() => expect(screen.getByText('chat.buildPlan')).toBeTruthy());
+
+    let resolveGenerate!: (v: unknown) => void;
+    (chatGenerate as jest.Mock).mockImplementationOnce(
+      () => new Promise((res) => { resolveGenerate = res; }),
+    );
+
+    // Ruta CARA (rate limit 5/hr): un doble-tap síncrono no puede generar
+    // dos planes. Mismo patrón que el guard de chips: ambos presses en el
+    // mismo act(), closures stale con generating=false.
+    const cta = screen.getByText('chat.buildPlan');
+    await act(async () => {
+      fireEvent.press(cta);
+      fireEvent.press(cta);
+    });
+
+    expect(chatGenerate).toHaveBeenCalledTimes(1);
+    expect(chatGenerate).toHaveBeenCalledWith({ sessionId: 's1' });
+
+    await act(async () => {
+      resolveGenerate({ data: { plan: { id: 'p1' } }, error: null, errorBody: null, status: 200 });
+    });
+    // Un solo plan generado → una sola navegación
+    expect(router.push).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledWith('/plan/p1');
+    expect(chatGenerate).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -194,7 +194,8 @@ export default function ChatScreen() {
   );
 
   const handleGenerate = useCallback(async () => {
-    if (!sessionId || generating) return;
+    if (!sessionId || pendingRef.current || generating) return;
+    pendingRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGenerating(true);
 
@@ -222,6 +223,7 @@ export default function ChatScreen() {
         router.push(`/plan/${plan.id}`);
       }
     } finally {
+      pendingRef.current = false;
       setGenerating(false);
     }
   }, [sessionId, generating, slots, isAuthenticated, t]);
