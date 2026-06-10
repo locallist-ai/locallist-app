@@ -29,13 +29,13 @@ Requires a **development build** installed on device/simulator — Expo Go will 
 # Simulator debug build (fast, no signing)
 npx expo run:ios --configuration Debug
 
-# Simulator release build via EAS (preview profile = iOS simulator, internal)
-eas build --platform ios --profile preview --local
-
-# TestFlight build (requires signing; production profile auto-increments buildNumber)
+# EAS builds: siempre a través del wrapper, nunca `eas build` a pelo
 git add -A && git commit  # EAS reads git HEAD
-eas build --platform ios --profile production --local
+npm run build:ios   # production (.ipa, TestFlight; production profile auto-incrementa buildNumber)
+npm run build:sim   # preview / simulator (.tar.gz)
 ```
+
+Artifacts land in `builds/<profile>-<date>-<sha>.<ext>` (gitignored). The wrapper (`scripts/build-local.sh`) prunes automatically and keeps only the 2 most recent builds per profile, so no stray `build-*.ipa` ever piles up in the repo root.
 
 Credentials live in EAS (never in repo). `eas.json` configures development + preview (simulator) + production profiles; `submit.production` targets the "Friends Testing" TestFlight group.
 
