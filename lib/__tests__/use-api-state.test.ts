@@ -150,7 +150,7 @@ describe('useApiState', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('refresh concurrente: se aplica el último lanzado, el anterior se descarta', async () => {
+  it('refresh concurrente: el viejo que resuelve primero ni se aplica ni apaga el spinner del nuevo', async () => {
     const resolvers: ((r: ApiStateResult<string>) => void)[] = [];
     const fetcher = jest.fn(
       () =>
@@ -168,21 +168,61 @@ describe('useApiState', () => {
     act(() => {
       second = result.current.refresh();
     });
+    expect(result.current.refreshing).toBe(true);
 
-    // El segundo refresh resuelve primero y se aplica.
+    // El refresh VIEJO resuelve primero: su resultado se descarta y el
+    // spinner del refresh nuevo (aún en vuelo) sigue encendido.
+    await act(async () => {
+      resolvers[0](ok('first'));
+      await first!;
+    });
+    expect(result.current.data).toBeNull();
+    expect(result.current.refreshing).toBe(true);
+
+    // El nuevo resuelve: se aplica y apaga el spinner.
     await act(async () => {
       resolvers[1](ok('second'));
       await second!;
     });
     expect(result.current.data).toBe('second');
-
-    // El primero llega tarde: no pisa al más nuevo.
-    await act(async () => {
-      resolvers[0](ok('first'));
-      await first!;
-    });
-    expect(result.current.data).toBe('second');
     expect(result.current.refreshing).toBe(false);
+  });
+
+  it('un fetcher que lanza setea error y apaga loading (sin unhandled rejection)', async () => {
+    const fetcher = jest.fn(async (): Promise<ApiStateResult<string>> => {
+      throw new Error('boom');
+    });
+    const { result } = renderHook(() => useApiState(fetcher));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe('boom');
+    expect(result.current.data).toBeNull();
+  });
+
+  it('onSuccess solo se invoca con resultados aplicados, no con descartados', async () => {
+    const onSuccess = jest.fn();
+    const resolvers: Record<string, (r: ApiStateResult<string>) => void> = {};
+    const fetcher = (id: string) =>
+      new Promise<ApiStateResult<string>>((resolve) => {
+        resolvers[id] = resolve;
+      });
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useApiState(() => fetcher(id), { deps: [id], onSuccess }),
+      { initialProps: { id: '1' } },
+    );
+
+    // El fetch de id=1 queda obsoleto antes de resolver.
+    rerender({ id: '2' });
+    await act(async () => {
+      resolvers['2'](ok('place-2'));
+    });
+    await waitFor(() => expect(result.current.data).toBe('place-2'));
+
+    await act(async () => {
+      resolvers['1'](ok('place-1'));
+    });
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onSuccess).toHaveBeenCalledWith('place-2');
   });
 
   it('unmount con fetch en vuelo no aplica estado ni rompe', async () => {

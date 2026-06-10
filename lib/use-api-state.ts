@@ -20,6 +20,12 @@ type UseApiStateOptions<T> = {
    * cambios de deps siempre refetchean. `refresh()` sigue funcionando.
    */
   skip?: boolean;
+  /**
+   * Side-effect tras un resultado APLICADO (ej. setCache). No se invoca para
+   * resultados descartados por out-of-order, deps cambiadas o unmount — para
+   * eso existe, en vez de hacer el side-effect dentro del fetcher.
+   */
+  onSuccess?: (data: T) => void;
 };
 
 export type UseApiState<T> = {
@@ -49,7 +55,7 @@ export function useApiState<T>(
   fetcher: ApiStateFetcher<T>,
   options: UseApiStateOptions<T> = {},
 ): UseApiState<T> {
-  const { deps = [], initialData, skip = false } = options;
+  const { deps = [], initialData, skip = false, onSuccess } = options;
 
   const [data, setData] = useState<T | null>(initialData ?? null);
   const [loading, setLoading] = useState(!skip && initialData == null);
@@ -60,6 +66,8 @@ export function useApiState<T>(
   // (que suele ser una arrow function nueva en cada render).
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
 
   // skip e initialData solo aplican al primer fetch; capturados al montar.
   const skipRef = useRef(skip);
@@ -83,6 +91,7 @@ export function useApiState<T>(
       dataRef.current = res.data;
       setData(res.data);
       setError(null);
+      onSuccessRef.current?.(res.data);
     } else if (dataRef.current === null) {
       setError(res.error);
     }
@@ -91,7 +100,14 @@ export function useApiState<T>(
   /** Ejecuta el fetcher; devuelve null si el resultado quedó obsoleto. */
   const runFetch = useCallback(async (): Promise<ApiStateResult<T> | null> => {
     const generation = ++generationRef.current;
-    const res = await fetcherRef.current();
+    let res: ApiStateResult<T>;
+    try {
+      res = await fetcherRef.current();
+    } catch (err) {
+      // El client api() no lanza (error-as-value), pero un fetcher custom
+      // puede: sin esto sería unhandled rejection y loading quedaría colgado.
+      res = { data: null, error: err instanceof Error ? err.message : String(err) };
+    }
     if (!mountedRef.current || generation !== generationRef.current) return null;
     return res;
   }, []);
@@ -118,13 +134,19 @@ export function useApiState<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
+  // Contador de refreshes en vuelo: un refresh viejo que resuelve primero no
+  // debe apagar el spinner del más nuevo todavía pendiente.
+  const refreshInFlightRef = useRef(0);
+
   const refresh = useCallback(async () => {
+    refreshInFlightRef.current += 1;
     setRefreshing(true);
     try {
       const res = await runFetch();
       if (res) applyResult(res);
     } finally {
-      if (mountedRef.current) setRefreshing(false);
+      refreshInFlightRef.current -= 1;
+      if (mountedRef.current && refreshInFlightRef.current === 0) setRefreshing(false);
     }
   }, [runFetch, applyResult]);
 

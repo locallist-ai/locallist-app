@@ -113,7 +113,6 @@ export default {
   },
   place: {
     loadError: 'Error al cargar el lugar',
-    networkError: 'Error de conexión',
     notFound: 'Lugar no encontrado',
     goBack: 'Volver',
     whyThisPlace: 'Por qué este lugar',

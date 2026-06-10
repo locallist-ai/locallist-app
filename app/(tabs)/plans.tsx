@@ -182,13 +182,14 @@ export default function PlansScreen() {
     async () => {
       const res = await api<{ plans: Plan[] }>('/plans?showcase=true');
       if (!res.data) return { data: null, error: res.error ?? t('plans.loadError') };
-      const list = sortPlans(res.data.plans ?? []);
-      setCache(PLANS_CACHE_KEY, list);
-      return { data: list, error: null };
+      return { data: sortPlans(res.data.plans ?? []), error: null };
     },
     {
       initialData: cached ?? undefined,
       skip: !!cached && isFresh(PLANS_CACHE_KEY),
+      // En onSuccess y no en el fetcher: los resultados descartados por
+      // out-of-order no deben escribir la cache.
+      onSuccess: (list) => setCache(PLANS_CACHE_KEY, list),
     },
   );
   const plans = plansData ?? [];
