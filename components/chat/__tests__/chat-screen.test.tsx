@@ -150,7 +150,7 @@ describe('chat — init con preSeededCity', () => {
 });
 
 describe('chat — guard de doble-tap en QuickReplyChips', () => {
-  it('un doble-tap dispara un único chatTurn y un único bubble de usuario', async () => {
+  it('dos taps en el mismo batch disparan un único chatTurn y un único bubble', async () => {
     await renderPreSeeded();
 
     let resolveTurn!: (v: unknown) => void;
@@ -158,11 +158,16 @@ describe('chat — guard de doble-tap en QuickReplyChips', () => {
       () => new Promise((res) => { resolveTurn = res; }),
     );
 
+    // Doble-tap verdaderamente síncrono: ambos presses dentro del MISMO
+    // act(), sin flush entre medias — el chip sigue montado y ambos handlers
+    // ven loading=false (closure stale). Solo el guard síncrono de
+    // pendingRef puede parar el segundo. Un press-2 tras desmontar el chip
+    // (test anterior) era un falso positivo.
     const chip = screen.getByText('2 días');
-    fireEvent.press(chip);
-    // Segundo tap inmediato: con el turn en vuelo (loading=true) no debe
-    // disparar otro chatTurn ni appendear otro bubble.
-    fireEvent.press(chip);
+    await act(async () => {
+      fireEvent.press(chip);
+      fireEvent.press(chip);
+    });
 
     // init (1) + primer tap (1) = 2. El doble-tap no suma.
     expect(mockChatTurn).toHaveBeenCalledTimes(2);
@@ -181,6 +186,38 @@ describe('chat — guard de doble-tap en QuickReplyChips', () => {
     // Tras resolver, sigue habiendo un único bubble y ningún turn extra
     expect(mockChatTurn).toHaveBeenCalledTimes(2);
     expect(screen.getAllByText('2 días')).toHaveLength(1);
+  });
+});
+
+describe('chat — input post-ready (#61)', () => {
+  it('con ready=true el input sigue editable y el envío dispara otro turn', async () => {
+    mockGetSavedSessionId.mockResolvedValue(null);
+    mockUseTripContext.mockReturnValue({ city: 'Madrid' });
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({ aiMessage: 'Listo para generar tu plan.', ready: true, quickReplies: [] }),
+    );
+    render(<ChatScreen />);
+    await waitFor(() => expect(screen.getByText('Listo para generar tu plan.')).toBeTruthy());
+
+    // CTA de generación visible y campo de texto activo (correcciones via MergeSlots)
+    expect(screen.getByText('chat.buildPlan')).toBeTruthy();
+    const input = screen.getByPlaceholderText('chat.inputPlaceholder');
+    expect(input.props.editable).toBe(true);
+
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({ aiMessage: 'Anotado, sin gluten.', ready: true, quickReplies: [], turnCount: 2 }),
+    );
+    fireEvent.changeText(input, 'sin gluten');
+    fireEvent.press(screen.getByTestId('chat-send-btn'));
+
+    await waitFor(() => expect(screen.getByText('Anotado, sin gluten.')).toBeTruthy());
+    expect(mockChatTurn).toHaveBeenCalledTimes(2);
+    expect(mockChatTurn).toHaveBeenLastCalledWith({
+      sessionId: 's1',
+      message: 'sin gluten',
+      quickReplyId: null,
+    });
+    expect(screen.getByText('sin gluten')).toBeTruthy();
   });
 });
 
