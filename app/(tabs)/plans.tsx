@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
+import { useApiState } from '../../lib/use-api-state';
 import { runBulkWithConcurrency } from '../../lib/plan/bulk-ops';
 import { useAuth } from '../../lib/auth';
 import { getCached, setCache, isFresh } from '../../lib/api-cache';
@@ -167,39 +168,32 @@ export default function PlansScreen() {
     navigation.setOptions({ headerShown: false, headerLeft: undefined });
   }, [navigation]);
 
-  // Stale-while-revalidate: show cached data instantly (preloaded during splash)
+  // Stale-while-revalidate: show cached data instantly (preloaded during splash).
+  // useApiState conserva la cache en fallo de revalidación y solo expone error
+  // cuando no hay data que mostrar.
   const cached = getCached<Plan[]>(PLANS_CACHE_KEY);
-  const [plans, setPlans] = useState<Plan[]>(cached ?? []);
-  const [loading, setLoading] = useState(!cached);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: plansData,
+    loading,
+    refreshing,
+    error,
+    refresh: onRefresh,
+  } = useApiState<Plan[]>(
+    async () => {
+      const res = await api<{ plans: Plan[] }>('/plans?showcase=true');
+      if (!res.data) return { data: null, error: res.error ?? t('plans.loadError') };
+      return { data: sortPlans(res.data.plans ?? []), error: null };
+    },
+    {
+      initialData: cached ?? undefined,
+      skip: !!cached && isFresh(PLANS_CACHE_KEY),
+      // En onSuccess y no en el fetcher: los resultados descartados por
+      // out-of-order no deben escribir la cache.
+      onSuccess: (list) => setCache(PLANS_CACHE_KEY, list),
+    },
+  );
+  const plans = plansData ?? [];
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-
-  const fetchPlans = useCallback(async () => {
-    const res = await api<{ plans: Plan[] }>('/plans?showcase=true');
-    if (res.data) {
-      const list = sortPlans(res.data.plans ?? []);
-      setPlans(list);
-      setCache(PLANS_CACHE_KEY, list);
-      setError(null);
-    } else if (!cached) {
-      setError(res.error ?? 'Failed to load plans');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (cached && isFresh(PLANS_CACHE_KEY)) {
-      setLoading(false);
-      return;
-    }
-    fetchPlans().finally(() => setLoading(false));
-  }, [fetchPlans]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchPlans();
-    setRefreshing(false);
-  }, [fetchPlans]);
 
   // Filter plans based on selected category
   const filteredPlans = selectedCategory
@@ -235,7 +229,7 @@ export default function PlansScreen() {
         sub: t('plans.exploreCuratedSub'),
         onPress: () => {
           setMode('curated');
-          if (!cached) fetchPlans().finally(() => setLoading(false));
+          if (!cached) onRefresh();
         },
       },
       {

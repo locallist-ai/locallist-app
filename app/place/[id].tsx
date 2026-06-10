@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { useResponsive } from '../../lib/responsive';
 import { formatPriceLabel } from '../../lib/helpers/price';
 import { api } from '../../lib/api';
+import { useApiState } from '../../lib/use-api-state';
 import { track } from '../../lib/analytics';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
 import { getOpenState } from '../../lib/openingHours';
@@ -58,9 +59,10 @@ export default function PlaceDetailScreen() {
   const { short } = useResponsive();
   const HERO_MAX = short ? 220 : 280;
 
-  const [place, setPlace] = useState<Place | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: place, loading, error } = useApiState<Place>(
+    () => api<Place>(`/places/${id}`),
+    { deps: [id] },
+  );
 
   // Parallax scroll tracking
   const scrollY = useSharedValue(0);
@@ -82,25 +84,6 @@ export default function PlaceDetailScreen() {
 
   useEffect(() => {
     if (id) track({ event: 'place_viewed', placeId: id });
-  }, [id]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await api<Place>(`/places/${id}`);
-        if (cancelled) return;
-        if (res.data) {
-          setPlace(res.data);
-        } else {
-          setError(res.error ?? t('place.loadError'));
-        }
-      } catch {
-        if (!cancelled) setError(t('place.networkError'));
-      }
-      if (!cancelled) setLoading(false);
-    })();
-    return () => { cancelled = true; };
   }, [id]);
 
   const openInMaps = () => {
