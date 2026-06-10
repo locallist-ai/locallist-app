@@ -302,7 +302,7 @@ export default function ChatScreen() {
           onPress={() => router.back()}
           style={styles.headerBtn}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('common.back')}
         >
           <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
@@ -313,7 +313,7 @@ export default function ChatScreen() {
               style={styles.cityPill}
               activeOpacity={0.75}
               accessibilityRole="button"
-              accessibilityLabel={`City: ${preSeededCity}, tap to change`}
+              accessibilityLabel={t('chat.cityPillA11y', { city: preSeededCity })}
             >
               <Text style={styles.cityPillText} numberOfLines={1}>
                 {preSeededCity}
@@ -325,7 +325,7 @@ export default function ChatScreen() {
           onPress={handleReset}
           style={styles.headerBtn}
           accessibilityRole="button"
-          accessibilityLabel="Reset conversation"
+          accessibilityLabel={t('chat.resetA11y')}
         >
           <Ionicons name="refresh-outline" size={20} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>

@@ -10,7 +10,7 @@
 | **iOS Target** | iOS 16.0+ |
 | **Privacy** | Privacy manifest configured (4 API types, 3 data types, no tracking) |
 | **i18n** | i18next + expo-localization. EN + ES (España). Parity test: `lib/i18n/__tests__/parity.test.ts` |
-| **Tests** | Jest (jest-expo) — `npm test`. Suites in `lib/__tests__/`, `lib/plan/__tests__/`, `lib/follow/__tests__/`, `components/map/__tests__/` |
+| **Tests** | Jest (jest-expo) — `npm test`. Suites in `lib/__tests__/`, `lib/plan/__tests__/`, `lib/follow/__tests__/`, `components/map/__tests__/`, `components/chat/__tests__/` |
 | **Analytics** | PostHog via REST (`lib/analytics.ts`) — no-op unless `EXPO_PUBLIC_POSTHOG_KEY` is set |
 | **Errors** | Sentry (`@sentry/react-native`), init in `lib/sentry.ts` |
 
@@ -74,7 +74,11 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `follow/StopCard.tsx` | Stop display card: photo, metadata, WhyThisPlace |
 | `follow/BottomSheetStop.tsx` | Animated bottom sheet with swipe gestures |
 | `follow/FollowDaySheet.tsx` | Day overview sheet inside Follow Mode |
-| `plan/PlanCardPager.tsx` | Swipeable plan overview + per-stop cards |
+| `plan/PlanCardPager.tsx` | Pagination shell (~310 LoC): horizontal pager, current day, progress footer, swipe hint, back pill |
+| `plan/PlanEditorContext.tsx` | Context for plan editor state (days, isDirty, isSaving, dispatch, save) — provided from `app/plan/[id].tsx` |
+| `plan/PlanEditorModals.tsx` | `PlanEditorModalsHost`: owns move/add/replace modal state, renders MoveToDay + PlaceSearchModal above the pager; exposes request* via context |
+| `plan/PlanOverview.tsx` | Overview slide: owner variant (DraggableFlatList editor) + read-only variant, consumes both contexts |
+| `plan/DayStopsCarousel.tsx` | Per-stop slides for the current day inside the pager |
 | `plan-editor/DaySection.tsx` | Editable day section with add-stop affordance |
 | `plan-editor/EditableStopCard.tsx` | Inline-editable stop row |
 | `plan-editor/SwipeableStopCard.tsx` | Swipe-to-delete stop row |
