@@ -169,7 +169,6 @@ export type ChatGenerateRequest = {
 export type ChatMessage = {
   role: 'user' | 'ai';
   text: string;
-  quickReplies?: QuickReply[];
 };
 
 // ─── Profile ─────────────────────────────────────────────────────────────────

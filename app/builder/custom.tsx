@@ -287,7 +287,7 @@ export default function CustomBuilderScreen() {
                     activeOpacity={0.7}
                   >
                     <Text style={[s.durationText, days === d && s.durationTextActive]}>
-                      {t('builder.day', { count: d })}
+                      {t('common.dayCount', { count: d })}
                     </Text>
                   </TouchableOpacity>
                 ))}

@@ -93,8 +93,8 @@ export default function ChatScreen() {
             setSlots(data.slots);
             setReady(data.ready);
             setTurnCount(data.turnCount);
-            setMessages([{ role: 'ai', text: data.aiMessage, quickReplies: data.quickReplies }]);
-            setQuickReplies(data.quickReplies);
+            setMessages([{ role: 'ai', text: data.aiMessage }]);
+            setQuickReplies(data.ready ? [] : data.quickReplies);
             setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
             return;
           }
@@ -107,9 +107,8 @@ export default function ChatScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const appendAiMessage = useCallback((text: string, replies: QuickReply[] = []) => {
-    setMessages((prev) => [...prev, { role: 'ai', text, quickReplies: replies }]);
-    setQuickReplies(replies);
+  const appendAiMessage = useCallback((text: string) => {
+    setMessages((prev) => [...prev, { role: 'ai', text }]);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   }, []);
 
@@ -122,12 +121,16 @@ export default function ChatScreen() {
     async (message: string, quickReplyId: string | null = null) => {
       if (loading || generating) return;
       setLoading(true);
+      const prevReplies = quickReplies;
       setQuickReplies([]);
 
       try {
         const result = await chatTurn({ sessionId, message, quickReplyId });
 
         if (result.error || !result.data) {
+          // Error transitorio (429/red): LastOfferedChips sigue vigente en el
+          // server, así que los chips anteriores se restauran.
+          setQuickReplies(prevReplies);
           if (result.status === 429) {
             appendAiMessage(t('chat.rateLimited'));
           } else {
@@ -157,12 +160,13 @@ export default function ChatScreen() {
         if (data.ready) {
           track({ event: 'chat_ready', sessionId: newSessionId, turnCount: data.turnCount });
         }
-        appendAiMessage(data.aiMessage, data.ready ? [] : data.quickReplies);
+        appendAiMessage(data.aiMessage);
+        setQuickReplies(data.ready ? [] : data.quickReplies);
       } finally {
         setLoading(false);
       }
     },
-    [sessionId, loading, generating, appendAiMessage, t],
+    [sessionId, loading, generating, quickReplies, appendAiMessage, t],
   );
 
   const handleSend = useCallback(() => {
@@ -175,10 +179,13 @@ export default function ChatScreen() {
 
   const handleChipSelect = useCallback(
     (reply: QuickReply) => {
+      // Mismo pre-guard que handleSend: sin él, un doble-tap appendea el
+      // bubble del usuario y sendTurn descarta el envío en silencio.
+      if (loading || generating) return;
       appendUserMessage(reply.label);
       sendTurn(reply.label, reply.id);
     },
-    [appendUserMessage, sendTurn],
+    [loading, generating, appendUserMessage, sendTurn],
   );
 
   const handleGenerate = useCallback(async () => {
@@ -376,11 +383,7 @@ export default function ChatScreen() {
 
         {/* Quick reply chips */}
         {!ready && !loading && quickReplies.length > 0 && (
-          <QuickReplyChips
-            replies={quickReplies}
-            onSelect={handleChipSelect}
-            disabled={loading || generating}
-          />
+          <QuickReplyChips replies={quickReplies} onSelect={handleChipSelect} />
         )}
 
         {/* Input row */}

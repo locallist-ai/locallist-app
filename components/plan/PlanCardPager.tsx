@@ -80,6 +80,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   totalDays,
   safeAreaTop = 0,
 }) => {
+  const { t } = useTranslation();
   const [slide, setSlide] = useState(0);
   const [hintVisible, setHintVisible] = useState(true);
   const scrollRef = useRef<ScrollView>(null);
@@ -268,7 +269,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
           style={[styles.backPill, { top: safeAreaTop + spacing.xs }]}
           onPress={handleBackPress}
           accessibilityRole="button"
-          accessibilityLabel={slide > 0 ? 'Back to overview' : 'Go back'}
+          accessibilityLabel={slide > 0 ? t('plan.backToOverview') : t('plan.goBack')}
           activeOpacity={0.7}
         >
           <Ionicons name="chevron-back" size={22} color={colors.deepOcean} />
@@ -367,7 +368,7 @@ const OverviewSlot: React.FC<OverviewSlotProps> = React.memo(({
 }) => {
   const { t } = useTranslation();
   const heroFallback = (plan.category ?? plan.type ?? 'Culture') as Category;
-  const heroSubtitle = `${plan.city} · ${t('builder.day', { count: plan.durationDays })}`;
+  const heroSubtitle = `${plan.city} · ${t('common.dayCount', { count: plan.durationDays })}`;
 
   const stopsForCurrentDay = useMemo(
     () =>

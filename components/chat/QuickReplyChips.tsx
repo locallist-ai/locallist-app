@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, borderRadius } from '../../lib/theme';
 import type { QuickReply } from '../../lib/types';
@@ -7,10 +7,9 @@ import type { QuickReply } from '../../lib/types';
 type Props = {
   replies: QuickReply[];
   onSelect: (reply: QuickReply) => void;
-  disabled?: boolean;
 };
 
-export function QuickReplyChips({ replies, onSelect, disabled }: Props) {
+export function QuickReplyChips({ replies, onSelect }: Props) {
   if (replies.length === 0) return null;
 
   return (
@@ -23,17 +22,14 @@ export function QuickReplyChips({ replies, onSelect, disabled }: Props) {
       {replies.map((reply) => (
         <TouchableOpacity
           key={reply.id}
-          style={[styles.chip, disabled && styles.chipDisabled]}
+          style={styles.chip}
           onPress={() => {
-            if (disabled) return;
             Haptics.selectionAsync();
             onSelect(reply);
           }}
           activeOpacity={0.7}
         >
-          <Text style={[styles.chipText, disabled && styles.chipTextDisabled]}>
-            {reply.label}
-          </Text>
+          <Text style={styles.chipText}>{reply.label}</Text>
         </TouchableOpacity>
       ))}
     </ScrollView>
@@ -55,16 +51,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  chipDisabled: {
-    borderColor: 'rgba(255,255,255,0.2)',
-    opacity: 0.5,
-  },
   chipText: {
     fontFamily: fonts.bodyMedium,
     fontSize: 14,
     color: colors.paperWhite,
-  },
-  chipTextDisabled: {
-    color: 'rgba(255,255,255,0.4)',
   },
 });
