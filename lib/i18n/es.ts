@@ -261,6 +261,10 @@ export default {
     startFollowMode: 'Iniciar Follow Mode',
     signInToFollow: 'Inicia sesión para seguir',
     followThisPlan: 'Seguir este plan',
+    overview: 'Resumen',
+    stopOf: 'Parada {{current}} de {{total}}',
+    swipeHint: 'Desliza',
+    dayLabel: 'Día {{day}}',
   },
   auth: {
     emailPlaceholder: 'tu@email.com',

@@ -90,10 +90,10 @@ export const PlanOverview: React.FC<PlanOverviewProps> = React.memo(({
               style={[styles.summaryDayChip, active && styles.summaryDayChipActive]}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={`Day ${d}`}
+              accessibilityLabel={t('plan.dayLabel', { day: d })}
             >
               <Text style={[styles.summaryDayChipText, active && styles.summaryDayChipTextActive]}>
-                Day {d}
+                {t('plan.dayLabel', { day: d })}
               </Text>
             </TouchableOpacity>
           );
@@ -335,10 +335,10 @@ export const PlanOverview: React.FC<PlanOverviewProps> = React.memo(({
                     style={[styles.summaryDayChip, active && styles.summaryDayChipActive]}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
-                    accessibilityLabel={`Day ${d}`}
+                    accessibilityLabel={t('plan.dayLabel', { day: d })}
                   >
                     <Text style={[styles.summaryDayChipText, active && styles.summaryDayChipTextActive]}>
-                      Day {d}
+                      {t('plan.dayLabel', { day: d })}
                     </Text>
                   </TouchableOpacity>
                 );

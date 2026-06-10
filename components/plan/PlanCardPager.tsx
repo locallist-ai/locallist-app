@@ -131,11 +131,11 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   };
 
   const slideLabel = useMemo(() => {
-    if (slide === 0) return 'Overview';
+    if (slide === 0) return t('plan.overview');
     const stop = stopsForDay[slide - 1];
     if (!stop) return '';
-    return `Stop ${slide} of ${stopsForDay.length}`;
-  }, [slide, stopsForDay]);
+    return t('plan.stopOf', { current: slide, total: stopsForDay.length });
+  }, [slide, stopsForDay, t]);
 
   const handleDayChange = (day: number) => {
     Haptics.selectionAsync();
@@ -216,7 +216,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
 
           {hintVisible && hasMoreSlides && slide === 0 && !isOwner && (
             <Animated.View pointerEvents="none" style={[styles.swipeHint, hintAnimStyle]}>
-              <Text style={styles.swipeHintText}>Swipe</Text>
+              <Text style={styles.swipeHintText}>{t('plan.swipeHint')}</Text>
               <Ionicons name="chevron-forward" size={16} color={colors.sunsetOrange} />
               <Ionicons name="chevron-forward" size={16} color={colors.sunsetOrange} style={styles.swipeHintSecondChevron} />
             </Animated.View>
