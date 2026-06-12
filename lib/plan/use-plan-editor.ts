@@ -7,7 +7,7 @@ export type DayGroup = {
   stops: (PlanStop & { id?: string })[];
 };
 
-type State = {
+export type EditorState = {
   days: DayGroup[];
   isDirty: boolean;
   isSaving: boolean;
@@ -47,7 +47,7 @@ function padDaysTo(durationDays: number, apiDays: DayGroup[]): DayGroup[] {
   return days;
 }
 
-function reducer(state: State, action: EditorAction): State {
+export function reducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
     case 'INIT':
       return { days: action.days, isDirty: false, isSaving: false };

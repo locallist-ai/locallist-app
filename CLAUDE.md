@@ -70,6 +70,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `ui/design-system/` | ChoiceChip, EditorialTitle, StepSubtitle, ProgressDots — wizard design system |
 | `chat/` | Chat UI: MessageBubble, QuickReplyChips, SlotBadges, SaveProfileSheet |
 | `map/PlanMap.tsx` | MapLibre map: pins, route line, animated camera |
+| `map/route-geojson.ts` | Pure helper: builds the route LineString GeoJSON (segments by active day or straight-line fallback) |
 | `map/useOfflineTiles.ts` | Offline tile caching hook |
 | `follow/StopCard.tsx` | Stop display card: photo, metadata, WhyThisPlace |
 | `follow/BottomSheetStop.tsx` | Animated bottom sheet with swipe gestures |

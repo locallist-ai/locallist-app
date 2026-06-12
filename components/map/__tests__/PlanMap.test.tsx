@@ -1,8 +1,10 @@
 import polyline from '@mapbox/polyline';
+import { buildRouteGeoJSON } from '../route-geojson';
 import type { RouteSegment } from '../../../lib/types';
 
-// Test the polyline decode helper independently since PlanMap uses it.
-// We exercise the same logic as buildRouteGeoJSON without needing to mount the MapLibre component.
+// Tests de la lógica de ruta de PlanMap a través de `buildRouteGeoJSON`,
+// la MISMA función que consume el useMemo del componente (extraída a
+// `route-geojson.ts`), sin necesidad de montar MapLibre.
 
 const decodeSegment = (encodedPolyline: string) =>
   polyline.decode(encodedPolyline, 6).map(([lat, lng]) => [lng, lat]);
@@ -40,7 +42,7 @@ describe('@mapbox/polyline decode (precision 6)', () => {
   });
 });
 
-describe('buildRouteGeoJSON logic', () => {
+describe('buildRouteGeoJSON', () => {
   const makeSeg = (day: number, from: number, to: number, poly: string): RouteSegment => ({
     dayNumber: day,
     fromOrderIndex: from,
@@ -50,45 +52,65 @@ describe('buildRouteGeoJSON logic', () => {
     durationSeconds: 300,
   });
 
+  const stops = [
+    { latitude: 40.4168, longitude: -3.7038 },
+    { latitude: 40.413, longitude: -3.6921 },
+  ];
+
   const encodedA = polyline.encode([[40.4168, -3.7038], [40.413, -3.6921]], 6);
   const encodedB = polyline.encode([[40.413, -3.6921], [40.42, -3.69]], 6);
 
-  it('devuelve segmentos del día activo cuando routeSegments está presente', () => {
+  const lineStrings = (geo: GeoJSON.GeoJSON) => {
+    expect(geo.type).toBe('FeatureCollection');
+    return (geo as GeoJSON.FeatureCollection).features.map(
+      (f) => (f.geometry as GeoJSON.LineString).coordinates,
+    );
+  };
+
+  it('con routeSegments produce una Feature por segmento del día activo, decodificada a [lng, lat]', () => {
     const segments = [makeSeg(1, 0, 1, encodedA), makeSeg(2, 0, 1, encodedB)];
-    const daySegs = segments.filter((s) => s.dayNumber === 1);
-    expect(daySegs).toHaveLength(1);
-    expect(daySegs[0].encodedPolyline).toBe(encodedA);
+
+    const geo = buildRouteGeoJSON(stops, segments, 1);
+
+    const lines = lineStrings(geo);
+    expect(lines).toHaveLength(1);
+    // El segmento del día 2 queda fuera; el del día 1 se decodifica entero
+    expect(lines[0]).toHaveLength(2);
+    expect(lines[0][0][0]).toBeCloseTo(-3.7038, 3);
+    expect(lines[0][0][1]).toBeCloseTo(40.4168, 3);
+    expect(lines[0][1][0]).toBeCloseTo(-3.6921, 3);
+    expect(lines[0][1][1]).toBeCloseTo(40.413, 3);
   });
 
-  it('filtra correctamente por día activo', () => {
+  it('sin activeDayNumber incluye los segmentos de todos los días', () => {
     const segments = [makeSeg(1, 0, 1, encodedA), makeSeg(2, 0, 1, encodedB)];
-    expect(segments.filter((s) => s.dayNumber === 2)).toHaveLength(1);
-    expect(segments.filter((s) => s.dayNumber === 3)).toHaveLength(0);
+
+    const geo = buildRouteGeoJSON(stops, segments, undefined);
+
+    expect(lineStrings(geo)).toHaveLength(2);
   });
 
-  it('decodifica polyline y produce coordenadas [lng, lat]', () => {
-    const coords = decodeSegment(encodedA);
-    // First coord should be [-3.7038, 40.4168] (lng, lat)
-    expect(coords[0][0]).toBeCloseTo(-3.7038, 3);
-    expect(coords[0][1]).toBeCloseTo(40.4168, 3);
+  it('sin routeSegments cae a una línea recta entre los stops', () => {
+    const geo = buildRouteGeoJSON(stops, undefined);
+
+    const lines = lineStrings(geo);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toEqual([
+      [-3.7038, 40.4168],
+      [-3.6921, 40.413],
+    ]);
   });
 
-  it('cuando no hay routeSegments usa fallback a línea recta', () => {
-    const daySegs: RouteSegment[] = [];
-    // If daySegs is empty, buildRouteGeoJSON falls back to straight line coords
-    expect(daySegs).toHaveLength(0);
-  });
-
-  it('memoización: la misma referencia de segments no re-decodifica', () => {
-    const decodeSpy = jest.spyOn(polyline, 'decode');
+  it('si ningún segmento pertenece al día activo también cae a la línea recta', () => {
     const segments = [makeSeg(1, 0, 1, encodedA)];
-    // Simulate the useMemo behavior: same deps = same result
-    const result1 = segments.filter((s) => s.dayNumber === 1).map((s) => decodeSegment(s.encodedPolyline));
-    const result2 = segments.filter((s) => s.dayNumber === 1).map((s) => decodeSegment(s.encodedPolyline));
-    // Both calls happened (no memoization at this level, memoization is in useMemo in the component)
-    expect(decodeSpy).toHaveBeenCalled();
-    decodeSpy.mockRestore();
-    // Verify results are consistent
-    expect(result1[0]).toEqual(result2[0]);
+
+    const geo = buildRouteGeoJSON(stops, segments, 3);
+
+    const lines = lineStrings(geo);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toEqual([
+      [-3.7038, 40.4168],
+      [-3.6921, 40.413],
+    ]);
   });
 });
