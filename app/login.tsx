@@ -1,682 +1,157 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import {
   View,
   Text,
-  TextInput,
-  Pressable,
-  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../lib/theme';
 import { useResponsive } from '../lib/responsive';
-import { api, getAccessToken } from '../lib/api';
-import { useAuth } from '../lib/auth';
-import { track } from '../lib/analytics';
-import type { AuthResponse } from '../lib/types';
-
-// Required for Google Auth redirect to close the browser on web
-WebBrowser.maybeCompleteAuthSession();
-
-type AuthStep = 'choose' | 'credentials';
-type CredentialsMode = 'login' | 'register';
-type AuthMode = 'signin' | 'signup';
-
-const PASSWORD_CHECKS: Array<{ key: 'auth.passwordRuleLength' | 'auth.passwordRuleUpper' | 'auth.passwordRuleLower' | 'auth.passwordRuleDigit' | 'auth.passwordRuleSpecial'; check: (p: string) => boolean }> = [
-  { key: 'auth.passwordRuleLength', check: (p: string) => p.length >= 8 },
-  { key: 'auth.passwordRuleUpper', check: (p: string) => /[A-Z]/.test(p) },
-  { key: 'auth.passwordRuleLower', check: (p: string) => /[a-z]/.test(p) },
-  { key: 'auth.passwordRuleDigit', check: (p: string) => /[0-9]/.test(p) },
-  { key: 'auth.passwordRuleSpecial', check: (p: string) => /[^A-Za-z0-9]/.test(p) },
-];
-
-async function trackAuthEvent(provider: 'apple' | 'google' | 'email') {
-  const hadToken = await getAccessToken();
-  track({ event: hadToken ? 'sign_in' : 'sign_up', provider });
-}
+import { useAuthForm } from '../lib/auth/useAuthForm';
+import { AuthModeToggle } from '../components/auth/AuthModeToggle';
+import { AppleSignInButton } from '../components/auth/AppleSignInButton';
+import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
+import { EmailSignInButton } from '../components/auth/EmailSignInButton';
+import { CredentialsForm } from '../components/auth/CredentialsForm';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
-  const { login } = useAuth();
   const { compact } = useResponsive();
-  const [step, setStep] = useState<AuthStep>('choose');
-  const [authMode, setAuthMode] = useState<AuthMode>('signin');
-  const [credentialsMode, setCredentialsMode] = useState<CredentialsMode>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [appleAvailable, setAppleAvailable] = useState(false);
-  const emailInputRef = useRef<TextInput>(null);
-
-  // Check Apple Sign In availability on mount
-  useEffect(() => {
-    AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
-  }, []);
-
-  // Focus email input after step transition animation completes (iOS crash prevention)
-  useEffect(() => {
-    if (step === 'credentials') {
-      const timer = setTimeout(() => {
-        emailInputRef.current?.focus();
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [step]);
-
-  // Google OAuth setup — pass a dummy clientId when env vars are missing to satisfy
-  // the hook's invariant (can't skip hooks conditionally). The Google button is hidden
-  // when unconfigured so the dummy value is never used for a real auth flow.
-  const googleConfigured = !!process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
-  const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || 'unconfigured.apps.googleusercontent.com',
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-  });
-
-  // Handle Google OAuth response
-  useEffect(() => {
-    if (!googleResponse) return;
-
-    if (googleResponse.type !== 'success') {
-      setLoading(null);
-      if (googleResponse.type === 'error') {
-        setError(t('auth.errorGoogleFailed'));
-      }
-      return;
-    }
-
-    const idToken = googleResponse.params.id_token;
-    if (!idToken) {
-      setError(t('auth.errorGoogleNoToken'));
-      setLoading(null);
-      return;
-    }
-
-    (async () => {
-      const res = await api<AuthResponse>(
-        '/auth/signin',
-        {
-          method: 'POST',
-          body: { provider: 'google', idToken },
-        },
-      );
-
-      if (res.data) {
-        await trackAuthEvent('google');
-        await login(res.data.user, res.data.accessToken, res.data.refreshToken);
-      } else {
-        setError(res.error ?? t('auth.errorGoogleFailed'));
-      }
-      setLoading(null);
-    })();
-  }, [googleResponse]);
-
-  const handleAppleSignIn = async () => {
-    try {
-      setError(null);
-      setLoading('apple');
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
-
-      const name = credential.fullName
-        ? [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(' ')
-        : undefined;
-
-      const res = await api<AuthResponse>(
-        '/auth/signin',
-        {
-          method: 'POST',
-          body: {
-            provider: 'apple',
-            idToken: credential.identityToken,
-            name: name || undefined,
-          },
-        },
-      );
-
-      if (res.data) {
-        await trackAuthEvent('apple');
-        await login(res.data.user, res.data.accessToken, res.data.refreshToken);
-      } else {
-        setError(res.error ?? t('auth.errorLoginFailed'));
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error && 'code' in err && (err as { code: string }).code === 'ERR_REQUEST_CANCELED') return;
-      setError(t('auth.errorAppleFailed'));
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setError(null);
-
-    if (!googleConfigured) {
-      setError(t('auth.errorGoogleNotConfigured'));
-      return;
-    }
-
-    setLoading('google');
-
-    if (!googleRequest) {
-      setError(t('auth.errorGoogleNotReady'));
-      setLoading(null);
-      return;
-    }
-
-    try {
-      await googlePromptAsync();
-    } catch {
-      setError(t('auth.errorGoogleFailed'));
-      setLoading(null);
-    }
-  };
-
-  const handleRegister = async () => {
-    setError(null);
-
-    // Validate inputs
-    if (!email.trim() || !email.includes('@')) {
-      setError(t('auth.errorInvalidEmail'));
-      return;
-    }
-    if (!password) {
-      setError(t('auth.errorPasswordRequired'));
-      return;
-    }
-
-    setLoading('email');
-
-    const res = await api<AuthResponse>(
-      '/auth/register',
-      {
-        method: 'POST',
-        body: {
-          email: email.trim(),
-          password,
-          name: name.trim() || undefined,
-        },
-      },
-    );
-
-    setLoading(null);
-
-    if (res.data) {
-      track({ event: 'sign_up', provider: 'email' });
-      await login(res.data.user, res.data.accessToken, res.data.refreshToken);
-    } else {
-      setError(res.error ?? t('auth.errorRegistrationFailed'));
-    }
-  };
-
-  const handleLogin = async () => {
-    setError(null);
-
-    // Validate inputs
-    if (!email.trim() || !email.includes('@')) {
-      setError(t('auth.errorInvalidEmail'));
-      return;
-    }
-    if (!password) {
-      setError(t('auth.errorPasswordRequired'));
-      return;
-    }
-
-    setLoading('email');
-
-    const res = await api<AuthResponse>(
-      '/auth/login',
-      {
-        method: 'POST',
-        body: {
-          email: email.trim(),
-          password,
-        },
-      },
-    );
-
-    setLoading(null);
-
-    if (res.data) {
-      await trackAuthEvent('email');
-      await login(res.data.user, res.data.accessToken, res.data.refreshToken);
-    } else {
-      setError(res.error ?? t('auth.errorLoginFailed'));
-    }
-  };
-
-  // Calculate password strength (for register mode only)
-  const passwordStrength = credentialsMode === 'register'
-    ? PASSWORD_CHECKS.filter(r => r.check(password)).length
-    : 0;
-
-  // ─── Main login screen ────────────────────────────
+  const {
+    step,
+    authMode,
+    credentialsMode,
+    email,
+    password,
+    name,
+    loading,
+    error,
+    appleAvailable,
+    passwordStrength,
+    emailInputRef,
+    setEmail,
+    setPassword,
+    setName,
+    handleAppleSignIn,
+    handleGoogleSignIn,
+    selectAuthMode,
+    goToCredentials,
+    toggleCredentialsMode,
+    backToChoose,
+    submitCredentials,
+  } = useAuthForm();
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.bgMain }}
+      style={s.root}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          paddingHorizontal: spacing.xl,
-        }}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <Image
           source={require('../assets/images/icon.png')}
-          style={{
-            width: compact ? 120 : 180,
-            height: compact ? 120 : 180,
-            marginTop: compact ? spacing.md : spacing.xxl,
-            marginBottom: spacing.sm,
-          }}
+          style={[
+            s.logo,
+            {
+              width: compact ? 120 : 180,
+              height: compact ? 120 : 180,
+              marginTop: compact ? spacing.md : spacing.xxl,
+            },
+          ]}
           resizeMode="contain"
         />
-        <Text
-          style={{
-            fontFamily: fonts.headingBold,
-            fontSize: 26,
-            color: colors.deepOcean,
-            marginBottom: spacing.sm,
-            textAlign: 'center',
-          }}
-        >
+        <Text style={s.title}>
           {step === 'choose'
-            ? (authMode === 'signin' ? t('auth.welcomeBack') : t('auth.joinLocalList'))
+            ? authMode === 'signin' ? t('auth.welcomeBack') : t('auth.joinLocalList')
             : credentialsMode === 'login' ? t('auth.logIn') : t('auth.createAccount')}
         </Text>
-        <Text
-          style={{
-            fontFamily: fonts.body,
-            fontSize: 15,
-            color: colors.textSecondary,
-            textAlign: 'center',
-            lineHeight: 22,
-          }}
-        >
-          {t('auth.taglineLine1')}
-        </Text>
-        <Text
-          style={{
-            fontFamily: fonts.body,
-            fontSize: 15,
-            color: colors.textSecondary,
-            textAlign: 'center',
-            marginBottom: spacing.lg,
-            lineHeight: 22,
-          }}
-        >
-          {t('auth.taglineLine2')}
-        </Text>
+        <Text style={s.tagline}>{t('auth.taglineLine1')}</Text>
+        <Text style={[s.tagline, s.taglineLast]}>{t('auth.taglineLine2')}</Text>
 
         {error && (
-          <View
-            style={{
-              backgroundColor: colors.error + '12',
-              borderRadius: borderRadius.md,
-              borderCurve: 'continuous',
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              marginBottom: spacing.md,
-              width: '100%',
-            }}
-          >
-            <Text
-              selectable
-              style={{
-                fontFamily: fonts.body,
-                fontSize: 14,
-                color: colors.error,
-                textAlign: 'center',
-              }}
-            >
+          <View style={s.errorBox}>
+            <Text selectable style={s.errorText}>
               {error}
             </Text>
           </View>
         )}
 
         {step === 'choose' ? (
-          <View style={{ width: '100%', gap: 12 }}>
-            {/* Top toggle Log in / Sign up — deja claro que las 3 opciones
-                de abajo sirven tanto para registrarse como para volver a entrar. */}
-            <View
-              style={{
-                flexDirection: 'row',
-                backgroundColor: colors.bgCard,
-                borderRadius: borderRadius.lg,
-                borderCurve: 'continuous',
-                padding: 4,
-                marginBottom: spacing.sm,
-              }}
-            >
-              {(['signin', 'signup'] as const).map((mode) => {
-                const active = authMode === mode;
-                return (
-                  <Pressable
-                    key={mode}
-                    onPress={() => { setError(null); setAuthMode(mode); }}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      paddingVertical: 10,
-                      borderRadius: borderRadius.md,
-                      borderCurve: 'continuous',
-                      backgroundColor: active ? colors.sunsetOrange : 'transparent',
-                      alignItems: 'center',
-                      opacity: pressed ? 0.85 : 1,
-                    })}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: fonts.bodySemiBold,
-                        fontSize: 14,
-                        color: active ? '#FFFFFF' : colors.textSecondary,
-                      }}
-                    >
-                      {mode === 'signin' ? t('auth.logIn') : t('auth.signUp')}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Apple */}
+          <View style={s.choiceStack}>
+            <AuthModeToggle authMode={authMode} onSelect={selectAuthMode} />
             {appleAvailable && (
-              <Pressable
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 10,
-                  width: '100%',
-                  paddingVertical: 16,
-                  borderRadius: borderRadius.lg,
-                  borderCurve: 'continuous',
-                  backgroundColor: '#000000',
-                  opacity: loading ? 0.6 : pressed ? 0.85 : 1,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
-                onPress={handleAppleSignIn}
-                disabled={!!loading}
-              >
-                {loading === 'apple' ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="logo-apple" size={20} color="#FFFFFF" />
-                    <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' }}>
-                      {authMode === 'signin' ? t('auth.logInWithApple') : t('auth.signUpWithApple')}
-                    </Text>
-                  </>
-                )}
-              </Pressable>
+              <AppleSignInButton authMode={authMode} loading={loading} onPress={handleAppleSignIn} />
             )}
-
-            {/* Google — siempre visible. Si el env var no está configurado,
-                handleGoogleSignIn muestra un error claro en runtime en lugar
-                de que el botón desaparezca sin explicación. */}
-            <Pressable
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                width: '100%',
-                paddingVertical: 16,
-                borderRadius: borderRadius.lg,
-                borderCurve: 'continuous',
-                backgroundColor: colors.bgCard,
-                borderWidth: 1.5,
-                borderColor: colors.borderColor,
-                opacity: loading ? 0.6 : pressed ? 0.85 : 1,
-                transform: [{ scale: pressed ? 0.98 : 1 }],
-              })}
-              onPress={handleGoogleSignIn}
-              disabled={!!loading}
-            >
-              {loading === 'google' ? (
-                <ActivityIndicator size="small" color={colors.deepOcean} />
-              ) : (
-                <>
-                  <Ionicons name="logo-google" size={20} color={colors.deepOcean} />
-                  <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.deepOcean }}>
-                    {authMode === 'signin' ? t('auth.logInWithGoogle') : t('auth.signUpWithGoogle')}
-                  </Text>
-                </>
-              )}
-            </Pressable>
-
-            {/* Email */}
-            <Pressable
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                width: '100%',
-                paddingVertical: 16,
-                borderRadius: borderRadius.lg,
-                borderCurve: 'continuous',
-                backgroundColor: 'transparent',
-                borderWidth: 1.5,
-                borderColor: colors.sunsetOrange,
-                opacity: loading ? 0.6 : pressed ? 0.85 : 1,
-                transform: [{ scale: pressed ? 0.98 : 1 }],
-              })}
-              onPress={() => {
-                setError(null);
-                setStep('credentials');
-                setCredentialsMode(authMode === 'signin' ? 'login' : 'register');
-              }}
-              disabled={!!loading}
-            >
-              <Ionicons name="mail-outline" size={20} color={colors.sunsetOrange} />
-              <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.sunsetOrange }}>
-                {authMode === 'signin' ? t('auth.logInWithEmail') : t('auth.signUpWithEmail')}
-              </Text>
-            </Pressable>
+            <GoogleSignInButton authMode={authMode} loading={loading} onPress={handleGoogleSignIn} />
+            <EmailSignInButton authMode={authMode} loading={loading} onPress={goToCredentials} />
           </View>
         ) : (
-          <View style={{ width: '100%', gap: 12 }}>
-            {/* Email Input */}
-            <TextInput
-              style={{
-                fontFamily: fonts.body,
-                fontSize: 16,
-                color: colors.textMain,
-                backgroundColor: colors.bgCard,
-                borderWidth: 1,
-                borderColor: colors.borderColor,
-                borderRadius: borderRadius.lg,
-                borderCurve: 'continuous',
-                paddingHorizontal: spacing.md,
-                paddingVertical: 14,
-              }}
-              placeholder={t('auth.emailPlaceholder')}
-              placeholderTextColor={colors.textSecondary}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              ref={emailInputRef}
-            />
-
-            {/* Password Input */}
-            <TextInput
-              style={{
-                fontFamily: fonts.body,
-                fontSize: 16,
-                color: colors.textMain,
-                backgroundColor: colors.bgCard,
-                borderWidth: 1,
-                borderColor: colors.borderColor,
-                borderRadius: borderRadius.lg,
-                borderCurve: 'continuous',
-                paddingHorizontal: spacing.md,
-                paddingVertical: 14,
-              }}
-              placeholder={t('auth.passwordPlaceholder')}
-              placeholderTextColor={colors.textSecondary}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoComplete="password"
-            />
-
-            {/* Name Input (register only) */}
-            {credentialsMode === 'register' && (
-              <TextInput
-                style={{
-                  fontFamily: fonts.body,
-                  fontSize: 16,
-                  color: colors.textMain,
-                  backgroundColor: colors.bgCard,
-                  borderWidth: 1,
-                  borderColor: colors.borderColor,
-                  borderRadius: borderRadius.lg,
-                  borderCurve: 'continuous',
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: 14,
-                }}
-                placeholder={t('auth.namePlaceholder')}
-                placeholderTextColor={colors.textSecondary}
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-                autoComplete="name"
-              />
-            )}
-
-            {/* Password Requirements (register only) */}
-            {credentialsMode === 'register' && password && (
-              <View style={{ backgroundColor: colors.bgCard, borderRadius: borderRadius.md, padding: spacing.md, gap: spacing.sm }}>
-                {PASSWORD_CHECKS.map((rule, idx) => {
-                  const isMet = rule.check(password);
-                  return (
-                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                      <Ionicons
-                        name={isMet ? 'checkmark-circle' : 'ellipse-outline'}
-                        size={16}
-                        color={isMet ? colors.successEmerald : colors.textSecondary}
-                      />
-                      <Text
-                        style={{
-                          fontFamily: fonts.body,
-                          fontSize: 13,
-                          color: isMet ? colors.textMain : colors.textSecondary,
-                        }}
-                      >
-                        {t(rule.key)}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-
-            {/* Main Button */}
-            <Pressable
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                width: '100%',
-                paddingVertical: 16,
-                borderRadius: borderRadius.lg,
-                borderCurve: 'continuous',
-                backgroundColor: colors.sunsetOrange,
-                opacity:
-                  (credentialsMode === 'login' && (!email.trim() || !password)) ||
-                  (credentialsMode === 'register' && (!email.trim() || !password || passwordStrength < 5))
-                    ? 0.5
-                    : loading ? 0.6 : pressed ? 0.85 : 1,
-                transform: [{ scale: pressed ? 0.98 : 1 }],
-              })}
-              onPress={credentialsMode === 'login' ? handleLogin : handleRegister}
-              disabled={
-                loading !== null ||
-                (credentialsMode === 'login' && (!email.trim() || !password)) ||
-                (credentialsMode === 'register' && (!email.trim() || !password || passwordStrength < 5))
-              }
-            >
-              {loading === 'email' ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={{ fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' }}>
-                  {credentialsMode === 'login' ? t('auth.logInButton') : t('auth.createAccountButton')}
-                </Text>
-              )}
-            </Pressable>
-
-            {/* Toggle Register/Login */}
-            <Pressable
-              style={({ pressed }) => ({
-                paddingVertical: spacing.md,
-                alignItems: 'center' as const,
-                opacity: pressed ? 0.7 : 1,
-              })}
-              onPress={() => {
-                setError(null);
-                setPassword('');
-                setName('');
-                setCredentialsMode(credentialsMode === 'login' ? 'register' : 'login');
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: fonts.body,
-                  fontSize: 14,
-                  color: colors.textSecondary,
-                }}
-              >
-                {credentialsMode === 'login' ? t('auth.noAccount') : t('auth.alreadyHaveAccount')}
-                <Text style={{ color: colors.sunsetOrange, fontFamily: fonts.bodySemiBold }}>
-                  {credentialsMode === 'login' ? t('auth.createOne') : t('auth.logIn')}
-                </Text>
-              </Text>
-            </Pressable>
-
-            {/* Back Button */}
-            <Pressable
-              style={({ pressed }) => ({
-                paddingVertical: spacing.md,
-                alignItems: 'center' as const,
-                opacity: pressed ? 0.7 : 1,
-              })}
-              onPress={() => { setError(null); setStep('choose'); setEmail(''); setPassword(''); setName(''); }}
-            >
-              <Text
-                style={{
-                  fontFamily: fonts.bodyMedium,
-                  fontSize: 14,
-                  color: colors.sunsetOrange,
-                }}
-              >
-                {t('auth.back')}
-              </Text>
-            </Pressable>
-          </View>
+          <CredentialsForm
+            credentialsMode={credentialsMode}
+            email={email}
+            password={password}
+            name={name}
+            loading={loading}
+            passwordStrength={passwordStrength}
+            emailInputRef={emailInputRef}
+            onChangeEmail={setEmail}
+            onChangePassword={setPassword}
+            onChangeName={setName}
+            onSubmit={submitCredentials}
+            onToggleMode={toggleCredentialsMode}
+            onBack={backToChoose}
+          />
         )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bgMain },
+  scroll: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  logo: {
+    marginBottom: spacing.sm,
+  },
+  title: {
+    fontFamily: fonts.headingBold,
+    fontSize: 26,
+    color: colors.deepOcean,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  tagline: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  taglineLast: {
+    marginBottom: spacing.lg,
+  },
+  errorBox: {
+    backgroundColor: colors.error + '12',
+    borderRadius: borderRadius.md,
+    borderCurve: 'continuous',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: spacing.md,
+    width: '100%',
+  },
+  errorText: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.error,
+    textAlign: 'center',
+  },
+  choiceStack: { width: '100%', gap: 12 },
+});
