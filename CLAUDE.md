@@ -69,6 +69,8 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `ui/ConfirmModal.tsx` | Reusable confirm/cancel modal |
 | `ui/design-system/` | ChoiceChip, EditorialTitle, StepSubtitle, ProgressDots — wizard design system |
 | `chat/` | Chat UI: MessageBubble, QuickReplyChips, SlotBadges, SaveProfileSheet |
+| `account/` | Account screen sections: PlusUpsellCard, ProfileCard, TravelPreferencesSection (consumes useProfile), SettingsSection (settings + legal in-app + actions), DevToolsSection, LanguagePickerModal |
+| `auth/` | Login screen pieces: AuthModeToggle, AppleSignInButton, GoogleSignInButton, EmailSignInButton, CredentialsForm, PasswordStrengthIndicator (state/OAuth in `lib/auth/useAuthForm.ts`) |
 | `map/PlanMap.tsx` | MapLibre map: pins, route line, animated camera |
 | `map/route-geojson.ts` | Pure helper: builds the route LineString GeoJSON (segments by active day or straight-line fallback) |
 | `map/useOfflineTiles.ts` | Offline tile caching hook |
@@ -80,6 +82,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `plan/PlanEditorModals.tsx` | `PlanEditorModalsHost`: owns move/add/replace modal state, renders MoveToDay + PlaceSearchModal above the pager; exposes request* via context |
 | `plan/PlanOverview.tsx` | Overview slide: owner variant (DraggableFlatList editor) + read-only variant, consumes both contexts |
 | `plan/DayStopsCarousel.tsx` | Per-stop slides for the current day inside the pager |
+| `plan/ChooserMode.tsx` + `plan/MineMode.tsx` + `plan/CuratedMode.tsx` + `plan/SelectionBar.tsx` | Plans tab modes: chooser cards, my-plans list + bulk-select, curated filter/list, bulk-delete bar (orchestrated by `app/(tabs)/plans.tsx`) |
 | `plan-editor/DaySection.tsx` | Editable day section with add-stop affordance |
 | `plan-editor/EditableStopCard.tsx` | Inline-editable stop row |
 | `plan-editor/SwipeableStopCard.tsx` | Swipe-to-delete stop row |
@@ -95,6 +98,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 |---|---|
 | `api.ts` | API client: auto JWT refresh, SecureStore token storage |
 | `auth.ts` | AuthContext: user state, logout, isPro flag |
+| `auth/useAuthForm.ts` | Login/register flow hook: choose↔credentials step, Apple/Google OAuth, email validation, password strength (powers `app/login.tsx`) |
 | `theme.ts` | Brand tokens: colors, typography, spacing, borderRadius |
 | `types.ts` | Shared TypeScript types (Plan, Place, PlanStop, etc.) |
 | `i18n/` | i18next setup, EN/ES resources, parity test |
