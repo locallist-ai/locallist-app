@@ -16,7 +16,15 @@
     "preset": "jest-expo",
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@sentry/.*))"
-    ]
+    ],
+    "coverageThreshold": {
+      "global": {
+        "lines": 72,
+        "statements": 70,
+        "functions": 62,
+        "branches": 62
+      }
+    }
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
