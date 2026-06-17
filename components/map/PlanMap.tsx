@@ -8,8 +8,8 @@ import Animated, {
   withRepeat,
   withSpring,
 } from 'react-native-reanimated';
-import polyline from '@mapbox/polyline';
 import type { RouteSegment } from '../../lib/types';
+import { buildRouteGeoJSON } from './route-geojson';
 
 export interface MapStop {
   id: string;
@@ -113,41 +113,10 @@ export const PlanMap: React.FC<PlanMapProps> = ({
 
   const { center, bounds } = calculateBounds();
 
-  const routeGeoJSON = useMemo<GeoJSON.GeoJSON>(() => {
-    const daySegments = routeSegments?.filter(
-      (s) => activeDayNumber === undefined || s.dayNumber === activeDayNumber,
-    ) ?? [];
-
-    if (daySegments.length > 0) {
-      return {
-        type: 'FeatureCollection',
-        features: daySegments.map((seg) => {
-          const coords = polyline
-            .decode(seg.encodedPolyline, 6)
-            .map(([lat, lng]) => [lng, lat] as [number, number]);
-          return {
-            type: 'Feature' as const,
-            geometry: { type: 'LineString' as const, coordinates: coords },
-            properties: {},
-          };
-        }),
-      };
-    }
-
-    return {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: stops.map((stop) => [stop.longitude, stop.latitude]),
-          },
-          properties: {},
-        },
-      ],
-    };
-  }, [stops, routeSegments, activeDayNumber]);
+  const routeGeoJSON = useMemo<GeoJSON.GeoJSON>(
+    () => buildRouteGeoJSON(stops, routeSegments, activeDayNumber),
+    [stops, routeSegments, activeDayNumber],
+  );
 
   return (
     <View style={[styles.container, style]}>
