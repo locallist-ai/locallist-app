@@ -301,6 +301,7 @@ export default function PlaceDetailScreen() {
             </View>
             <View style={s.mapWrap}>
               <PlanMap
+                interactive={false}
                 stops={[{
                   id: place.id,
                   name: place.name,
