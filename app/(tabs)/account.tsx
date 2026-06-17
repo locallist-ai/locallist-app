@@ -8,9 +8,9 @@ import {
   Modal,
   Pressable,
   Share,
-  Linking,
   Alert,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
@@ -366,7 +366,7 @@ export default function AccountScreen() {
           <TouchableOpacity
             style={s.row}
             activeOpacity={0.7}
-            onPress={() => Linking.openURL('https://locallist.ai/privacy')}
+            onPress={() => WebBrowser.openBrowserAsync('https://locallist.ai/privacy')}
           >
             <Ionicons name="shield-checkmark-outline" size={22} color={colors.textMain} />
             <Text style={s.rowText}>{t('account.privacyPolicy')}</Text>
@@ -376,7 +376,7 @@ export default function AccountScreen() {
           <TouchableOpacity
             style={s.row}
             activeOpacity={0.7}
-            onPress={() => Linking.openURL('https://locallist.ai/terms')}
+            onPress={() => WebBrowser.openBrowserAsync('https://locallist.ai/terms')}
           >
             <Ionicons name="document-text-outline" size={22} color={colors.textMain} />
             <Text style={s.rowText}>{t('account.termsOfService')}</Text>

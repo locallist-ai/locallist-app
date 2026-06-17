@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { View, StyleSheet, Pressable, Text, Linking, type ViewStyle } from 'react-native';
+import { View, StyleSheet, Pressable, Text, type ViewStyle } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import MapLibreGL, { type MapViewRef, type CameraRef } from '@maplibre/maplibre-react-native';
 import Animated, {
   useSharedValue,
@@ -29,6 +30,12 @@ interface PlanMapProps {
   routeSegments?: RouteSegment[];
   /** Día activo para filtrar los routeSegments (Follow Mode muestra un día a la vez). */
   activeDayNumber?: number;
+  /**
+   * Si es `false`, desactiva scroll/zoom del mapa (preview estático). Útil al incrustarlo
+   * dentro de un ScrollView vertical, donde los gestos del mapa secuestran el scroll de la página.
+   * Por defecto `true` (interactivo, como en Follow Mode).
+   */
+  interactive?: boolean;
 }
 
 const PIN_COLOR = '#3b82f6'; // electric-blue
@@ -42,6 +49,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
   style,
   routeSegments,
   activeDayNumber,
+  interactive = true,
 }) => {
   const mapRef = useRef<MapViewRef>(null);
   const cameraRef = useRef<CameraRef>(null);
@@ -149,6 +157,8 @@ export const PlanMap: React.FC<PlanMapProps> = ({
         mapStyle="https://tiles.openfreemap.org/styles/liberty"
         pitchEnabled={false}
         rotateEnabled={false}
+        scrollEnabled={interactive}
+        zoomEnabled={interactive}
       >
         <MapLibreGL.Camera
           ref={cameraRef}
@@ -203,7 +213,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
       </MapLibreGL.MapView>
 
       <Pressable
-        onPress={() => Linking.openURL('https://www.openstreetmap.org/copyright')}
+        onPress={() => WebBrowser.openBrowserAsync('https://www.openstreetmap.org/copyright')}
         style={styles.attribution}
         hitSlop={6}
         accessibilityRole="link"
