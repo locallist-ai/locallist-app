@@ -173,11 +173,8 @@ export default {
     shareMessage: "Check out LocalList - Your AI travel curator. Stop Researching. Start Traveling.\nhttps://locallist.ai",
   },
   follow: {
-    dayCompleteTitle: 'Day {{day}} complete',
-    dayCompleteBody: 'Continue to Day {{nextDay}}?',
-    dayCompleteContinue: 'Continue',
-    dayCompleteStay: 'Stay here',
     loading: 'Starting Follow Mode...',
+    loadError: 'Failed to load plan',
     tripCompleteTitle: 'Trip Complete!',
     tripCompleteBody: 'You finished the plan. Enjoy your trip!',
     done: 'Done',

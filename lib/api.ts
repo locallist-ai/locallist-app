@@ -95,9 +95,9 @@ interface ApiResult<T> {
 
 export async function api<T>(
   path: string,
-  options: { method?: string; body?: unknown; _retryCount?: number } = {},
+  options: { method?: string; body?: unknown; signal?: AbortSignal; _retryCount?: number } = {},
 ): Promise<ApiResult<T>> {
-  const { method = 'GET', body, _retryCount = 0 } = options;
+  const { method = 'GET', body, signal, _retryCount = 0 } = options;
 
   // Ensure token is loaded before first request
   const token = await getAccessToken();
@@ -108,8 +108,13 @@ export async function api<T>(
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
+  // El controller interno gestiona el timeout; un `signal` externo del caller
+  // (p. ej. cleanup de un useEffect) también lo aborta.
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const onExternalAbort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener('abort', onExternalAbort);
 
   try {
     const res = await fetch(`${API_URL}${path}`, {
@@ -126,7 +131,7 @@ export async function api<T>(
     if (res.status === 401 && token && _retryCount < 1) {
       const refreshed = await tryRefreshToken();
       if (refreshed) {
-        return api<T>(path, { method, body, _retryCount: _retryCount + 1 });
+        return api<T>(path, { method, body, signal, _retryCount: _retryCount + 1 });
       }
     }
 
@@ -142,16 +147,21 @@ export async function api<T>(
     return { data: json as T, error: null, errorBody: null, status: res.status };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Network error';
-    const isTimeout = err instanceof Error && err.name === 'AbortError';
+    const isAbort = err instanceof Error && err.name === 'AbortError';
+    // Un abort externo (caller desmontado) no es un fallo: no lo logueamos como error.
+    if (signal?.aborted) {
+      return { data: null, error: 'Request aborted', errorBody: null, status: 0 };
+    }
     logger.error('API request failed', err);
     return {
       data: null,
-      error: isTimeout ? 'Request timed out' : message,
+      error: isAbort ? 'Request timed out' : message,
       errorBody: null,
       status: 0,
     };
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener('abort', onExternalAbort);
   }
 }
 

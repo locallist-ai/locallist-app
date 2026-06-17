@@ -286,3 +286,73 @@ describe('lib/api 401 → refresh → retry', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('lib/api abort externo (unmount del caller)', () => {
+  // Mock de fetch que nunca resuelve por sí solo: sólo rechaza con AbortError
+  // cuando el signal interno de `api()` se aborta (timeout o signal externo).
+  const hangingFetch = () =>
+    jest.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          const fail = () => {
+            const err = new Error('Aborted');
+            err.name = 'AbortError';
+            reject(err);
+          };
+          if (init?.signal?.aborted) fail();
+          else init?.signal?.addEventListener('abort', fail);
+        }),
+    );
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.resetModules();
+  });
+
+  it('cancela la petición en vuelo al abortar el signal externo', async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = hangingFetch();
+    const { api } = require('../api') as typeof import('../api');
+
+    const controller = new AbortController();
+    const pending = api('/follow/start', {
+      method: 'POST',
+      body: { planId: 'p1' },
+      signal: controller.signal,
+    });
+    controller.abort();
+
+    const res = await pending;
+    expect(res.data).toBeNull();
+    expect(res.error).toBe('Request aborted');
+    expect(res.status).toBe(0);
+  });
+
+  it('no llega a esperar la respuesta si el signal ya estaba abortado', async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = hangingFetch();
+    const { api } = require('../api') as typeof import('../api');
+
+    const controller = new AbortController();
+    controller.abort();
+
+    const res = await api('/follow/start', {
+      method: 'POST',
+      body: { planId: 'p1' },
+      signal: controller.signal,
+    });
+    expect(res.data).toBeNull();
+    expect(res.error).toBe('Request aborted');
+  });
+
+  it('no loguea como error un abort externo', async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = hangingFetch();
+    const { api } = require('../api') as typeof import('../api');
+    const { logger } = require('../logger') as typeof import('../logger');
+
+    const controller = new AbortController();
+    const pending = api('/account', { signal: controller.signal });
+    controller.abort();
+    await pending;
+
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+});
