@@ -68,5 +68,10 @@
     "jest-expo": "~54.0.14",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "form-data": "^4.0.6",
+    "ws@6.2.3": "^6.2.4",
+    "ws@7.5.10": "^7.5.11"
+  }
 }
