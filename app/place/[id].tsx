@@ -5,8 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Linking,
-  Platform,
 } from 'react-native';
 import Animated, {
   useAnimatedScrollHandler,
@@ -15,8 +13,6 @@ import Animated, {
   interpolate,
   Extrapolate,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +23,7 @@ import { api } from '../../lib/api';
 import { useApiState } from '../../lib/use-api-state';
 import { track } from '../../lib/analytics';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
+import { PlanMap } from '../../components/map/PlanMap';
 import { getOpenState } from '../../lib/openingHours';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import type { Place } from '../../lib/types';
@@ -56,7 +53,6 @@ const TIME_BLOCK_LABEL_KEYS = {
 export default function PlaceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const { short } = useResponsive();
   const HERO_MAX = short ? 220 : 280;
 
@@ -86,19 +82,6 @@ export default function PlaceDetailScreen() {
   useEffect(() => {
     if (id) track({ event: 'place_viewed', placeId: id });
   }, [id]);
-
-  const openInMaps = () => {
-    if (!place?.latitude || !place?.longitude) return;
-    const lat = place.latitude;
-    const lng = place.longitude;
-    const label = encodeURIComponent(place.name);
-    const url = Platform.select({
-      ios: `maps:0,0?q=${label}@${lat},${lng}`,
-      android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
-      default: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
-    });
-    if (url) Linking.openURL(url);
-  };
 
   // ── Loading state ──
 
@@ -262,7 +245,7 @@ export default function PlaceDetailScreen() {
                 <Text style={s.detailValue}>
                   {place.priceRange === 'FREE'
                     ? formatPriceLabel(place.priceRange, t)
-                    : `${place.priceRange}${(place.priceRange as keyof typeof PRICE_KEYS) in PRICE_KEYS ? ` \u2014 ${t(PRICE_KEYS[place.priceRange as keyof typeof PRICE_KEYS])}` : ''}`}
+                    : `${place.priceRange}${(place.priceRange as keyof typeof PRICE_KEYS) in PRICE_KEYS ? `: ${t(PRICE_KEYS[place.priceRange as keyof typeof PRICE_KEYS])}` : ''}`}
                 </Text>
               </View>
             </View>
@@ -309,35 +292,34 @@ export default function PlaceDetailScreen() {
           )}
         </View>
 
+        {/* Location map (in-app) */}
+        {hasCoords && (
+          <View style={s.card}>
+            <View style={s.cardHeader}>
+              <Ionicons name="map-outline" size={18} color={colors.sunsetOrange} />
+              <Text style={s.cardTitle}>{t('place.location')}</Text>
+            </View>
+            <View style={s.mapWrap}>
+              <PlanMap
+                stops={[{
+                  id: place.id,
+                  name: place.name,
+                  latitude: place.latitude as number,
+                  longitude: place.longitude as number,
+                  category: place.category,
+                }]}
+              />
+            </View>
+          </View>
+        )}
+
         {/* Source attribution */}
         {place.source && place.source !== 'curated' && (
           <Text style={s.sourceText}>{t('place.source')}: {place.source}</Text>
         )}
 
-        <View style={{ height: hasCoords ? 100 : spacing.xl }} />
+        <View style={{ height: spacing.xl }} />
       </Animated.ScrollView>
-
-      {/* Bottom CTA: Open in Maps */}
-      {hasCoords && (
-        <View style={[s.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={openInMaps}
-            accessibilityLabel={t('place.openInMaps')}
-            accessibilityRole="button"
-          >
-            <LinearGradient
-              colors={[colors.sunsetOrange, '#ea580c']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={s.mapBtnGradient}
-            >
-              <Ionicons name="navigate-outline" size={20} color="#FFFFFF" />
-              <Text style={s.mapBtnText}>{t('place.openInMaps')}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 }
@@ -494,23 +476,11 @@ const s = StyleSheet.create({
     marginTop: spacing.sm,
   },
 
-  // Bottom bar
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.bgMain,
-  },
-  mapBtnGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
+  // Location map
+  mapWrap: {
+    height: 180,
     borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    marginTop: spacing.sm,
   },
-  mapBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#FFFFFF' },
 });

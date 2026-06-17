@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { View, StyleSheet, Pressable, Text, Linking, type ViewStyle } from 'react-native';
+import { View, StyleSheet, Pressable, Text, type ViewStyle } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import MapLibreGL, { type MapViewRef, type CameraRef } from '@maplibre/maplibre-react-native';
 import Animated, {
   useSharedValue,
@@ -203,7 +204,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
       </MapLibreGL.MapView>
 
       <Pressable
-        onPress={() => Linking.openURL('https://www.openstreetmap.org/copyright')}
+        onPress={() => WebBrowser.openBrowserAsync('https://www.openstreetmap.org/copyright')}
         style={styles.attribution}
         hitSlop={6}
         accessibilityRole="link"
