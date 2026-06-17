@@ -54,3 +54,6 @@ build/
 
 # Claude Code
 .claude/
+
+# wrapper scripts/build-local.sh
+builds/

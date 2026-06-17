@@ -8,7 +8,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:ios": "./scripts/build-local.sh production",
+    "build:sim": "./scripts/build-local.sh preview"
   },
   "jest": {
     "preset": "jest-expo",
