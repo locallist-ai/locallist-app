@@ -9,6 +9,9 @@ dist/
 web-build/
 expo-env.d.ts
 
+# Test coverage (generado por el coverage gate)
+coverage/
+
 # Native
 .kotlin/
 *.orig.*

@@ -3,6 +3,8 @@ name: CI & Security Checks
 on:
   pull_request:
     branches: [ "main" ]
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
 
 concurrency:
@@ -33,5 +35,11 @@ jobs:
       - name: Type Check
         run: npx tsc --noEmit
 
+      # Gate: falla el build ante errores de lint (los warnings se loguean).
+      - name: Lint
+        run: npx expo lint
+
+      # Gate de cobertura (coverageThreshold en package.json): suelo
+      # anti-regresión bajo el ~78% líneas actual, no un objetivo.
       - name: Run Tests
-        run: npm test -- --passWithNoTests
+        run: npm test -- --coverage --passWithNoTests
