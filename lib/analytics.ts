@@ -36,6 +36,7 @@ export type AppEvent =
   | { event: 'chat_generated'; sessionId: string; planId: string; turnCount: number }
   | { event: 'chat_abandoned'; sessionId: string; turnCount: number }
   | { event: 'chat_to_wizard_escape'; sessionId: string | null; turnCount: number }
+  | { event: 'chat_city_unsupported'; sessionId: string | null; city: string | null }
   // Profile
   | { event: 'profile_saved'; fields: string[] }
   | { event: 'profile_reset' };

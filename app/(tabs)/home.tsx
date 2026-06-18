@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Image, StyleSheet, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../../lib/theme';
 import { useResponsive } from '../../lib/responsive';
-import { CITIES } from '../../lib/cities';
+import { CITIES, cityFromLive, type City } from '../../lib/cities';
+import { getLiveCities } from '../../lib/api';
+import { logger } from '../../lib/logger';
 import { setSelectedCity } from '../../lib/trip-context-store';
 import { CityCard } from '../../components/home/CityCard';
 import { HeroSkiaBg } from '../../components/home/HeroSkiaBg';
@@ -16,6 +18,27 @@ export default function HomeTab() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight, compact } = useResponsive();
+
+  // El selector ofrece SOLO ciudades cubiertas (`GET /cities/live`). Arrancamos
+  // con el catálogo bundled como render instantáneo + fallback offline, y lo
+  // reemplazamos con la verdad del backend en cuanto responde.
+  const [cities, setCities] = useState<City[]>(CITIES);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    (async () => {
+      const result = await getLiveCities(controller.signal);
+      if (controller.signal.aborted) return;
+      if (result.data?.cities?.length) {
+        setCities(result.data.cities.map(cityFromLive));
+      } else if (result.error) {
+        // Red caída: mantenemos el catálogo bundled (Miami) para no romper el
+        // selector. La cobertura real se reintenta en el próximo montaje.
+        logger.warn('home: /cities/live failed, using bundled catalog', result.error);
+      }
+    })();
+    return () => controller.abort();
+  }, []);
 
   const handleCitySelect = async (cityName: string) => {
     await setSelectedCity(cityName);
@@ -53,7 +76,7 @@ export default function HomeTab() {
         />
 
         <View style={styles.cards}>
-          {CITIES.map((city, index) => (
+          {cities.map((city, index) => (
             <CityCard
               key={city.name}
               city={city}

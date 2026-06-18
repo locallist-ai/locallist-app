@@ -6,6 +6,7 @@ import type {
   ChatTurnRequest, ChatTurnResponse,
   ChatGenerateRequest, BuilderResponse,
   UserProfile, UpsertProfileRequest,
+  LiveCity,
 } from './types';
 
 function getApiUrl(): string {
@@ -215,6 +216,16 @@ export async function chatGenerate(req: ChatGenerateRequest) {
 
 export async function deleteChatSession(sessionId: string) {
   return api<void>(`/chat/session/${sessionId}`, { method: 'DELETE' });
+}
+
+// ─── Cities API ──────────────────────────────────────────────────────────────
+
+/**
+ * Ciudades LIVE (allowlist de cobertura del backend). La app pinta el selector
+ * solo con estas; no usar `/cities/search` (registry completo) para el gate.
+ */
+export async function getLiveCities(signal?: AbortSignal) {
+  return api<{ cities: LiveCity[] }>('/cities/live', { signal });
 }
 
 // ─── Profile API ─────────────────────────────────────────────────────────────

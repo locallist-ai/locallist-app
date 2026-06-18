@@ -335,6 +335,9 @@ export default {
     planWithAi: 'Planifica con IA',
     planWithAiSub: 'Dime a dónde vas en un mensaje',
     useWizardFull: 'O usa el asistente paso a paso',
+    cityUnsupportedTitle: 'Ciudad aún no disponible',
+    cityUnsupportedBody: 'Todavía no cubrimos esa ciudad. Elige una ciudad disponible para crear tu plan.',
+    cityUnsupportedCta: 'Elegir una ciudad disponible',
   },
   profile: {
     title: 'Preferencias de viaje',
