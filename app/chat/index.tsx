@@ -25,6 +25,7 @@ import { getSavedSessionId, saveSessionId, clearSessionId } from '../../lib/chat
 import { BlurView } from 'expo-blur';
 import { MessageBubble } from '../../components/chat/MessageBubble';
 import { CityNoticeBubble } from '../../components/chat/CityNoticeBubble';
+import { ChatErrorBubble } from '../../components/chat/ChatErrorBubble';
 import { QuickReplyChips } from '../../components/chat/QuickReplyChips';
 import { SaveProfileSheet } from '../../components/chat/SaveProfileSheet';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
@@ -66,6 +67,9 @@ export default function ChatScreen() {
   // dos toques en el mismo batch (ambos handlers ven loading=false por
   // closure stale); el ref se escribe síncronamente antes de cualquier await.
   const pendingRef = useRef(false);
+  // Thunk para reintentar el último turno que falló por infra (ai_unavailable).
+  // Lo fija quien detecta el error; el botón de reintento lo invoca.
+  const retryRef = useRef<(() => void) | null>(null);
 
   // Resume prior session on mount; if city was pre-selected, seed it on first turn
   useEffect(() => {
@@ -81,28 +85,36 @@ export default function ChatScreen() {
       }
       if (preSeededCity) {
         // New session with pre-selected city: send preSeededSlots so backend
-        // fills city slot and returns a greeting without user typing the city
-        setLoading(true);
-        try {
-          const result = await chatTurn({
-            sessionId: null,
-            message: '',
-            quickReplyId: null,
-            preSeededSlots: { city: preSeededCity },
-          });
-          if (result.data) {
+        // fills city slot and returns a greeting without user typing the city.
+        // Envuelto en una función local para poder reintentarlo si la infra cae.
+        const runPreSeeded = async (): Promise<boolean> => {
+          setLoading(true);
+          try {
+            const result = await chatTurn({
+              sessionId: null,
+              message: '',
+              quickReplyId: null,
+              preSeededSlots: { city: preSeededCity },
+            });
+            if (!result.data) return false;
             const data = result.data;
             setSessionId(data.sessionId);
             await saveSessionId(data.sessionId);
             setSlots(data.slots);
             setReady(data.ready);
             setTurnCount(data.turnCount);
-            // Red de seguridad: una ciudad pre-seleccionada no debería ser no
-            // cubierta (el selector ya la gatea), pero un prefill de perfil
-            // podría serlo. Render como aviso, no como saludo normal.
-            if (data.cityUnsupported) {
-              // El backend limpia slots.city, así que reportamos la ciudad que
-              // el usuario pidió (el preseed), no null.
+            // Infra caída en el primer turno: estado de error con reintento, no
+            // saludo normal. El reintento reejecuta este mismo turno preseed.
+            if (data.error === 'ai_unavailable') {
+              retryRef.current = () => { runPreSeeded(); };
+              track({ event: 'chat_ai_unavailable', sessionId: data.sessionId });
+              setMessages([{ role: 'ai', text: data.aiMessage, aiError: true }]);
+              setQuickReplies([]);
+            } else if (data.cityUnsupported) {
+              // Red de seguridad: una ciudad pre-seleccionada no debería ser no
+              // cubierta (el selector ya la gatea), pero un prefill de perfil
+              // podría serlo. El backend limpia slots.city, así que reportamos
+              // la ciudad que el usuario pidió (el preseed), no null.
               track({ event: 'chat_city_unsupported', sessionId: data.sessionId, city: preSeededCity ?? null });
               setMessages([{ role: 'ai', text: data.aiMessage, cityUnsupported: true }]);
               setQuickReplies([]);
@@ -111,11 +123,13 @@ export default function ChatScreen() {
               setQuickReplies(data.ready ? [] : data.quickReplies);
             }
             setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
-            return;
+            return true;
+          } finally {
+            setLoading(false);
           }
-        } finally {
-          setLoading(false);
-        }
+        };
+        const handled = await runPreSeeded();
+        if (handled) return;
       }
       appendAiMessage(t('chat.welcomeMessage'));
     })();
@@ -142,6 +156,21 @@ export default function ChatScreen() {
   const handleSwitchCity = useCallback(() => {
     router.push('/(tabs)/home');
   }, []);
+
+  // Estado de error de infra (LLM caído): el texto genérico viene del backend
+  // (`aiMessage`); se marca para renderizar como error con reintento.
+  const appendAiError = useCallback((text: string) => {
+    setMessages((prev) => [...prev, { role: 'ai', text, aiError: true }]);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+  }, []);
+
+  const handleRetry = useCallback(() => {
+    const retry = retryRef.current;
+    if (!retry || pendingRef.current || loading || generating) return;
+    // Quita el estado de error antes de reintentar el turno que falló.
+    setMessages((prev) => prev.filter((m) => !m.aiError));
+    retry();
+  }, [loading, generating]);
 
   const sendTurn = useCallback(
     async (message: string, quickReplyId: string | null = null) => {
@@ -178,6 +207,17 @@ export default function ChatScreen() {
         setReady(data.ready);
         setTurnCount(data.turnCount);
 
+        // Error de infraestructura: la cadena LLM falló de verdad (distinto de
+        // "no te he entendido"). Estado de error con reintento, no turno normal.
+        // No exponemos detalle técnico: solo el mensaje genérico + reintentar.
+        if (data.error === 'ai_unavailable') {
+          retryRef.current = () => sendTurn(message, quickReplyId);
+          track({ event: 'chat_ai_unavailable', sessionId: newSessionId });
+          appendAiError(data.aiMessage);
+          setQuickReplies([]);
+          return;
+        }
+
         // Ciudad no cubierta: el backend limpió el slot city y NO avanzó el
         // slot-filling. Renderizamos el aviso (que ya viene en aiMessage) como
         // aviso con CTA, no como turno normal, y no mostramos quick replies.
@@ -207,7 +247,7 @@ export default function ChatScreen() {
         setLoading(false);
       }
     },
-    [sessionId, loading, generating, quickReplies, appendAiMessage, appendCityNotice, t],
+    [sessionId, loading, generating, quickReplies, appendAiMessage, appendCityNotice, appendAiError, t],
   );
 
   const handleSend = useCallback(() => {
@@ -399,7 +439,9 @@ export default function ChatScreen() {
           data={messages}
           keyExtractor={(_, i) => String(i)}
           renderItem={({ item }) =>
-            item.cityUnsupported ? (
+            item.aiError ? (
+              <ChatErrorBubble text={item.text} onRetry={handleRetry} />
+            ) : item.cityUnsupported ? (
               <CityNoticeBubble text={item.text} onSwitchCity={handleSwitchCity} />
             ) : (
               <MessageBubble message={item} />
