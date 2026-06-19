@@ -338,6 +338,8 @@ export default {
     cityUnsupportedTitle: 'City not covered yet',
     cityUnsupportedBody: 'We don\'t cover that city yet. Pick a covered city to build your plan.',
     cityUnsupportedCta: 'Choose a covered city',
+    aiUnavailableTitle: 'Connection problem',
+    aiUnavailableRetry: 'Try again',
   },
   profile: {
     title: 'Travel Preferences',

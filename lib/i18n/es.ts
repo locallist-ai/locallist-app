@@ -338,6 +338,8 @@ export default {
     cityUnsupportedTitle: 'Ciudad aún no disponible',
     cityUnsupportedBody: 'Todavía no cubrimos esa ciudad. Elige una ciudad disponible para crear tu plan.',
     cityUnsupportedCta: 'Elegir una ciudad disponible',
+    aiUnavailableTitle: 'Problema de conexión',
+    aiUnavailableRetry: 'Reintentar',
   },
   profile: {
     title: 'Preferencias de viaje',

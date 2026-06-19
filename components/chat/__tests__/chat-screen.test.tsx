@@ -358,6 +358,102 @@ describe('chat — ciudad no cubierta (coverage gate)', () => {
   });
 });
 
+describe('chat — error de infraestructura (ai_unavailable)', () => {
+  it('un turno con error ai_unavailable se pinta como error con reintento, no turno normal', async () => {
+    await renderPreSeeded();
+
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({
+        aiMessage: 'Estamos teniendo problemas. Inténtalo de nuevo.',
+        error: 'ai_unavailable',
+        quickReplies: [],
+      }),
+    );
+    const input = screen.getByPlaceholderText('chat.inputPlaceholder');
+    fireEvent.changeText(input, 'algo');
+    fireEvent.press(screen.getByTestId('chat-send-btn'));
+
+    await waitFor(() =>
+      expect(screen.getByText('Estamos teniendo problemas. Inténtalo de nuevo.')).toBeTruthy(),
+    );
+    // Se pinta como error (título + reintento), NO como turno normal.
+    expect(screen.getByText('chat.aiUnavailableTitle')).toBeTruthy();
+    expect(screen.getByText('chat.aiUnavailableRetry')).toBeTruthy();
+    expect(track).toHaveBeenCalledWith({ event: 'chat_ai_unavailable', sessionId: 's1' });
+
+    // Reintento: reenvía el MISMO turno; en éxito muestra respuesta normal y
+    // desaparece el estado de error.
+    mockChatTurn.mockResolvedValueOnce(turnOk({ aiMessage: 'Perfecto, sigamos.', quickReplies: [] }));
+    fireEvent.press(screen.getByText('chat.aiUnavailableRetry'));
+
+    await waitFor(() => expect(screen.getByText('Perfecto, sigamos.')).toBeTruthy());
+    expect(screen.queryByText('chat.aiUnavailableTitle')).toBeNull();
+    expect(mockChatTurn).toHaveBeenLastCalledWith({
+      sessionId: 's1',
+      message: 'algo',
+      quickReplyId: null,
+    });
+  });
+
+  it('error ai_unavailable en el turno preseed inicial se pinta como error y el reintento reejecuta el preseed', async () => {
+    mockGetSavedSessionId.mockResolvedValue(null);
+    mockUseTripContext.mockReturnValue({ city: 'Miami' });
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({
+        aiMessage: 'No podemos procesar ahora mismo.',
+        error: 'ai_unavailable',
+        quickReplies: [],
+      }),
+    );
+    render(<ChatScreen />);
+
+    await waitFor(() => expect(screen.getByText('No podemos procesar ahora mismo.')).toBeTruthy());
+    expect(screen.getByText('chat.aiUnavailableTitle')).toBeTruthy();
+
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({ aiMessage: 'Hola, ¿cuántos días en Miami?', quickReplies: [] }),
+    );
+    fireEvent.press(screen.getByText('chat.aiUnavailableRetry'));
+
+    await waitFor(() => expect(screen.getByText('Hola, ¿cuántos días en Miami?')).toBeTruthy());
+    expect(screen.queryByText('chat.aiUnavailableTitle')).toBeNull();
+    // El reintento reejecuta el turno preseed (sessionId null + preSeededSlots).
+    expect(mockChatTurn).toHaveBeenLastCalledWith({
+      sessionId: null,
+      message: '',
+      quickReplyId: null,
+      preSeededSlots: { city: 'Miami' },
+    });
+  });
+
+  it('reintento de un ai_unavailable en el PRIMER turno reusa la sesión creada, no la recrea', async () => {
+    // Sin sesión previa ni ciudad pre-seleccionada: el primer turno es texto libre.
+    // El backend crea la sesión (s1) pero la cadena cae → ai_unavailable. El
+    // reintento debe reusar s1 (no mandar sessionId:null, que crearía una 2ª sesión).
+    mockGetSavedSessionId.mockResolvedValue(null);
+    mockUseTripContext.mockReturnValue({ city: null });
+    render(<ChatScreen />);
+    await waitFor(() => expect(screen.getByText('chat.welcomeMessage')).toBeTruthy());
+
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({ sessionId: 's1', aiMessage: 'No puedo ahora mismo.', error: 'ai_unavailable', quickReplies: [] }),
+    );
+    fireEvent.changeText(screen.getByPlaceholderText('chat.inputPlaceholder'), 'restaurantes');
+    fireEvent.press(screen.getByTestId('chat-send-btn'));
+
+    await waitFor(() => expect(screen.getByText('chat.aiUnavailableTitle')).toBeTruthy());
+    // El primer turno se envió sin sesión.
+    expect(mockChatTurn).toHaveBeenNthCalledWith(1, { sessionId: null, message: 'restaurantes', quickReplyId: null });
+
+    mockChatTurn.mockResolvedValueOnce(turnOk({ sessionId: 's1', aiMessage: 'Listo, sigamos.', quickReplies: [] }));
+    fireEvent.press(screen.getByText('chat.aiUnavailableRetry'));
+
+    await waitFor(() => expect(screen.getByText('Listo, sigamos.')).toBeTruthy());
+    // Clave del fix: el reintento reusa s1, no recrea sesión con sessionId:null.
+    expect(mockChatTurn).toHaveBeenLastCalledWith({ sessionId: 's1', message: 'restaurantes', quickReplyId: null });
+  });
+});
+
 describe('chat — restore de chips tras error transitorio (PR #61)', () => {
   it('tras un 429 restaura los quick replies anteriores y muestra rate-limited', async () => {
     await renderPreSeeded();

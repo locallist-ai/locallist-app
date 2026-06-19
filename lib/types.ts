@@ -163,6 +163,10 @@ export type ChatTurnResponse = {
   // True cuando la ciudad pedida no está en la cobertura LIVE: el aviso ya
   // viene en `aiMessage` y el slot-filling se detiene hasta elegir una cubierta.
   cityUnsupported: boolean;
+  // Código de error de infraestructura cuando la cadena LLM falla de verdad
+  // (p. ej. "ai_unavailable"), distinto de "no te he entendido". Omitido/null
+  // en operación normal. El mensaje genérico ya viene en `aiMessage`.
+  error?: string | null;
 };
 
 /**
@@ -185,6 +189,9 @@ export type ChatMessage = {
   // Marca un turno de aviso de ciudad no cubierta: se renderiza como aviso
   // con CTA, no como burbuja normal del asistente.
   cityUnsupported?: boolean;
+  // Marca un estado de error de infraestructura (LLM caído): se renderiza como
+  // error con reintento, no como burbuja normal del asistente.
+  aiError?: boolean;
 };
 
 // ─── Profile ─────────────────────────────────────────────────────────────────
