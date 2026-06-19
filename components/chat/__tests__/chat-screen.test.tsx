@@ -20,6 +20,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-
 import { router } from 'expo-router';
 import ChatScreen from '../../../app/chat/index';
 import { chatTurn, chatGenerate } from '../../../lib/api';
+import { track } from '../../../lib/analytics';
 import { getSavedSessionId, saveSessionId } from '../../../lib/chat-store';
 import { useTripContext } from '../../../lib/trip-context-store';
 import type { ChatSlots, ChatTurnResponse } from '../../../lib/types';
@@ -283,6 +284,12 @@ describe('chat — ciudad no cubierta (coverage gate)', () => {
 
     fireEvent.press(screen.getByText('chat.cityUnsupportedCta'));
     expect(router.push).toHaveBeenCalledWith('/(tabs)/home');
+    // Analytics: reporta la ciudad que pidió el usuario (preseed), no null.
+    expect(track).toHaveBeenCalledWith({
+      event: 'chat_city_unsupported',
+      sessionId: 's1',
+      city: 'Madrid',
+    });
   });
 
   it('un turno con cityUnsupported borra los chips y no muestra el CTA de generar', async () => {
@@ -306,6 +313,12 @@ describe('chat — ciudad no cubierta (coverage gate)', () => {
     expect(screen.getByText('chat.cityUnsupportedCta')).toBeTruthy();
     expect(screen.queryByText('no-deberia-verse')).toBeNull();
     expect(screen.queryByText('chat.buildPlan')).toBeNull();
+    // Analytics: la ciudad real es lo que escribió el usuario en el turno.
+    expect(track).toHaveBeenCalledWith({
+      event: 'chat_city_unsupported',
+      sessionId: 's1',
+      city: 'Tokio',
+    });
   });
 
   it('chatGenerate 400 city_unsupported muestra aviso amable, sin navegar a un plan', async () => {
@@ -335,6 +348,12 @@ describe('chat — ciudad no cubierta (coverage gate)', () => {
     );
     // No se generó plan → no hay navegación a /plan/...
     expect(router.push).not.toHaveBeenCalled();
+    // Analytics: usa la ciudad reportada por el 400 (`errorBody.city`), no null.
+    expect(track).toHaveBeenCalledWith({
+      event: 'chat_city_unsupported',
+      sessionId: 's1',
+      city: 'Madrid',
+    });
     alertSpy.mockRestore();
   });
 });

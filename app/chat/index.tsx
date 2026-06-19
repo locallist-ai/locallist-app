@@ -101,7 +101,9 @@ export default function ChatScreen() {
             // cubierta (el selector ya la gatea), pero un prefill de perfil
             // podría serlo. Render como aviso, no como saludo normal.
             if (data.cityUnsupported) {
-              track({ event: 'chat_city_unsupported', sessionId: data.sessionId, city: data.slots.city });
+              // El backend limpia slots.city, así que reportamos la ciudad que
+              // el usuario pidió (el preseed), no null.
+              track({ event: 'chat_city_unsupported', sessionId: data.sessionId, city: preSeededCity ?? null });
               setMessages([{ role: 'ai', text: data.aiMessage, cityUnsupported: true }]);
               setQuickReplies([]);
             } else {
@@ -180,7 +182,9 @@ export default function ChatScreen() {
         // slot-filling. Renderizamos el aviso (que ya viene en aiMessage) como
         // aviso con CTA, no como turno normal, y no mostramos quick replies.
         if (data.cityUnsupported) {
-          track({ event: 'chat_city_unsupported', sessionId: newSessionId, city: data.slots.city });
+          // slots.city viene limpio del backend; el valor real es lo que el
+          // usuario escribió en este turno (la ciudad que pidió).
+          track({ event: 'chat_city_unsupported', sessionId: newSessionId, city: message || null });
           appendCityNotice(data.aiMessage);
           setQuickReplies([]);
           return;
@@ -235,11 +239,12 @@ export default function ChatScreen() {
       const result = await chatGenerate({ sessionId });
 
       if (result.error || !result.data) {
-        const errorCode = (result.errorBody as { error?: string } | null)?.error;
-        if (errorCode === 'city_unsupported') {
+        const errorBody = result.errorBody as { error?: string; city?: string | null } | null;
+        if (errorBody?.error === 'city_unsupported') {
           // Red de seguridad: la sesión llegó a generar con una ciudad no
           // cubierta (prefill antiguo). Aviso amable + CTA, no pantalla rota.
-          track({ event: 'chat_city_unsupported', sessionId, city: slots.city });
+          // El 400 reporta la ciudad real (`city`); usamos esa, no null.
+          track({ event: 'chat_city_unsupported', sessionId, city: errorBody.city ?? slots.city });
           Alert.alert(
             t('chat.cityUnsupportedTitle'),
             t('chat.cityUnsupportedBody'),

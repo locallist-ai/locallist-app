@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts } from '../../lib/theme';
 
@@ -21,7 +21,7 @@ export function CityNoticeBubble({ text, onSwitchCity }: Props) {
     <View style={styles.row}>
       <View style={styles.card}>
         <View style={styles.header}>
-          <Ionicons name="information-circle" size={20} color={colors.sunsetOrange} />
+          <MaterialCommunityIcons name="map-marker-alert" size={20} color={colors.sunsetOrange} />
           <Text style={styles.title}>{t('chat.cityUnsupportedTitle')}</Text>
         </View>
         <Text style={styles.body}>{text}</Text>
@@ -32,7 +32,7 @@ export function CityNoticeBubble({ text, onSwitchCity }: Props) {
           accessibilityRole="button"
           accessibilityLabel={t('chat.cityUnsupportedCta')}
         >
-          <Ionicons name="location" size={16} color="#fff" />
+          <MaterialCommunityIcons name="map-marker" size={16} color="#fff" />
           <Text style={styles.ctaText}>{t('chat.cityUnsupportedCta')}</Text>
         </TouchableOpacity>
       </View>
