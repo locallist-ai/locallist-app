@@ -211,7 +211,9 @@ export default function ChatScreen() {
         // "no te he entendido"). Estado de error con reintento, no turno normal.
         // No exponemos detalle técnico: solo el mensaje genérico + reintentar.
         if (data.error === 'ai_unavailable') {
-          retryRef.current = () => sendTurn(message, quickReplyId);
+          // Reintentar vía el ref al sendTurn más reciente (sessionId ya fijado):
+          // evita recrear sesión cuando el fallo ocurre en el primer turno.
+          retryRef.current = () => sendTurnRef.current(message, quickReplyId);
           track({ event: 'chat_ai_unavailable', sessionId: newSessionId });
           appendAiError(data.aiMessage);
           setQuickReplies([]);
@@ -249,6 +251,15 @@ export default function ChatScreen() {
     },
     [sessionId, loading, generating, quickReplies, appendAiMessage, appendCityNotice, appendAiError, t],
   );
+
+  // Espejo del sendTurn más reciente: el reintento de un ai_unavailable debe usar
+  // el sessionId ya actualizado. En el primer turno, el closure capturado tendría
+  // sessionId=null y recrearía sesión (dejando la primera huérfana); leyendo el
+  // ref se reusa la sesión que el turno fallido ya creó.
+  const sendTurnRef = useRef(sendTurn);
+  useEffect(() => {
+    sendTurnRef.current = sendTurn;
+  }, [sendTurn]);
 
   const handleSend = useCallback(() => {
     const text = inputText.trim();
