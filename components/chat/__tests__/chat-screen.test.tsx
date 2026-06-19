@@ -15,10 +15,12 @@
  */
 
 import React from 'react';
+import { Alert } from 'react-native';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import ChatScreen from '../../../app/chat/index';
 import { chatTurn, chatGenerate } from '../../../lib/api';
+import { track } from '../../../lib/analytics';
 import { getSavedSessionId, saveSessionId } from '../../../lib/chat-store';
 import { useTripContext } from '../../../lib/trip-context-store';
 import type { ChatSlots, ChatTurnResponse } from '../../../lib/types';
@@ -256,6 +258,103 @@ describe('chat — input post-ready (#61)', () => {
       quickReplyId: null,
     });
     expect(screen.getByText('sin gluten')).toBeTruthy();
+  });
+});
+
+describe('chat — ciudad no cubierta (coverage gate)', () => {
+  it('preSeeded con cityUnsupported renderiza aviso con CTA que va al selector', async () => {
+    mockGetSavedSessionId.mockResolvedValue(null);
+    mockUseTripContext.mockReturnValue({ city: 'Madrid' });
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({
+        aiMessage: 'Todavía no cubrimos Madrid. Prueba con Miami.',
+        cityUnsupported: true,
+        slots: { ...SLOTS, city: null },
+        quickReplies: [{ id: 'qr-2d', label: '2 días' }],
+      }),
+    );
+    render(<ChatScreen />);
+
+    await waitFor(() =>
+      expect(screen.getByText('Todavía no cubrimos Madrid. Prueba con Miami.')).toBeTruthy(),
+    );
+    // Se pinta como aviso (título + CTA), NO como turno normal con chips.
+    expect(screen.getByText('chat.cityUnsupportedTitle')).toBeTruthy();
+    expect(screen.queryByText('2 días')).toBeNull();
+
+    fireEvent.press(screen.getByText('chat.cityUnsupportedCta'));
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/home');
+    // Analytics: reporta la ciudad que pidió el usuario (preseed), no null.
+    expect(track).toHaveBeenCalledWith({
+      event: 'chat_city_unsupported',
+      sessionId: 's1',
+      city: 'Madrid',
+    });
+  });
+
+  it('un turno con cityUnsupported borra los chips y no muestra el CTA de generar', async () => {
+    await renderPreSeeded();
+
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({
+        aiMessage: 'No cubrimos Tokio todavía.',
+        cityUnsupported: true,
+        slots: { ...SLOTS, city: null },
+        // El backend podría devolver chips; el aviso NO debe mostrarlos.
+        quickReplies: [{ id: 'x', label: 'no-deberia-verse' }],
+      }),
+    );
+
+    const input = screen.getByPlaceholderText('chat.inputPlaceholder');
+    fireEvent.changeText(input, 'Tokio');
+    fireEvent.press(screen.getByTestId('chat-send-btn'));
+
+    await waitFor(() => expect(screen.getByText('No cubrimos Tokio todavía.')).toBeTruthy());
+    expect(screen.getByText('chat.cityUnsupportedCta')).toBeTruthy();
+    expect(screen.queryByText('no-deberia-verse')).toBeNull();
+    expect(screen.queryByText('chat.buildPlan')).toBeNull();
+    // Analytics: la ciudad real es lo que escribió el usuario en el turno.
+    expect(track).toHaveBeenCalledWith({
+      event: 'chat_city_unsupported',
+      sessionId: 's1',
+      city: 'Tokio',
+    });
+  });
+
+  it('chatGenerate 400 city_unsupported muestra aviso amable, sin navegar a un plan', async () => {
+    mockGetSavedSessionId.mockResolvedValue(null);
+    mockUseTripContext.mockReturnValue({ city: 'Madrid' });
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({ aiMessage: 'Listo para generar.', ready: true, quickReplies: [] }),
+    );
+    render(<ChatScreen />);
+    await waitFor(() => expect(screen.getByText('chat.buildPlan')).toBeTruthy());
+
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (chatGenerate as jest.Mock).mockResolvedValueOnce({
+      data: null,
+      error: 'city_unsupported',
+      errorBody: { error: 'city_unsupported', message: 'no cubierta', city: 'Madrid', liveCities: ['Miami'] },
+      status: 400,
+    });
+
+    fireEvent.press(screen.getByText('chat.buildPlan'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy).toHaveBeenCalledWith(
+      'chat.cityUnsupportedTitle',
+      'chat.cityUnsupportedBody',
+      expect.any(Array),
+    );
+    // No se generó plan → no hay navegación a /plan/...
+    expect(router.push).not.toHaveBeenCalled();
+    // Analytics: usa la ciudad reportada por el 400 (`errorBody.city`), no null.
+    expect(track).toHaveBeenCalledWith({
+      event: 'chat_city_unsupported',
+      sessionId: 's1',
+      city: 'Madrid',
+    });
+    alertSpy.mockRestore();
   });
 });
 

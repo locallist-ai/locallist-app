@@ -335,6 +335,9 @@ export default {
     planWithAi: 'Plan with AI',
     planWithAiSub: 'Tell me where you\'re going in one message',
     useWizardFull: 'Or use the step-by-step wizard',
+    cityUnsupportedTitle: 'City not covered yet',
+    cityUnsupportedBody: 'We don\'t cover that city yet. Pick a covered city to build your plan.',
+    cityUnsupportedCta: 'Choose a covered city',
   },
   profile: {
     title: 'Travel Preferences',

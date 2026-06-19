@@ -160,6 +160,19 @@ export type ChatTurnResponse = {
   ready: boolean;
   turnCount: number;
   turnLimit: number;
+  // True cuando la ciudad pedida no está en la cobertura LIVE: el aviso ya
+  // viene en `aiMessage` y el slot-filling se detiene hasta elegir una cubierta.
+  cityUnsupported: boolean;
+};
+
+/**
+ * Ciudad LIVE para el selector de la app (`GET /cities/live`). `id` es nullable:
+ * una ciudad de la allowlist puede no tener fila seed todavía en el backend.
+ */
+export type LiveCity = {
+  id: string | null;
+  name: string;
+  country: string | null;
 };
 
 export type ChatGenerateRequest = {
@@ -169,6 +182,9 @@ export type ChatGenerateRequest = {
 export type ChatMessage = {
   role: 'user' | 'ai';
   text: string;
+  // Marca un turno de aviso de ciudad no cubierta: se renderiza como aviso
+  // con CTA, no como burbuja normal del asistente.
+  cityUnsupported?: boolean;
 };
 
 // ─── Profile ─────────────────────────────────────────────────────────────────

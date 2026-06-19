@@ -68,7 +68,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `ui/CategoryBadge.tsx` | Category pill with per-category color |
 | `ui/ConfirmModal.tsx` | Reusable confirm/cancel modal |
 | `ui/design-system/` | ChoiceChip, EditorialTitle, StepSubtitle, ProgressDots — wizard design system |
-| `chat/` | Chat UI: MessageBubble, QuickReplyChips, SlotBadges, SaveProfileSheet |
+| `chat/` | Chat UI: MessageBubble, CityNoticeBubble (aviso de ciudad no cubierta + CTA), QuickReplyChips, SlotBadges, SaveProfileSheet |
 | `account/` | Account screen sections: PlusUpsellCard, ProfileCard, TravelPreferencesSection (consumes useProfile), SettingsSection (settings + legal in-app + actions), DevToolsSection, LanguagePickerModal |
 | `auth/` | Login screen pieces: AuthModeToggle, AppleSignInButton, GoogleSignInButton, EmailSignInButton, CredentialsForm, PasswordStrengthIndicator (state/OAuth in `lib/auth/useAuthForm.ts`) |
 | `map/PlanMap.tsx` | MapLibre map: pins, route line, animated camera |
