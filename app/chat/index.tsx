@@ -87,11 +87,15 @@ export default function ChatScreen() {
         // New session with pre-selected city: send preSeededSlots so backend
         // fills city slot and returns a greeting without user typing the city.
         // Envuelto en una función local para poder reintentarlo si la infra cae.
-        const runPreSeeded = async (): Promise<boolean> => {
+        // `existingSessionId` reusa la sesión que un turno preseed fallido ya
+        // creó: null en el primer intento, el sessionId real en el reintento.
+        const runPreSeeded = async (existingSessionId: string | null = null): Promise<boolean> => {
+          if (pendingRef.current) return false;
+          pendingRef.current = true;
           setLoading(true);
           try {
             const result = await chatTurn({
-              sessionId: null,
+              sessionId: existingSessionId,
               message: '',
               quickReplyId: null,
               preSeededSlots: { city: preSeededCity },
@@ -104,9 +108,11 @@ export default function ChatScreen() {
             setReady(data.ready);
             setTurnCount(data.turnCount);
             // Infra caída en el primer turno: estado de error con reintento, no
-            // saludo normal. El reintento reejecuta este mismo turno preseed.
+            // saludo normal. El reintento reejecuta este mismo turno preseed
+            // reusando la sesión que el backend ya creó (data.sessionId), no
+            // sessionId:null — que dejaría huérfana esta sesión al crear otra.
             if (data.error === 'ai_unavailable') {
-              retryRef.current = () => { runPreSeeded(); };
+              retryRef.current = () => { runPreSeeded(data.sessionId); };
               track({ event: 'chat_ai_unavailable', sessionId: data.sessionId });
               setMessages([{ role: 'ai', text: data.aiMessage, aiError: true }]);
               setQuickReplies([]);
@@ -125,6 +131,7 @@ export default function ChatScreen() {
             setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
             return true;
           } finally {
+            pendingRef.current = false;
             setLoading(false);
           }
         };

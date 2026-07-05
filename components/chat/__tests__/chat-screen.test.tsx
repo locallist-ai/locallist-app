@@ -395,11 +395,14 @@ describe('chat — error de infraestructura (ai_unavailable)', () => {
     });
   });
 
-  it('error ai_unavailable en el turno preseed inicial se pinta como error y el reintento reejecuta el preseed', async () => {
+  it('error ai_unavailable en el turno preseed inicial reintenta reusando la sesión creada, no la recrea', async () => {
     mockGetSavedSessionId.mockResolvedValue(null);
     mockUseTripContext.mockReturnValue({ city: 'Miami' });
+    // El turno preseed fallido ya trae sessionId (s1): el backend creó la
+    // sesión aunque la cadena LLM cayera.
     mockChatTurn.mockResolvedValueOnce(
       turnOk({
+        sessionId: 's1',
         aiMessage: 'No podemos procesar ahora mismo.',
         error: 'ai_unavailable',
         quickReplies: [],
@@ -409,17 +412,26 @@ describe('chat — error de infraestructura (ai_unavailable)', () => {
 
     await waitFor(() => expect(screen.getByText('No podemos procesar ahora mismo.')).toBeTruthy());
     expect(screen.getByText('chat.aiUnavailableTitle')).toBeTruthy();
+    // El primer intento sí manda sessionId:null (crea la sesión).
+    expect(mockChatTurn).toHaveBeenNthCalledWith(1, {
+      sessionId: null,
+      message: '',
+      quickReplyId: null,
+      preSeededSlots: { city: 'Miami' },
+    });
 
     mockChatTurn.mockResolvedValueOnce(
-      turnOk({ aiMessage: 'Hola, ¿cuántos días en Miami?', quickReplies: [] }),
+      turnOk({ sessionId: 's1', aiMessage: 'Hola, ¿cuántos días en Miami?', quickReplies: [] }),
     );
     fireEvent.press(screen.getByText('chat.aiUnavailableRetry'));
 
     await waitFor(() => expect(screen.getByText('Hola, ¿cuántos días en Miami?')).toBeTruthy());
     expect(screen.queryByText('chat.aiUnavailableTitle')).toBeNull();
-    // El reintento reejecuta el turno preseed (sessionId null + preSeededSlots).
+    // Clave del fix (gemelo del camino de texto libre): el reintento reusa la
+    // sesión que el turno preseed fallido ya creó (s1), no manda sessionId:null
+    // —que crearía una 2ª sesión huérfana—, y reenvía el mismo preSeededSlots.
     expect(mockChatTurn).toHaveBeenLastCalledWith({
-      sessionId: null,
+      sessionId: 's1',
       message: '',
       quickReplyId: null,
       preSeededSlots: { city: 'Miami' },
