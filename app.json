@@ -128,7 +128,8 @@
           "project": "locallist-app"
         }
       ],
-      "expo-video"
+      "expo-video",
+      "./plugins/withCertPinning"
     ],
     "extra": {
       "eas": {

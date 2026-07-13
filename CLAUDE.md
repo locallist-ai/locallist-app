@@ -9,6 +9,7 @@
 | **Storage** | SecureStore (tokens), in-memory cache (api-cache.ts) |
 | **iOS Target** | iOS 16.0+ |
 | **Privacy** | Privacy manifest configured (4 API types, 3 data types, no tracking) |
+| **Security** | Cert pinning ATS (`NSPinnedDomains`) vía config plugin `plugins/withCertPinning.js` — pins CA de ISRG contra el dominio de la API; rotación y riesgos documentados en el propio plugin |
 | **i18n** | i18next + expo-localization. EN + ES (España). Parity test: `lib/i18n/__tests__/parity.test.ts` |
 | **Tests** | Jest (jest-expo) — `npm test`. Suites in `lib/__tests__/`, `lib/plan/__tests__/`, `lib/follow/__tests__/`, `components/map/__tests__/`, `components/chat/__tests__/` |
 | **Analytics** | PostHog via REST (`lib/analytics.ts`) — no-op unless `EXPO_PUBLIC_POSTHOG_KEY` is set |
