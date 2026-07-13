@@ -5,12 +5,12 @@
 | **Tech** | Expo SDK 54, React Native 0.81, Expo Router 6, TypeScript |
 | **Deploy** | EAS Build (local) → TestFlight → App Store |
 | **Auth** | Apple Sign In + Google OAuth + email/password (HS256 JWT, auto-refresh) |
-| **Payments** | RevenueCat SDK (Apple IAP) — **planned, not yet installed** |
+| **Payments** | RevenueCat SDK (Apple IAP) — `react-native-purchases`, entitlement `plus`. Paywall `app/paywall.tsx`, lógica `lib/purchases.ts`. **Pendiente**: API key + productos en dashboard/ASC (sin key el paywall degrada a "no disponible") |
 | **Storage** | SecureStore (tokens), in-memory cache (api-cache.ts) |
 | **iOS Target** | iOS 16.0+ |
 | **Privacy** | Privacy manifest configured (4 API types, 3 data types, no tracking) |
 | **i18n** | i18next + expo-localization. EN + ES (España). Parity test: `lib/i18n/__tests__/parity.test.ts` |
-| **Tests** | Jest (jest-expo) — `npm test`. Suites in `lib/__tests__/`, `lib/plan/__tests__/`, `lib/follow/__tests__/`, `components/map/__tests__/`, `components/chat/__tests__/` |
+| **Tests** | Jest (jest-expo) — `npm test`. Suites in `lib/__tests__/`, `lib/plan/__tests__/`, `lib/follow/__tests__/`, `components/map/__tests__/`, `components/chat/__tests__/`, `components/account/__tests__/` |
 | **Analytics** | PostHog via REST (`lib/analytics.ts`) — no-op unless `EXPO_PUBLIC_POSTHOG_KEY` is set |
 | **Errors** | Sentry (`@sentry/react-native`), init in `lib/sentry.ts` |
 
@@ -50,6 +50,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `(tabs)/plans.tsx` | Plans list: PhotoHero covers, category filter chips, skeleton loading; CTA → `/builder/custom` |
 | `(tabs)/account.tsx` | Profile (useProfile: pace/budget/dietary), tier badge, language selector, sign out |
 | `login.tsx` | Apple Sign In, Google OAuth, email/password, password strength rules |
+| `paywall.tsx` | LocalList Plus paywall (modal iOS): offerings de RevenueCat con precio localizado, compra, restore, links legales; degrada a "no disponible" sin API key/productos |
 | `chat/index.tsx` | **Main plan-creation flow**: conversational AI chat — slot extraction (SlotBadges), quick replies, `chatGenerate` → plan, SaveProfileSheet, escape hatch to wizard |
 | `builder/wizard.tsx` | AI plan wizard (renders `components/home/HomeScreen` step flow) — escape hatch from chat |
 | `builder/custom.tsx` | Manual plan builder: name + debounced city search + days (1–3) → opens `/plan/new` editor |
@@ -97,7 +98,8 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | File | Description |
 |---|---|
 | `api.ts` | API client: auto JWT refresh, SecureStore token storage |
-| `auth.ts` | AuthContext: user state, logout, isPro flag |
+| `auth.ts` | AuthContext: user state, logout, isPro flag, refreshUser (re-fetch /account post-compra) |
+| `purchases.ts` | RevenueCat: configure (key por `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY`), offerings, purchase/restore con poll de `GET /account` hasta el flip del tier; cancelación de usuario no es error |
 | `auth/useAuthForm.ts` | Login/register flow hook: choose↔credentials step, Apple/Google OAuth, email validation, password strength (powers `app/login.tsx`) |
 | `theme.ts` | Brand tokens: colors, typography, spacing, borderRadius |
 | `types.ts` | Shared TypeScript types (Plan, Place, PlanStop, etc.) |

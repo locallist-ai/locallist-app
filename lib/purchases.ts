@@ -1,0 +1,205 @@
+/**
+ * RevenueCat (Apple IAP) — suscripción "LocalList Plus".
+ *
+ * Flujo: la compra se hace contra StoreKit vía RevenueCat; el backend recibe
+ * el webhook de RevenueCat y flipea `tier` a 'pro'. La app NO decide el tier
+ * por su cuenta: tras una compra/restore con entitlement activo, refresca
+ * `GET /account` (con un poll corto) hasta ver el flip. La fuente de verdad
+ * del gating sigue siendo `user.tier` del backend (`isPro` en lib/auth).
+ *
+ * Sin API key configurada el módulo degrada a "not_configured" (nunca crash):
+ * el paywall muestra un estado de no-disponible. Esto cubre dev/simulador y
+ * el periodo previo a crear los productos en App Store Connect.
+ */
+import { Platform } from 'react-native';
+import Purchases, {
+  LOG_LEVEL,
+  type CustomerInfo,
+  type PurchasesPackage,
+} from 'react-native-purchases';
+import { logger } from './logger';
+
+/** Entitlement configurado en el dashboard de RevenueCat. */
+export const PLUS_ENTITLEMENT_ID = 'plus';
+
+/** Poll de `GET /account` tras compra: 5 intentos x 2s = techo de ~10s. */
+const TIER_POLL_ATTEMPTS = 5;
+const TIER_POLL_DELAY_MS = 2000;
+
+// TODO(pablo): RevenueCat public API key (Apple) — crear app iOS en el
+// dashboard de RevenueCat y exponer la key como EXPO_PUBLIC_REVENUECAT_IOS_API_KEY
+// (en .env local y en EAS Build env). Es una key pública, no un secreto.
+function getApiKey(): string {
+  return process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '';
+}
+
+let configured = false;
+
+export function isPurchasesConfigured(): boolean {
+  return configured;
+}
+
+/**
+ * Inicializa el SDK (idempotente). Devuelve false si no hay API key o la
+ * plataforma no está soportada — el caller degrada a estado "no disponible".
+ */
+export async function configurePurchases(appUserID?: string | null): Promise<boolean> {
+  if (configured) return true;
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    logger.warn('RevenueCat: no API key configured, purchases disabled');
+    return false;
+  }
+  if (Platform.OS !== 'ios') {
+    logger.warn('RevenueCat: platform not supported yet', { platform: Platform.OS });
+    return false;
+  }
+
+  try {
+    Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
+    Purchases.configure({ apiKey, appUserID: appUserID ?? undefined });
+    configured = true;
+    return true;
+  } catch (err) {
+    logger.error('RevenueCat: configure failed', err);
+    return false;
+  }
+}
+
+/** Solo para tests: resetea el estado del módulo. */
+export function resetPurchasesForTesting() {
+  configured = false;
+}
+
+// ─── Offerings ───────────────────────────────────────────
+
+export type OfferingsError = 'not_configured' | 'no_offerings' | 'network';
+
+export interface OfferingsResult {
+  packages: PurchasesPackage[];
+  error: OfferingsError | null;
+}
+
+/**
+ * Packages del offering actual (precios ya localizados por StoreKit).
+ * Error-as-value, mismo espíritu que lib/api.
+ */
+export async function getPlusOfferings(): Promise<OfferingsResult> {
+  if (!configured) return { packages: [], error: 'not_configured' };
+
+  try {
+    const offerings = await Purchases.getOfferings();
+    const packages = offerings.current?.availablePackages ?? [];
+    if (packages.length === 0) {
+      // Productos aún no creados/aprobados en App Store Connect, u offering vacío.
+      logger.warn('RevenueCat: current offering has no packages');
+      return { packages: [], error: 'no_offerings' };
+    }
+    return { packages, error: null };
+  } catch (err) {
+    logger.warn('RevenueCat: getOfferings failed', err);
+    return { packages: [], error: 'network' };
+  }
+}
+
+// ─── Purchase / Restore ──────────────────────────────────
+
+/** Callback que refresca `GET /account` y devuelve el tier actual (o null si falla). */
+export type RefreshAccountTier = () => Promise<'free' | 'pro' | null>;
+
+export type PurchaseOutcome =
+  /** Entitlement activo y backend ya devuelve tier 'pro' — isPro flipea sin reiniciar. */
+  | { status: 'success' }
+  /** Entitlement activo en RevenueCat pero el backend aún no flipeó dentro del techo del poll. */
+  | { status: 'pending_backend' }
+  /** El usuario canceló el flujo de compra de Apple. NO es un error. */
+  | { status: 'cancelled' }
+  /** Compra/restore sin el entitlement "plus" activo (nada que restaurar o misconfig). */
+  | { status: 'no_entitlement' }
+  | { status: 'error'; message: string };
+
+interface PollOptions {
+  pollAttempts?: number;
+  pollDelayMs?: number;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function hasPlusEntitlement(customerInfo: CustomerInfo): boolean {
+  return PLUS_ENTITLEMENT_ID in (customerInfo.entitlements.active ?? {});
+}
+
+function isUserCancelled(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { userCancelled?: boolean }).userCancelled === true;
+}
+
+/**
+ * Con el entitlement ya activo en RevenueCat, espera al flip del backend:
+ * refresca /account con reintentos cortos hasta ver tier 'pro' o agotar el techo.
+ */
+async function settleTierWithBackend(
+  refreshAccountTier: RefreshAccountTier,
+  { pollAttempts = TIER_POLL_ATTEMPTS, pollDelayMs = TIER_POLL_DELAY_MS }: PollOptions,
+): Promise<PurchaseOutcome> {
+  for (let attempt = 0; attempt < pollAttempts; attempt++) {
+    const tier = await refreshAccountTier();
+    if (tier === 'pro') return { status: 'success' };
+    if (attempt < pollAttempts - 1) await sleep(pollDelayMs);
+  }
+  // El webhook de RevenueCat aún no llegó al backend: la compra es válida,
+  // el tier flipeará solo. El caller informa sin alarmar (no es un fallo).
+  logger.warn('RevenueCat: entitlement active but backend tier not flipped yet');
+  return { status: 'pending_backend' };
+}
+
+/**
+ * Compra un package del offering. La cancelación del usuario devuelve
+ * `{ status: 'cancelled' }` (no es error y no se loguea como tal).
+ */
+export async function purchasePlusPackage(
+  pkg: PurchasesPackage,
+  refreshAccountTier: RefreshAccountTier,
+  pollOptions: PollOptions = {},
+): Promise<PurchaseOutcome> {
+  if (!configured) return { status: 'error', message: 'not_configured' };
+
+  try {
+    const { customerInfo } = await Purchases.purchasePackage(pkg);
+    if (!hasPlusEntitlement(customerInfo)) {
+      logger.error('RevenueCat: purchase completed without plus entitlement (check dashboard mapping)');
+      return { status: 'no_entitlement' };
+    }
+    return settleTierWithBackend(refreshAccountTier, pollOptions);
+  } catch (err) {
+    if (isUserCancelled(err)) return { status: 'cancelled' };
+    logger.warn('RevenueCat: purchase failed', err);
+    const message = err instanceof Error ? err.message : 'purchase_failed';
+    return { status: 'error', message };
+  }
+}
+
+/**
+ * Restaura compras previas (reinstalación / nuevo dispositivo).
+ * Sin entitlement activo devuelve `no_entitlement` (nada que restaurar).
+ */
+export async function restorePlusPurchases(
+  refreshAccountTier: RefreshAccountTier,
+  pollOptions: PollOptions = {},
+): Promise<PurchaseOutcome> {
+  if (!configured) return { status: 'error', message: 'not_configured' };
+
+  try {
+    const customerInfo = await Purchases.restorePurchases();
+    if (!hasPlusEntitlement(customerInfo)) {
+      return { status: 'no_entitlement' };
+    }
+    return settleTierWithBackend(refreshAccountTier, pollOptions);
+  } catch (err) {
+    logger.warn('RevenueCat: restore failed', err);
+    const message = err instanceof Error ? err.message : 'restore_failed';
+    return { status: 'error', message };
+  }
+}

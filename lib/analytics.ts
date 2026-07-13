@@ -40,7 +40,15 @@ export type AppEvent =
   | { event: 'chat_ai_unavailable'; sessionId: string | null }
   // Profile
   | { event: 'profile_saved'; fields: string[] }
-  | { event: 'profile_reset' };
+  | { event: 'profile_reset' }
+  // Monetization (paywall / IAP)
+  | { event: 'paywall_viewed'; source: 'account_upsell' }
+  | { event: 'paywall_unavailable'; reason: string }
+  | { event: 'purchase_started'; productId: string }
+  | { event: 'purchase_completed'; productId: string; pendingBackend: boolean }
+  | { event: 'purchase_cancelled'; productId: string }
+  | { event: 'purchase_failed'; productId: string }
+  | { event: 'restore_completed'; found: boolean };
 
 /** @deprecated Use AppEvent */
 export type ChatEvent = AppEvent;

@@ -215,6 +215,13 @@ function AppStack() {
           presentation: Platform.OS === 'ios' ? 'modal' : 'card',
         }}
       />
+      <Stack.Screen
+        name="paywall"
+        options={{
+          headerShown: false,
+          presentation: Platform.OS === 'ios' ? 'modal' : 'card',
+        }}
+      />
     </Stack>
   );
 }

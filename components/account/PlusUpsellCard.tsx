@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   FadeInDown,
@@ -61,7 +62,7 @@ export function PlusUpsellCard() {
     <Animated.View entering={FadeInDown.duration(600).delay(200).springify().damping(14)}>
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => Alert.alert(t('pro.comingSoonTitle'), t('pro.comingSoonBody'), [{ text: t('pro.ok') }])}
+        onPress={() => router.push('/paywall')}
         style={s.plusCard}
       >
         <LinearGradient

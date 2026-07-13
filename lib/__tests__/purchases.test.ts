@@ -1,0 +1,243 @@
+/**
+ * Tests de comportamiento de lib/purchases.ts (RevenueCat mockeado).
+ *
+ * Cubre:
+ *  - configure: sin API key degrada (no crash), con key configura el SDK.
+ *  - getPlusOfferings: not_configured / packages / no_offerings / network.
+ *  - purchase ok + entitlement activo + backend flipeado → success y se
+ *    refresca /account (vía callback refreshAccountTier).
+ *  - cancelación del usuario → 'cancelled', NO es error y NO refresca account.
+ *  - entitlement activo pero backend sin flipear → retry con techo →
+ *    'pending_backend'; y flip en un intento intermedio → 'success'.
+ *  - restore: con entitlement → success; sin él → 'no_entitlement'; fallo → error.
+ */
+import Purchases from 'react-native-purchases';
+import {
+  configurePurchases,
+  isPurchasesConfigured,
+  resetPurchasesForTesting,
+  getPlusOfferings,
+  purchasePlusPackage,
+  restorePlusPurchases,
+  PLUS_ENTITLEMENT_ID,
+} from '../purchases';
+import type { PurchasesPackage, CustomerInfo } from 'react-native-purchases';
+
+jest.mock('react-native-purchases', () => ({
+  __esModule: true,
+  default: {
+    configure: jest.fn(),
+    setLogLevel: jest.fn(),
+    getOfferings: jest.fn(),
+    purchasePackage: jest.fn(),
+    restorePurchases: jest.fn(),
+  },
+  LOG_LEVEL: { DEBUG: 'DEBUG', WARN: 'WARN' },
+}));
+
+jest.mock('../logger', () => ({
+  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
+
+const mockPurchases = Purchases as jest.Mocked<typeof Purchases>;
+
+const PKG = {
+  identifier: '$rc_annual',
+  packageType: 'ANNUAL',
+  product: { identifier: 'plus_annual', title: 'Plus Annual', priceString: '39,99 €' },
+} as unknown as PurchasesPackage;
+
+function customerInfoWith(entitlements: string[]): CustomerInfo {
+  const active: Record<string, object> = {};
+  for (const e of entitlements) active[e] = { isActive: true };
+  return { entitlements: { active } } as unknown as CustomerInfo;
+}
+
+const API_KEY_ENV = 'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY';
+
+/** Configura el módulo con una key de prueba (estado limpio en cada test vía beforeEach). */
+async function configureWithKey(): Promise<boolean> {
+  process.env[API_KEY_ENV] = 'appl_test_key';
+  return configurePurchases('user-1');
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  resetPurchasesForTesting();
+  delete process.env[API_KEY_ENV];
+});
+
+describe('configurePurchases', () => {
+  it('sin API key: devuelve false y no crashea ni llama al SDK', async () => {
+    const ok = await configurePurchases('user-1');
+    expect(ok).toBe(false);
+    expect(isPurchasesConfigured()).toBe(false);
+    expect(mockPurchases.configure).not.toHaveBeenCalled();
+  });
+
+  it('con API key: configura el SDK con el appUserID y es idempotente', async () => {
+    const ok = await configureWithKey();
+    expect(ok).toBe(true);
+    expect(isPurchasesConfigured()).toBe(true);
+    expect(mockPurchases.configure).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: 'appl_test_key', appUserID: 'user-1' }),
+    );
+
+    await configurePurchases('user-1');
+    expect(mockPurchases.configure).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getPlusOfferings', () => {
+  it('sin configurar: error not_configured (paywall degrada, no crash)', async () => {
+    const res = await getPlusOfferings();
+    expect(res).toEqual({ packages: [], error: 'not_configured' });
+    expect(mockPurchases.getOfferings).not.toHaveBeenCalled();
+  });
+
+  it('offering con packages: los devuelve sin error', async () => {
+    await configureWithKey();
+    mockPurchases.getOfferings.mockResolvedValue({
+      current: { availablePackages: [PKG] },
+    } as never);
+
+    const res = await getPlusOfferings();
+    expect(res.error).toBeNull();
+    expect(res.packages).toEqual([PKG]);
+  });
+
+  it('offering vacío (productos ASC aún no creados): error no_offerings', async () => {
+    await configureWithKey();
+    mockPurchases.getOfferings.mockResolvedValue({ current: null } as never);
+
+    const res = await getPlusOfferings();
+    expect(res).toEqual({ packages: [], error: 'no_offerings' });
+  });
+
+  it('fallo de red del SDK: error network, sin throw', async () => {
+    await configureWithKey();
+    mockPurchases.getOfferings.mockRejectedValue(new Error('offline'));
+
+    const res = await getPlusOfferings();
+    expect(res).toEqual({ packages: [], error: 'network' });
+  });
+});
+
+describe('purchasePlusPackage', () => {
+  it('compra ok + entitlement plus + backend flipeado: success y refresca account', async () => {
+    await configureWithKey();
+    mockPurchases.purchasePackage.mockResolvedValue({
+      customerInfo: customerInfoWith([PLUS_ENTITLEMENT_ID]),
+    } as never);
+    const refresh = jest.fn().mockResolvedValue('pro');
+
+    const outcome = await purchasePlusPackage(PKG, refresh, { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'success' });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancelación del usuario: status cancelled, no es error y NO refresca account', async () => {
+    await configureWithKey();
+    mockPurchases.purchasePackage.mockRejectedValue({ userCancelled: true, message: 'cancelled' });
+    const refresh = jest.fn();
+
+    const outcome = await purchasePlusPackage(PKG, refresh, { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'cancelled' });
+    expect(refresh).not.toHaveBeenCalled();
+    const { logger } = jest.requireMock('../logger');
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('entitlement activo pero backend sin flipear: reintenta con techo → pending_backend', async () => {
+    await configureWithKey();
+    mockPurchases.purchasePackage.mockResolvedValue({
+      customerInfo: customerInfoWith([PLUS_ENTITLEMENT_ID]),
+    } as never);
+    const refresh = jest.fn().mockResolvedValue('free');
+
+    const outcome = await purchasePlusPackage(PKG, refresh, { pollAttempts: 3, pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'pending_backend' });
+    expect(refresh).toHaveBeenCalledTimes(3);
+  });
+
+  it('backend flipea en un intento intermedio del poll: success sin agotar el techo', async () => {
+    await configureWithKey();
+    mockPurchases.purchasePackage.mockResolvedValue({
+      customerInfo: customerInfoWith([PLUS_ENTITLEMENT_ID]),
+    } as never);
+    const refresh = jest.fn()
+      .mockResolvedValueOnce('free')
+      .mockResolvedValueOnce('free')
+      .mockResolvedValueOnce('pro');
+
+    const outcome = await purchasePlusPackage(PKG, refresh, { pollAttempts: 5, pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'success' });
+    expect(refresh).toHaveBeenCalledTimes(3);
+  });
+
+  it('compra completada sin entitlement plus (misconfig dashboard): no_entitlement', async () => {
+    await configureWithKey();
+    mockPurchases.purchasePackage.mockResolvedValue({
+      customerInfo: customerInfoWith([]),
+    } as never);
+    const refresh = jest.fn();
+
+    const outcome = await purchasePlusPackage(PKG, refresh, { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'no_entitlement' });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('fallo de red/StoreKit no cancelado: status error con mensaje', async () => {
+    await configureWithKey();
+    mockPurchases.purchasePackage.mockRejectedValue(new Error('network down'));
+
+    const outcome = await purchasePlusPackage(PKG, jest.fn(), { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'error', message: 'network down' });
+  });
+
+  it('sin configurar: status error sin llamar al SDK', async () => {
+    const outcome = await purchasePlusPackage(PKG, jest.fn(), { pollDelayMs: 0 });
+    expect(outcome).toEqual({ status: 'error', message: 'not_configured' });
+    expect(mockPurchases.purchasePackage).not.toHaveBeenCalled();
+  });
+});
+
+describe('restorePlusPurchases', () => {
+  it('restore con entitlement plus + backend pro: success', async () => {
+    await configureWithKey();
+    mockPurchases.restorePurchases.mockResolvedValue(customerInfoWith([PLUS_ENTITLEMENT_ID]) as never);
+    const refresh = jest.fn().mockResolvedValue('pro');
+
+    const outcome = await restorePlusPurchases(refresh, { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'success' });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('restore sin compras previas: no_entitlement (no es error)', async () => {
+    await configureWithKey();
+    mockPurchases.restorePurchases.mockResolvedValue(customerInfoWith([]) as never);
+    const refresh = jest.fn();
+
+    const outcome = await restorePlusPurchases(refresh, { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'no_entitlement' });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('restore con fallo de red: status error', async () => {
+    await configureWithKey();
+    mockPurchases.restorePurchases.mockRejectedValue(new Error('offline'));
+
+    const outcome = await restorePlusPurchases(jest.fn(), { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'error', message: 'offline' });
+  });
+});
