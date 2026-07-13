@@ -7,6 +7,12 @@
  * `GET /account` (con un poll corto) hasta ver el flip. La fuente de verdad
  * del gating sigue siendo `user.tier` del backend (`isPro` en lib/auth).
  *
+ * Si el webhook se retrasa más que el poll, el cliente reconcilia solo: un
+ * `addPlusActivationListener` a nivel de app refresca `/account` cuando el SDK
+ * marca el entitlement activo, y la vuelta a foreground vuelve a reconciliar
+ * (ver `usePurchaseReconciliation`). Así el flip llega en caliente, sin cold
+ * start ni Restore manual.
+ *
  * Sin API key configurada el módulo degrada a "not_configured" (nunca crash):
  * el paywall muestra un estado de no-disponible. Esto cubre dev/simulador y
  * el periodo previo a crear los productos en App Store Connect.
@@ -26,14 +32,21 @@ export const PLUS_ENTITLEMENT_ID = 'plus';
 const TIER_POLL_ATTEMPTS = 5;
 const TIER_POLL_DELAY_MS = 2000;
 
-// TODO(pablo): RevenueCat public API key (Apple) — crear app iOS en el
-// dashboard de RevenueCat y exponer la key como EXPO_PUBLIC_REVENUECAT_IOS_API_KEY
-// (en .env local y en EAS Build env). Es una key pública, no un secreto.
+// TODO(pablo): config externa pendiente (checklist de lanzamiento IAP):
+//  1. RevenueCat public API key (Apple): crear app iOS en el dashboard y exponer
+//     la key como EXPO_PUBLIC_REVENUECAT_IOS_API_KEY (.env local + EAS Build env).
+//     Es una key pública, no un secreto.
+//  2. Webhook RevenueCat → backend verificado end-to-end: que el evento de compra
+//     flipe `tier` a 'pro' de forma fiable (auth del webhook, reintentos, latencia).
+//     El cliente ya reconcilia solo si el webhook se retrasa (listener + foreground),
+//     pero el webhook sigue siendo la fuente de verdad y hay que confirmarlo en real.
 function getApiKey(): string {
   return process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '';
 }
 
 let configured = false;
+/** appUserID con el que quedó asociado el SDK (para re-asociar si cambia el usuario). */
+let currentAppUserID: string | null = null;
 
 export function isPurchasesConfigured(): boolean {
   return configured;
@@ -42,9 +55,26 @@ export function isPurchasesConfigured(): boolean {
 /**
  * Inicializa el SDK (idempotente). Devuelve false si no hay API key o la
  * plataforma no está soportada — el caller degrada a estado "no disponible".
+ *
+ * Ya configurado, si el `appUserID` cambia (login con otra cuenta en la misma
+ * sesión de proceso) re-asocia vía `Purchases.logIn` para no dejar las compras
+ * colgadas del usuario anterior. Un fallo del re-login no invalida el SDK: se
+ * loguea y se sigue (la siguiente compra/restore reintentará el flujo).
  */
 export async function configurePurchases(appUserID?: string | null): Promise<boolean> {
-  if (configured) return true;
+  const uid = appUserID ?? null;
+
+  if (configured) {
+    if (uid && uid !== currentAppUserID) {
+      try {
+        await Purchases.logIn(uid);
+        currentAppUserID = uid;
+      } catch (err) {
+        logger.warn('RevenueCat: logIn on user change failed', err);
+      }
+    }
+    return true;
+  }
 
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -58,8 +88,9 @@ export async function configurePurchases(appUserID?: string | null): Promise<boo
 
   try {
     Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
-    Purchases.configure({ apiKey, appUserID: appUserID ?? undefined });
+    Purchases.configure({ apiKey, appUserID: uid ?? undefined });
     configured = true;
+    currentAppUserID = uid;
     return true;
   } catch (err) {
     logger.error('RevenueCat: configure failed', err);
@@ -70,6 +101,7 @@ export async function configurePurchases(appUserID?: string | null): Promise<boo
 /** Solo para tests: resetea el estado del módulo. */
 export function resetPurchasesForTesting() {
   configured = false;
+  currentAppUserID = null;
 }
 
 // ─── Offerings ───────────────────────────────────────────
@@ -130,6 +162,31 @@ function sleep(ms: number): Promise<void> {
 
 function hasPlusEntitlement(customerInfo: CustomerInfo): boolean {
   return PLUS_ENTITLEMENT_ID in (customerInfo.entitlements.active ?? {});
+}
+
+/**
+ * Reconciliación en caliente: registra un listener del SDK que dispara
+ * `onPlusActivated` cuando el entitlement "plus" pasa a activo (transición
+ * inactivo→activo). El SDK emite estas actualizaciones también cuando el webhook
+ * de RevenueCat confirma la compra en su backend, así que aunque el webhook de
+ * nuestro backend se retrase, el cliente puede refrescar `/account` sin esperar
+ * a un cold start ni a un Restore manual.
+ *
+ * Devuelve una función de limpieza que quita el listener. Sin SDK configurado es
+ * un no-op (devuelve un cleanup vacío) para no requerir configure previo.
+ */
+export function addPlusActivationListener(onPlusActivated: () => void): () => void {
+  if (!configured) return () => {};
+
+  let wasActive = false;
+  const listener = (customerInfo: CustomerInfo) => {
+    const active = hasPlusEntitlement(customerInfo);
+    if (active && !wasActive) onPlusActivated();
+    wasActive = active;
+  };
+
+  Purchases.addCustomerInfoUpdateListener(listener);
+  return () => Purchases.removeCustomerInfoUpdateListener(listener);
 }
 
 function isUserCancelled(err: unknown): boolean {

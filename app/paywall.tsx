@@ -35,7 +35,7 @@ function usePackageLabel() {
 
 export default function PaywallScreen() {
   const { t } = useTranslation();
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, isPro } = useAuth();
   const packageLabel = usePackageLabel();
 
   const [phase, setPhase] = useState<Phase>('loading');
@@ -68,6 +68,22 @@ export default function PaywallScreen() {
     track({ event: 'paywall_viewed', source: 'account_upsell' });
     load();
   }, [load]);
+
+  // Reconciliación en caliente: si el tier flipa a 'pro' mientras esperamos en el
+  // estado pending (el listener a nivel de app refrescó /account al llegar el
+  // webhook retrasado), avanzamos a éxito sin que el usuario tenga que reintentar.
+  useEffect(() => {
+    if (phase === 'pending' && isPro) setPhase('success');
+  }, [phase, isPro]);
+
+  // Reintento manual desde el estado pending: vuelve a preguntar al backend.
+  const onCheckPending = async () => {
+    if (busy) return;
+    setBusy(true);
+    const tier = await refreshUser();
+    setBusy(false);
+    if (tier === 'pro') setPhase('success');
+  };
 
   const onPurchase = async () => {
     if (!selected || busy) return;
@@ -146,23 +162,45 @@ export default function PaywallScreen() {
         </View>
       )}
 
-      {(phase === 'success' || phase === 'pending') && (
+      {phase === 'success' && (
         <View style={s.center}>
           <View style={[s.stateIcon, s.stateIconSuccess]}>
-            <Ionicons
-              name={phase === 'success' ? 'checkmark' : 'hourglass-outline'}
-              size={40}
-              color={colors.successEmerald}
-            />
+            <Ionicons name="checkmark" size={40} color={colors.successEmerald} />
           </View>
-          <Text style={s.stateTitle}>
-            {phase === 'success' ? t('paywall.successTitle') : t('paywall.pendingTitle')}
-          </Text>
-          <Text style={s.stateBody}>
-            {phase === 'success' ? t('paywall.successBody') : t('paywall.pendingBody')}
-          </Text>
+          <Text style={s.stateTitle}>{t('paywall.successTitle')}</Text>
+          <Text style={s.stateBody}>{t('paywall.successBody')}</Text>
           <TouchableOpacity style={s.primaryBtn} activeOpacity={0.8} onPress={() => router.back()}>
             <Text style={s.primaryBtnText}>{t('paywall.done')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {phase === 'pending' && (
+        <View style={s.center}>
+          <View style={[s.stateIcon, s.stateIconSuccess]}>
+            <Ionicons name="hourglass-outline" size={40} color={colors.successEmerald} />
+          </View>
+          <Text style={s.stateTitle}>{t('paywall.pendingTitle')}</Text>
+          <Text style={s.stateBody}>{t('paywall.pendingBody')}</Text>
+          <TouchableOpacity
+            style={[s.primaryBtn, busy && s.primaryBtnDisabled]}
+            activeOpacity={0.8}
+            onPress={onCheckPending}
+            disabled={busy}
+            testID="paywall-pending-retry"
+          >
+            {busy
+              ? <ActivityIndicator color="#FFFFFF" />
+              : <Text style={s.primaryBtnText}>{t('paywall.pendingRetry')}</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => WebBrowser.openBrowserAsync('https://locallist.ai/support')}
+            testID="paywall-pending-contact"
+          >
+            <Text style={s.restoreText}>{t('paywall.pendingContact')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={s.restoreText}>{t('paywall.done')}</Text>
           </TouchableOpacity>
         </View>
       )}

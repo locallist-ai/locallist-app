@@ -12,6 +12,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { colors } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
+import { usePurchaseReconciliation } from '../lib/usePurchaseReconciliation';
 import { preloadPlans } from '../lib/preload';
 import { logger } from '../lib/logger';
 import LoginScreen from './login';
@@ -175,6 +176,9 @@ function AuthGate() {
 
 function AppStack() {
   const { t } = useTranslation();
+  // Reconcilia el tier en caliente tras una compra IAP (webhook retrasado /
+  // vuelta a foreground) sin depender de que el usuario siga en el paywall.
+  usePurchaseReconciliation();
   return (
     <Stack
       screenOptions={{

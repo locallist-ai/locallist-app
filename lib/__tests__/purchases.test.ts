@@ -19,6 +19,7 @@ import {
   getPlusOfferings,
   purchasePlusPackage,
   restorePlusPurchases,
+  addPlusActivationListener,
   PLUS_ENTITLEMENT_ID,
 } from '../purchases';
 import type { PurchasesPackage, CustomerInfo } from 'react-native-purchases';
@@ -31,6 +32,9 @@ jest.mock('react-native-purchases', () => ({
     getOfferings: jest.fn(),
     purchasePackage: jest.fn(),
     restorePurchases: jest.fn(),
+    logIn: jest.fn(),
+    addCustomerInfoUpdateListener: jest.fn(),
+    removeCustomerInfoUpdateListener: jest.fn(),
   },
   LOG_LEVEL: { DEBUG: 'DEBUG', WARN: 'WARN' },
 }));
@@ -85,6 +89,77 @@ describe('configurePurchases', () => {
 
     await configurePurchases('user-1');
     expect(mockPurchases.configure).toHaveBeenCalledTimes(1);
+  });
+
+  it('ya configurado y cambia el appUserID: re-asocia vía logIn sin reconfigurar', async () => {
+    await configureWithKey(); // appUserID user-1
+    const ok = await configurePurchases('user-2');
+
+    expect(ok).toBe(true);
+    expect(mockPurchases.logIn).toHaveBeenCalledWith('user-2');
+    expect(mockPurchases.configure).toHaveBeenCalledTimes(1);
+  });
+
+  it('ya configurado con el mismo appUserID: no re-loguea', async () => {
+    await configureWithKey(); // appUserID user-1
+    await configurePurchases('user-1');
+
+    expect(mockPurchases.logIn).not.toHaveBeenCalled();
+  });
+
+  it('logIn falla en el cambio de usuario: no invalida el SDK (sigue true, warn)', async () => {
+    await configureWithKey();
+    mockPurchases.logIn.mockRejectedValueOnce(new Error('offline'));
+
+    const ok = await configurePurchases('user-2');
+
+    expect(ok).toBe(true);
+    const { logger } = jest.requireMock('../logger');
+    expect(logger.warn).toHaveBeenCalled();
+  });
+});
+
+describe('addPlusActivationListener', () => {
+  it('sin configurar: no registra listener y el cleanup no crashea (no-op)', () => {
+    const cb = jest.fn();
+    const cleanup = addPlusActivationListener(cb);
+
+    expect(mockPurchases.addCustomerInfoUpdateListener).not.toHaveBeenCalled();
+    expect(() => cleanup()).not.toThrow();
+  });
+
+  it('el entitlement plus pasa a activo: dispara el callback una sola vez en la transición', async () => {
+    await configureWithKey();
+    const cb = jest.fn();
+    addPlusActivationListener(cb);
+    const listener = mockPurchases.addCustomerInfoUpdateListener.mock.calls[0][0];
+
+    // Primera actualización con plus activo: transición inactivo→activo.
+    listener(customerInfoWith([PLUS_ENTITLEMENT_ID]));
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    // Sigue activo en la siguiente actualización: no re-dispara.
+    listener(customerInfoWith([PLUS_ENTITLEMENT_ID]));
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+
+  it('actualización sin entitlement plus: no dispara el callback', async () => {
+    await configureWithKey();
+    const cb = jest.fn();
+    addPlusActivationListener(cb);
+    const listener = mockPurchases.addCustomerInfoUpdateListener.mock.calls[0][0];
+
+    listener(customerInfoWith([]));
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('cleanup quita el listener registrado en el SDK', async () => {
+    await configureWithKey();
+    const cleanup = addPlusActivationListener(jest.fn());
+    const listener = mockPurchases.addCustomerInfoUpdateListener.mock.calls[0][0];
+
+    cleanup();
+    expect(mockPurchases.removeCustomerInfoUpdateListener).toHaveBeenCalledWith(listener);
   });
 });
 

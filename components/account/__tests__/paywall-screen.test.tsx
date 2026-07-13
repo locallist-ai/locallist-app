@@ -152,6 +152,31 @@ it('entitlement activo pero tier sin flipear (pending_backend): estado compra re
   expect(await screen.findByText('paywall.pendingTitle')).toBeOnTheScreen();
 });
 
+it('pending: si isPro flipa en caliente (reconciliación app-level), avanza a éxito solo', async () => {
+  mockPurchase.mockResolvedValue({ status: 'pending_backend' });
+  const { rerender } = render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+  expect(await screen.findByText('paywall.pendingTitle')).toBeOnTheScreen();
+
+  // El listener a nivel de app refrescó /account al llegar el webhook: tier → pro.
+  mockUseAuth.mockReturnValue({ user: { id: 'u1', tier: 'pro' }, isPro: true, refreshUser });
+  rerender(<PaywallScreen />);
+
+  expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
+});
+
+it('pending: "comprobar de nuevo" reconsulta el backend y muestra éxito si ya es pro', async () => {
+  mockPurchase.mockResolvedValue({ status: 'pending_backend' });
+  refreshUser.mockResolvedValue('pro');
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+  fireEvent.press(await screen.findByTestId('paywall-pending-retry'));
+
+  expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
+});
+
 it('fallo de compra: modal de error y el paywall sigue usable', async () => {
   mockPurchase.mockResolvedValue({ status: 'error', message: 'boom' });
   render(<PaywallScreen />);
