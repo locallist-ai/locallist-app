@@ -14,7 +14,9 @@ import {
   purchasePlusPackage,
   restorePlusPurchases,
 } from '../lib/purchases';
+import type { PlusEntitlementPeriodType } from '../lib/purchases';
 import { track, type PaywallSource } from '../lib/analytics';
+import { syncTrialReminderAfterPurchase } from '../lib/trial-reminder';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 
 type Phase = 'loading' | 'ready' | 'unavailable' | 'success' | 'pending';
@@ -77,6 +79,10 @@ export default function PaywallScreen() {
   const [selected, setSelected] = useState<PurchasesPackage | null>(null);
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<{ title: string; body: string } | null>(null);
+  // True si la compra completada fue el plan anual con trial: las pantallas de
+  // éxito/pendiente muestran el contexto del permiso ("te avisaremos antes del
+  // cobro") justo cuando aparece el prompt del sistema.
+  const [trialReminderApplies, setTrialReminderApplies] = useState(false);
 
   // paywall_viewed se emite UNA vez por apertura y SOLO cuando las offerings
   // renderizan con precios visibles (denominador de la señal de pricing) — la
@@ -186,15 +192,41 @@ export default function PaywallScreen() {
     const outcome = await purchasePlusPackage(selected, user.id, refreshUser);
     setBusy(false);
 
+    // Promesa "recordatorio el día 5": tras una compra efectiva del plan anual
+    // con trial REAL se programa la notificación local (el módulo pide el
+    // permiso en este momento, con el contexto en pantalla — nunca en el
+    // arranque). El criterio es `entitlementPeriodType === 'TRIAL'` del
+    // outcome (elegibilidad del USUARIO), no el introPrice del producto: a
+    // quien ya consumió su trial Apple le cobra ya, y avisarle de "tu prueba
+    // acaba" sería mentira. Una compra efectiva SIN trial cancela cualquier
+    // aviso pendiente obsoleto (cambio de plan durante el trial).
+    // Fire-and-forget: nunca lanza y no puede romper el flujo de compra.
+    const syncReminder = (
+      entitlementPeriodType: PlusEntitlementPeriodType | null,
+      outcomeStatus: 'success' | 'pending_backend',
+    ) => {
+      setTrialReminderApplies(
+        selected.packageType === 'ANNUAL' && entitlementPeriodType === 'TRIAL',
+      );
+      void syncTrialReminderAfterPurchase({
+        packageType: selected.packageType,
+        entitlementPeriodType,
+        outcomeStatus,
+        purchasedAt: new Date(),
+      });
+    };
+
     switch (outcome.status) {
       case 'success':
         purchaseOutcomeRef.current = true;
         track({ event: 'purchase_completed', ...props, pendingBackend: false });
+        syncReminder(outcome.entitlementPeriodType, outcome.status);
         setPhase('success');
         break;
       case 'pending_backend':
         purchaseOutcomeRef.current = true;
         track({ event: 'purchase_completed', ...props, pendingBackend: true });
+        syncReminder(outcome.entitlementPeriodType, outcome.status);
         setPhase('pending');
         break;
       case 'cancelled':
@@ -278,6 +310,11 @@ export default function PaywallScreen() {
           </View>
           <Text style={s.stateTitle}>{t('paywall.successTitle')}</Text>
           <Text style={s.stateBody}>{t('paywall.successBody')}</Text>
+          {trialReminderApplies && (
+            <Text style={s.trialNotice} testID="paywall-trial-notice">
+              {t('paywall.trialReminderNotice')}
+            </Text>
+          )}
           <TouchableOpacity style={s.primaryBtn} activeOpacity={0.8} onPress={() => router.back()}>
             <Text style={s.primaryBtnText}>{t('paywall.done')}</Text>
           </TouchableOpacity>
@@ -291,6 +328,11 @@ export default function PaywallScreen() {
           </View>
           <Text style={s.stateTitle}>{t('paywall.pendingTitle')}</Text>
           <Text style={s.stateBody}>{t('paywall.pendingBody')}</Text>
+          {trialReminderApplies && (
+            <Text style={s.trialNotice} testID="paywall-trial-notice">
+              {t('paywall.trialReminderNotice')}
+            </Text>
+          )}
           <TouchableOpacity
             style={[s.primaryBtn, busy && s.primaryBtnDisabled]}
             activeOpacity={0.8}
@@ -605,6 +647,15 @@ const s = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: spacing.lg,
+  },
+  trialNotice: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginTop: -spacing.sm,
     marginBottom: spacing.lg,
   },
 });

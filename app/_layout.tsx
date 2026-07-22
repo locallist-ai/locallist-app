@@ -13,6 +13,7 @@ import { useFonts } from 'expo-font';
 import { colors } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { usePurchaseReconciliation } from '../lib/usePurchaseReconciliation';
+import { useTrialReminder } from '../lib/trial-reminder/useTrialReminder';
 import { preloadPlans } from '../lib/preload';
 import { logger } from '../lib/logger';
 import LoginScreen from './login';
@@ -179,6 +180,9 @@ function AppStack() {
   // Reconcilia el tier en caliente tras una compra IAP (webhook retrasado /
   // vuelta a foreground) sin depender de que el usuario siga en el paywall.
   usePurchaseReconciliation();
+  // Recordatorio de fin de trial (día 5): presentación en foreground, tap →
+  // evento + cuenta, y cancelación del recordatorio huérfano vía tier.
+  useTrialReminder();
   return (
     <Stack
       screenOptions={{

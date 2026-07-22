@@ -166,7 +166,7 @@ it('CONTRATO: la venta espera al logIn en vuelo (commit antes de verificar, lueg
 
   resolveLogIn({});
   expect(await login).toBe(true);
-  expect(await sale).toEqual({ status: 'success' }); // identidad user-2 ya commiteada
+  expect(await sale).toEqual({ status: 'success', entitlementPeriodType: null }); // identidad user-2 ya commiteada
   expect(mockPurchases.purchasePackage).toHaveBeenCalledTimes(1);
 });
 
