@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
@@ -14,10 +14,42 @@ import {
   purchasePlusPackage,
   restorePlusPurchases,
 } from '../lib/purchases';
-import { track } from '../lib/analytics';
+import { track, type PaywallSource } from '../lib/analytics';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 
 type Phase = 'loading' | 'ready' | 'unavailable' | 'success' | 'pending';
+
+const PAYWALL_SOURCES: readonly PaywallSource[] = [
+  'account_upsell', 'plan_limit', 'day_limit', 'multi_city',
+  'offline_follow', 'favorites_limit', 'video_import', 'settings',
+];
+
+/** `?source=` del deep link/push validado contra la taxonomía; default upsell. */
+function asPaywallSource(raw: string | string[] | undefined): PaywallSource {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return (PAYWALL_SOURCES as readonly string[]).includes(value ?? '')
+    ? (value as PaywallSource)
+    : 'account_upsell';
+}
+
+/**
+ * Props de precio para los eventos purchase_* — todo derivado del product de
+ * StoreKit (precio ya localizado). `hasTrial` = intro price gratuito (el trial
+ * de 7 días del plan anual); un intro de pago no es trial. OJO: refleja el
+ * PRODUCTO, no la elegibilidad del usuario (Apple puede denegar el trial a
+ * quien ya lo consumió) — el cruce real trial→paid vive en los billing_events
+ * del backend, no en esta prop.
+ */
+function purchaseEventProps(pkg: PurchasesPackage) {
+  return {
+    productId: pkg.product.identifier,
+    priceString: pkg.product.priceString,
+    price: pkg.product.price,
+    currency: pkg.product.currencyCode,
+    period: (pkg.packageType === 'ANNUAL' ? 'annual' : 'monthly') as 'annual' | 'monthly',
+    hasTrial: pkg.product.introPrice?.price === 0,
+  };
+}
 
 // Etiqueta legible por tipo de package (precio localizado lo da StoreKit).
 function usePackageLabel() {
@@ -37,12 +69,42 @@ export default function PaywallScreen() {
   const { t } = useTranslation();
   const { user, refreshUser, isPro } = useAuth();
   const packageLabel = usePackageLabel();
+  const params = useLocalSearchParams<{ source?: string }>();
+  const source = asPaywallSource(params.source);
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [selected, setSelected] = useState<PurchasesPackage | null>(null);
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<{ title: string; body: string } | null>(null);
+
+  // paywall_viewed se emite UNA vez por apertura y SOLO cuando las offerings
+  // renderizan con precios visibles (denominador de la señal de pricing) — la
+  // pantalla de error ya tiene su evento (paywall_unavailable). Si un retry
+  // triunfa tras un fallo, el viewed se emite entonces, anclado al éxito.
+  const viewTrackedRef = useRef(false);
+  // Momento en que los precios se mostraron por primera vez (msOnScreen de
+  // paywall_dismissed con phase 'shown' se ancla aquí, no al mount).
+  const pricesShownAtRef = useRef<number | null>(null);
+  // Una compra/restore con entitlement suprime paywall_dismissed en el cierre.
+  const purchaseOutcomeRef = useRef(false);
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
+  // Estado vigente al desmontar (el cleanup del unmount no ve el state actual).
+  const phaseRef = useRef<Phase>('loading');
+  phaseRef.current = phase;
+  // Guard de montaje (limpiado en el cleanup del effect del dismissed): un
+  // load() que resuelve con éxito DESPUÉS del unmount no debe emitir un
+  // paywall_viewed fantasma tras el dismissed — esos precios nunca renderizaron.
+  const mountedRef = useRef(true);
+
+  const trackViewedOnce = useCallback((offeringId: string | null) => {
+    if (!mountedRef.current) return;
+    if (pricesShownAtRef.current === null) pricesShownAtRef.current = Date.now();
+    if (viewTrackedRef.current) return;
+    viewTrackedRef.current = true;
+    track({ event: 'paywall_viewed', source: sourceRef.current, offeringId });
+  }, []);
 
   const load = useCallback(async () => {
     setPhase('loading');
@@ -58,16 +120,45 @@ export default function PaywallScreen() {
       setPhase('unavailable');
       return;
     }
+    trackViewedOnce(pkgs[0]?.presentedOfferingContext?.offeringIdentifier ?? null);
     setPackages(pkgs);
     // Preselección: anual si existe (mejor precio), si no el primero.
     setSelected(pkgs.find((p) => p.packageType === 'ANNUAL') ?? pkgs[0]);
     setPhase('ready');
-  }, [user?.id]);
+  }, [user?.id, trackViewedOnce]);
 
   useEffect(() => {
-    track({ event: 'paywall_viewed', source: 'account_upsell' });
     load();
   }, [load]);
+
+  // Funnel view→dismiss: al desmontar (X, back, swipe-down del modal) sin
+  // outcome de compra se emite paywall_dismissed con la phase vigente. Un
+  // dismissed con phase 'loading'/'unavailable' no lleva viewed emparejado:
+  // correcto, el usuario nunca vio precios.
+  useEffect(() => {
+    const mountedAt = Date.now();
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (purchaseOutcomeRef.current) return;
+      const dismissPhase =
+        phaseRef.current === 'ready'
+          ? ('shown' as const)
+          : phaseRef.current === 'unavailable'
+            ? ('unavailable' as const)
+            : ('loading' as const);
+      const since =
+        dismissPhase === 'shown' && pricesShownAtRef.current !== null
+          ? pricesShownAtRef.current
+          : mountedAt;
+      track({
+        event: 'paywall_dismissed',
+        source: sourceRef.current,
+        phase: dismissPhase,
+        msOnScreen: Date.now() - since,
+      });
+    };
+  }, []);
 
   // Reconciliación en caliente: si el tier flipa a 'pro' mientras esperamos en el
   // estado pending (el listener a nivel de app refrescó /account al llegar el
@@ -87,9 +178,9 @@ export default function PaywallScreen() {
 
   const onPurchase = async () => {
     if (!selected || busy || !user?.id) return;
-    const productId = selected.product.identifier;
+    const props = purchaseEventProps(selected);
     setBusy(true);
-    track({ event: 'purchase_started', productId });
+    track({ event: 'purchase_started', ...props });
     // user.id como identidad esperada: la lib rechaza la compra si el SDK no
     // está asociado exactamente a este usuario (identity_mismatch).
     const outcome = await purchasePlusPackage(selected, user.id, refreshUser);
@@ -97,19 +188,21 @@ export default function PaywallScreen() {
 
     switch (outcome.status) {
       case 'success':
-        track({ event: 'purchase_completed', productId, pendingBackend: false });
+        purchaseOutcomeRef.current = true;
+        track({ event: 'purchase_completed', ...props, pendingBackend: false });
         setPhase('success');
         break;
       case 'pending_backend':
-        track({ event: 'purchase_completed', productId, pendingBackend: true });
+        purchaseOutcomeRef.current = true;
+        track({ event: 'purchase_completed', ...props, pendingBackend: true });
         setPhase('pending');
         break;
       case 'cancelled':
         // Cancelar el sheet de Apple no es un error: sin modal, sin log.
-        track({ event: 'purchase_cancelled', productId });
+        track({ event: 'purchase_cancelled', ...props });
         break;
       default:
-        track({ event: 'purchase_failed', productId });
+        track({ event: 'purchase_failed', ...props });
         if (outcome.status === 'error' && outcome.message === 'identity_mismatch') {
           // La identidad RC quedó invalidada (divergencia/carrera): un re-load
           // re-configura (logIn fresco) y refetch — re-pulsar comprar vuelve a
@@ -129,10 +222,12 @@ export default function PaywallScreen() {
 
     switch (outcome.status) {
       case 'success':
+        purchaseOutcomeRef.current = true;
         track({ event: 'restore_completed', found: true });
         setPhase('success');
         break;
       case 'pending_backend':
+        purchaseOutcomeRef.current = true;
         track({ event: 'restore_completed', found: true });
         setPhase('pending');
         break;

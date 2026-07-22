@@ -58,6 +58,12 @@ jest.mock('../logger', () => ({
   },
 }));
 
+// Analytics mockeado: evita cargar lib/purchases (react-native-purchases) en el
+// graph y permite asertar el wiring de los 403 de gates Plus.
+jest.mock('../analytics', () => ({
+  trackPlanLimitIfGate403: jest.fn(),
+}));
+
 describe('lib/api auto-login', () => {
   const mockUser = {
     id: 'u1',
@@ -354,5 +360,58 @@ describe('lib/api abort externo (unmount del caller)', () => {
     await pending;
 
     expect(logger.error).not.toHaveBeenCalled();
+  });
+});
+
+describe('lib/api wiring de gates Plus (403 estructurado → analytics)', () => {
+  const jsonRes = (status: number, body: unknown) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.resetModules();
+  });
+
+  it('en un 403 pasa status y body a trackPlanLimitIfGate403 y devuelve error-as-value', async () => {
+    const gateBody = { error: 'plan_limit_reached', used: 3, limit: 3, resetsAt: '2026-08-01T00:00:00Z' };
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => jsonRes(403, gateBody));
+
+    const { api } = require('../api') as typeof import('../api');
+    const { trackPlanLimitIfGate403 } = jest.requireMock('../analytics');
+
+    const res = await api<unknown>('/chat/generate', { method: 'POST', body: { city: 'Madrid' } });
+
+    expect(res.status).toBe(403);
+    expect(res.error).toBe('plan_limit_reached');
+    expect(res.errorBody).toEqual(gateBody);
+    expect(trackPlanLimitIfGate403).toHaveBeenCalledTimes(1);
+    expect(trackPlanLimitIfGate403).toHaveBeenCalledWith(403, gateBody);
+  });
+
+  it('una respuesta 200 no pasa por el helper', async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => jsonRes(200, { ok: true }));
+
+    const { api } = require('../api') as typeof import('../api');
+    const { trackPlanLimitIfGate403 } = jest.requireMock('../analytics');
+
+    await api<unknown>('/account');
+
+    expect(trackPlanLimitIfGate403).not.toHaveBeenCalled();
+  });
+
+  it('cualquier respuesta no-ok pasa por el helper (el filtrado del 403 vive en analytics)', async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () =>
+      jsonRes(429, { error: 'daily_cap_reached', used: 50, limit: 50 }),
+    );
+
+    const { api } = require('../api') as typeof import('../api');
+    const { trackPlanLimitIfGate403 } = jest.requireMock('../analytics');
+
+    await api<unknown>('/chat/generate', { method: 'POST', body: {} });
+
+    expect(trackPlanLimitIfGate403).toHaveBeenCalledWith(429, { error: 'daily_cap_reached', used: 50, limit: 50 });
   });
 });

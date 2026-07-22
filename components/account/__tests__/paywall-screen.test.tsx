@@ -20,9 +20,11 @@ import {
   restorePlusPurchases,
 } from '../../../lib/purchases';
 import { useAuth } from '../../../lib/auth';
+import { track } from '../../../lib/analytics';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn() },
+  useLocalSearchParams: jest.fn(() => ({})),
 }));
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn() }));
 jest.mock('expo-linear-gradient', () => {
@@ -65,12 +67,29 @@ const refreshUser = jest.fn().mockResolvedValue('pro');
 const MONTHLY = {
   identifier: '$rc_monthly',
   packageType: 'MONTHLY',
-  product: { identifier: 'plus_monthly', title: 'Plus Monthly', priceString: '4,99 €' },
+  presentedOfferingContext: { offeringIdentifier: 'default' },
+  product: {
+    identifier: 'plus_monthly',
+    title: 'Plus Monthly',
+    priceString: '4,99 €',
+    price: 4.99,
+    currencyCode: 'EUR',
+    introPrice: null,
+  },
 };
 const ANNUAL = {
   identifier: '$rc_annual',
   packageType: 'ANNUAL',
-  product: { identifier: 'plus_annual', title: 'Plus Annual', priceString: '39,99 €' },
+  presentedOfferingContext: { offeringIdentifier: 'default' },
+  product: {
+    identifier: 'plus_annual',
+    title: 'Plus Annual',
+    priceString: '39,99 €',
+    price: 39.99,
+    currencyCode: 'EUR',
+    // Trial de 7 días del plan anual: intro price gratuito.
+    introPrice: { price: 0, periodNumberOfUnits: 7, periodUnit: 'DAY' },
+  },
 };
 
 beforeEach(() => {
@@ -266,4 +285,158 @@ it('restore con entitlement: muestra éxito', async () => {
   fireEvent.press(await screen.findByTestId('paywall-restore'));
 
   expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
+});
+
+// ─── Analytics de monetización (paywall_viewed / dismissed / purchase props) ──
+
+const mockTrack = track as jest.Mock;
+const eventsOf = (name: string) =>
+  mockTrack.mock.calls.map(([p]) => p).filter((p) => p.event === name);
+
+it('paywall_viewed se emite UNA vez cuando los precios renderizan, con offeringId y source', async () => {
+  render(<PaywallScreen />);
+  await screen.findByTestId('paywall-cta');
+
+  const viewed = eventsOf('paywall_viewed');
+  expect(viewed).toHaveLength(1);
+  expect(viewed[0]).toEqual({ event: 'paywall_viewed', source: 'account_upsell', offeringId: 'default' });
+});
+
+it('paywall no disponible: NO emite paywall_viewed (el denominador es "precios mostrados")', async () => {
+  mockConfigure.mockResolvedValue(false);
+  render(<PaywallScreen />);
+  await screen.findByText('paywall.unavailableTitle');
+
+  expect(eventsOf('paywall_viewed')).toHaveLength(0);
+  expect(eventsOf('paywall_unavailable')).toHaveLength(1);
+});
+
+it('retry que triunfa tras un fallo: paywall_viewed se emite entonces (anclado al éxito), una sola vez', async () => {
+  mockConfigure.mockResolvedValueOnce(false);
+  render(<PaywallScreen />);
+
+  await screen.findByText('paywall.unavailableTitle');
+  expect(eventsOf('paywall_viewed')).toHaveLength(0);
+
+  fireEvent.press(screen.getByText('paywall.retry'));
+  await screen.findByTestId('paywall-cta');
+
+  const viewed = eventsOf('paywall_viewed');
+  expect(viewed).toHaveLength(1);
+  expect(viewed[0].offeringId).toBe('default');
+});
+
+it('cierre con precios visibles: paywall_dismissed con phase shown y msOnScreen numérico', async () => {
+  const { unmount } = render(<PaywallScreen />);
+  await screen.findByTestId('paywall-cta');
+
+  unmount();
+
+  const dismissed = eventsOf('paywall_dismissed');
+  expect(dismissed).toHaveLength(1);
+  expect(dismissed[0].source).toBe('account_upsell');
+  expect(dismissed[0].phase).toBe('shown');
+  expect(typeof dismissed[0].msOnScreen).toBe('number');
+  expect(dismissed[0].msOnScreen).toBeGreaterThanOrEqual(0);
+});
+
+// Caso del review adversarial: cerrar DURANTE el load no debe fabricar un
+// "viewed" que nunca ocurrió — sale un dismissed con phase loading sin pareja.
+it('cierre durante el load (configure en vuelo): dismissed con phase loading y CERO paywall_viewed', async () => {
+  mockConfigure.mockReturnValue(new Promise(() => {})); // nunca resuelve
+  const { unmount } = render(<PaywallScreen />);
+
+  unmount();
+
+  expect(eventsOf('paywall_viewed')).toHaveLength(0);
+  const dismissed = eventsOf('paywall_dismissed');
+  expect(dismissed).toHaveLength(1);
+  expect(dismissed[0].phase).toBe('loading');
+});
+
+// Caso ADV2 del re-check: unmount durante el load y el load resuelve CON ÉXITO
+// después — sin guard de montaje salía un viewed fantasma tras el dismissed,
+// con precios que nunca renderizaron.
+it('load que resuelve con éxito tras el unmount: CERO paywall_viewed (sin viewed fantasma post-dismiss)', async () => {
+  let resolveConfigure!: (v: boolean) => void;
+  mockConfigure.mockReturnValue(new Promise<boolean>((r) => { resolveConfigure = r; }));
+  const { unmount } = render(<PaywallScreen />);
+
+  unmount();
+  resolveConfigure(true); // el load sigue en background y llega a offerings OK
+  await waitFor(() => expect(mockGetOfferings).toHaveBeenCalled());
+  await new Promise((r) => setTimeout(r, 0)); // drena la continuación del load
+
+  expect(eventsOf('paywall_viewed')).toHaveLength(0);
+  const dismissed = eventsOf('paywall_dismissed');
+  expect(dismissed).toHaveLength(1);
+  expect(dismissed[0].phase).toBe('loading');
+});
+
+it('cierre desde el estado no-disponible: dismissed con phase unavailable y sin viewed', async () => {
+  mockGetOfferings.mockResolvedValue({ packages: [], error: 'no_offerings' });
+  const { unmount } = render(<PaywallScreen />);
+  await screen.findByText('paywall.unavailableTitle');
+
+  unmount();
+
+  expect(eventsOf('paywall_viewed')).toHaveLength(0);
+  const dismissed = eventsOf('paywall_dismissed');
+  expect(dismissed).toHaveLength(1);
+  expect(dismissed[0].phase).toBe('unavailable');
+});
+
+it('compra completada: NO se emite paywall_dismissed al cerrar', async () => {
+  mockPurchase.mockResolvedValue({ status: 'success' });
+  const { unmount } = render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+  await screen.findByText('paywall.successTitle');
+  unmount();
+
+  expect(eventsOf('paywall_dismissed')).toHaveLength(0);
+});
+
+it('purchase_started/completed llevan las props de precio del package (anual con trial)', async () => {
+  mockPurchase.mockResolvedValue({ status: 'success' });
+  render(<PaywallScreen />);
+
+  // Preselección anual (mejor precio) → las props salen del product del anual.
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+  await screen.findByText('paywall.successTitle');
+
+  const expected = {
+    productId: 'plus_annual',
+    priceString: '39,99 €',
+    price: 39.99,
+    currency: 'EUR',
+    period: 'annual',
+    hasTrial: true,
+  };
+  expect(eventsOf('purchase_started')[0]).toEqual({ event: 'purchase_started', ...expected });
+  expect(eventsOf('purchase_completed')[0]).toEqual({
+    event: 'purchase_completed',
+    pendingBackend: false,
+    ...expected,
+  });
+});
+
+it('cancelación: purchase_cancelled con props del package mensual (sin trial)', async () => {
+  mockPurchase.mockResolvedValue({ status: 'cancelled' });
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-pkg-$rc_monthly'));
+  fireEvent.press(screen.getByTestId('paywall-cta'));
+  await waitFor(() => expect(mockPurchase).toHaveBeenCalled());
+
+  const cancelled = eventsOf('purchase_cancelled');
+  expect(cancelled[0]).toEqual({
+    event: 'purchase_cancelled',
+    productId: 'plus_monthly',
+    priceString: '4,99 €',
+    price: 4.99,
+    currency: 'EUR',
+    period: 'monthly',
+    hasTrial: false,
+  });
 });

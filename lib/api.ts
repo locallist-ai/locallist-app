@@ -1,6 +1,7 @@
 import * as SecureStore from './safe-store';
 import { Platform } from 'react-native';
 import { logger } from './logger';
+import { trackPlanLimitIfGate403 } from './analytics';
 import i18n from './i18n';
 import type {
   ChatTurnRequest, ChatTurnResponse,
@@ -137,6 +138,8 @@ export async function api<T>(
     }
 
     if (!res.ok) {
+      // Funnel de upsell: un 403 estructurado de un gate Plus emite plan_limit_hit.
+      trackPlanLimitIfGate403(res.status, json);
       return {
         data: null,
         error: json?.error ?? `HTTP ${res.status}`,
