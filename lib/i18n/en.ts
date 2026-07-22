@@ -312,6 +312,36 @@ export default {
     comingSoonBody: 'Upgrade to LocalList Pro will be available shortly. Stay tuned!',
     ok: 'OK',
   },
+  gate: {
+    // Guest hit an authenticated generation endpoint (or tapped generate while
+    // signed out) — prompt to register/log in.
+    signupRequiredTitle: 'Create an account to build your plan',
+    signupRequiredBody: 'Sign up or log in to generate and save your itinerary.',
+    signupCta: 'Sign up',
+    maybeLater: 'Maybe later',
+    upgradeCta: 'Go Plus',
+    // Structured 403 upsells.
+    planLimitTitle: "You've used all your free plans",
+    planLimitBody: "You've used your {{limit}} free plans this month. Go Plus for unlimited plans.",
+    planLimitBodyReset: "You've used your {{limit}} free plans this month. They reset on {{date}}. Go Plus for unlimited plans.",
+    durationTitle: 'Longer trips are a Plus feature',
+    durationBody: 'Free plans go up to {{maxDays}} days. Go Plus to plan trips up to {{plusMaxDays}} days.',
+    multicityTitle: 'Multi-city trips are a Plus feature',
+    multicityBody: 'Go Plus to plan trips across multiple cities.',
+    savedPlansTitle: 'Saved plans limit reached',
+    savedPlansBody: 'Free accounts can save up to {{limit}} plans. Go Plus to save unlimited plans.',
+    // 429 daily cap — the user is ALREADY Plus, so this is a soft throttle, not an upsell.
+    dailyCapTitle: 'Taking a quick breather',
+    dailyCapBody: "You've generated a lot of plans today. Please try again in a little while.",
+    // Monthly quota line shown to free users on the generation UI.
+    quotaRemaining: '{{used}} of {{limit}} plans this month',
+    // A generated plan was shortened to the free duration cap.
+    clampedTitle: 'Trip shortened to your free limit',
+    clampedBody: 'We built a {{days}}-day plan. Go Plus for longer trips.',
+    clampedBodyGeneric: 'We shortened your trip to fit the free limit. Go Plus for longer trips.',
+    // DurationStep: free-tier locked affordance for 4–14 day trips.
+    durationPlusLocked: 'Up to {{plusMaxDays}} days with Plus',
+  },
   placeSearch: {
     placeholder: 'Search places in {{city}}...',
   },

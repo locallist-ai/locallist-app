@@ -15,6 +15,8 @@ import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { useGateHandler } from '../../lib/useGateHandler';
+import { mapGateError } from '../../lib/gate-errors';
 import { getPreviewPlan } from '../../lib/plan/plan-store';
 import { PlanCardPager } from '../../components/plan/PlanCardPager';
 import { PlanEditorProvider } from '../../components/plan/PlanEditorContext';
@@ -61,6 +63,7 @@ export default function PlanDetailScreen() {
     planDays?: string;
   }>();
   const { isAuthenticated, user } = useAuth();
+  const { presentGate } = useGateHandler();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
 
@@ -211,6 +214,14 @@ export default function PlanDetailScreen() {
   const handleEditorSave = useCallback(async () => {
     const result = await editorSave();
     if (!result.success) {
+      // Structured gate on POST /plans (e.g. saved_plans_limit_reached) → Plus
+      // upsell via the centralised handler; otherwise fall back to the inline
+      // save-error modal.
+      const action = mapGateError(result.status ?? 0, result.errorBody);
+      if (action.type === 'signup_required' || action.type === 'upsell' || action.type === 'soft_throttle') {
+        presentGate(action);
+        return;
+      }
       setSaveError(result.error ?? 'Failed to save');
       return;
     }
@@ -232,7 +243,7 @@ export default function PlanDetailScreen() {
         )));
       }
     }
-  }, [editorSave, effectivePlanId, isNew]);
+  }, [editorSave, effectivePlanId, isNew, presentGate]);
 
   const handleFollow = () => {
     if (!isAuthenticated) { router.push('/login'); return; }

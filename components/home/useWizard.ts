@@ -6,8 +6,11 @@ import { api } from '../../lib/api';
 import { track } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan/plan-store';
-import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX, tierFromBudgetAmount } from './constants';
+import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX, tierFromBudgetAmount, maxDaysForTier } from './constants';
 import { useTripContext } from '../../lib/trip-context-store';
+import { useAuth } from '../../lib/auth';
+import { useGateHandler } from '../../lib/useGateHandler';
+import { mapGateError, parseClampedHint, type AiPlansQuota } from '../../lib/gate-errors';
 import type { BuilderResponse } from '../../lib/types';
 
 // ── Return type ──
@@ -65,6 +68,13 @@ export interface UseWizardResult {
   selectCompany: (id: string) => void;
   /** Ciudad seleccionada (step 0). */
   city: string | null;
+
+  /** Selecciona el nº de días del viaje (step 1). Escribe selections[0]. */
+  handleSelectDays: (days: number) => void;
+  /** Cuota mensual de planes IA ({used,limit,resetsAt}) o null si el backend no la expone. */
+  aiPlansMonth: AiPlansQuota | null;
+  /** True para usuarios Plus — habilita hasta 14 días en el picker de duración. */
+  isPro: boolean;
 }
 
 // ── Hook ──
@@ -73,6 +83,8 @@ export const useWizard = (): UseWizardResult => {
   const { t } = useTranslation();
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { city: tripCity } = useTripContext();
+  const { isAuthenticated, isPro, aiPlansMonth } = useAuth();
+  const { presentGate, presentClamped } = useGateHandler();
 
   // City is pre-selected via the city-picker home screen; wizard starts at step 1.
   const [step, setStep] = useState(1);
@@ -192,6 +204,18 @@ export const useWizard = (): UseWizardResult => {
     // explícitamente. Antes había setTimeout(advanceToNext, 350).
   }, [step]);
 
+  // Duration step (step 1) usa DurationStep con pills numéricos (1..14 según
+  // tier), en vez de las 3 cards legacy. Escribimos selections[0] como string
+  // del nº de días para conservar el payload existente (daysFromDuration parsea).
+  const handleSelectDays = useCallback((days: number) => {
+    hapticImpact(ImpactFeedbackStyle.Light);
+    setSelections((prev) => {
+      const next = [...prev];
+      next[0] = String(days);
+      return next;
+    });
+  }, []);
+
   // Selector de parent con drill-down. RefineableStep llama este handler
   // cuando el usuario tap un parent — NO auto-advance aquí, el sheet del
   // RefineableStep maneja el continue. Al cambiar de parent, reseteamos los
@@ -256,16 +280,28 @@ export const useWizard = (): UseWizardResult => {
       return;
     }
 
+    // Generation is now `[Authorize]` on the backend: a guest can no longer
+    // generate. Prompt register/login BEFORE hitting the endpoint (avoids a
+    // wasted 401 roundtrip); the 401 response is still handled below as a
+    // fallback in case the token expires mid-flow.
+    if (!isAuthenticated) {
+      hapticImpact(ImpactFeedbackStyle.Heavy);
+      setError(presentGate({ type: 'signup_required' }));
+      return;
+    }
+
     setError(null);
     setLoading(true);
     hapticImpact(ImpactFeedbackStyle.Medium);
 
-    // Backend's TripContextDto has `Days: int? [Range(1,7)]`, not `duration`.
-    // Duration option ids are stringified integers ("1" | "2" | "3") — parse to int.
+    // Duration cap mirrors the backend Plus gate: free = 3 days, Plus = 14.
+    // Duration ids are stringified integers ("1".."14") — parse and clamp to
+    // the tier's max. The picker already gates the UI, this is defence in depth.
+    const maxDays = maxDaysForTier(isPro);
     const daysFromDuration = (id: string | null | undefined): number | undefined => {
       if (!id) return undefined;
       const n = parseInt(id, 10);
-      return Number.isFinite(n) && n >= 1 && n <= 7 ? n : undefined;
+      return Number.isFinite(n) && n >= 1 && n <= maxDays ? n : undefined;
     };
 
     // El tripContext recoge TODAS las señales capturadas por el wizard para que el
@@ -310,13 +346,19 @@ export const useWizard = (): UseWizardResult => {
         logger.debug('[builder/chat] RESPONSE body', res.data);
         track({ event: 'wizard_completed', planId: res.data.plan.id, city: res.data.plan.city, days: res.data.plan.durationDays });
         setPreviewPlan(res.data);
+        // A free plan may have its duration clamped to the cap — surface a soft
+        // upsell (non-blocking) over the preview. Tolerant hint parse (m3).
+        const clamped = parseClampedHint(res.data);
         router.push('/plan/preview');
+        if (clamped) presentClamped(clamped.appliedDays ?? res.data.plan.durationDays);
       } else {
         logger.debug('[builder/chat] ERROR body', res.errorBody);
-        // 429 = rate limit. Builder limita planes por hora (ver
-        // locallist-api-net Program.cs rate limiter). Mensaje específico
-        // amigable en vez del genérico.
-        if (res.status === 429) {
+        // Centralised gate mapping: 401 → signup, 403 structured → upsell,
+        // 429 daily_cap → soft throttle (Plus, no upsell), else rate_limit/generic.
+        const action = mapGateError(res.status, res.errorBody);
+        if (action.type === 'signup_required' || action.type === 'upsell' || action.type === 'soft_throttle') {
+          setError(presentGate(action));
+        } else if (action.type === 'rate_limit') {
           setError(t('wizard.errorRateLimit'));
         } else {
           setError(res.error ?? t('wizard.errorDefault'));
@@ -328,7 +370,7 @@ export const useWizard = (): UseWizardResult => {
     } finally {
       setLoading(false);
     }
-  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, companySubs, t]);
+  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, companySubs, t, isAuthenticated, isPro, presentGate, presentClamped]);
 
   // Mantener el ref siempre apuntando al último handleGenerate. advanceToNext
   // lo invoca cuando el usuario completa el último step de prefs y necesitamos
@@ -363,5 +405,8 @@ export const useWizard = (): UseWizardResult => {
     setCompanySubs,
     selectCompany,
     city,
+    handleSelectDays,
+    aiPlansMonth,
+    isPro,
   };
 };

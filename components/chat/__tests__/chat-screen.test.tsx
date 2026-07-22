@@ -23,6 +23,7 @@ import { chatTurn, chatGenerate } from '../../../lib/api';
 import { track } from '../../../lib/analytics';
 import { getSavedSessionId, saveSessionId } from '../../../lib/chat-store';
 import { useTripContext } from '../../../lib/trip-context-store';
+import { useAuth } from '../../../lib/auth';
 import type { ChatSlots, ChatTurnResponse } from '../../../lib/types';
 
 jest.mock('expo-router', () => ({
@@ -46,7 +47,9 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 jest.mock('../../../lib/auth', () => ({
-  useAuth: () => ({ isAuthenticated: false }),
+  // Generación es [Authorize]: por defecto autenticado para los tests que
+  // llegan a generar. Los tests de guest lo sobreescriben a isAuthenticated:false.
+  useAuth: jest.fn(() => ({ isAuthenticated: true, isPro: false, aiPlansMonth: null })),
 }));
 jest.mock('../../../lib/trip-context-store', () => ({
   useTripContext: jest.fn(),
@@ -73,6 +76,7 @@ jest.mock('../../ui/ConfirmModal', () => ({ ConfirmModal: () => null }));
 const mockChatTurn = chatTurn as jest.Mock;
 const mockGetSavedSessionId = getSavedSessionId as jest.Mock;
 const mockUseTripContext = useTripContext as jest.Mock;
+const mockUseAuth = useAuth as jest.Mock;
 
 const SLOTS: ChatSlots = {
   city: 'Madrid',
@@ -119,6 +123,9 @@ const renderPreSeeded = async () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Default: autenticado. Los tests de guest lo sobreescriben. Se fija en
+  // beforeEach porque clearAllMocks no restaura implementaciones de mockReturnValue.
+  mockUseAuth.mockReturnValue({ isAuthenticated: true, isPro: false, aiPlansMonth: null });
 });
 
 describe('chat — init con preSeededCity', () => {
@@ -463,6 +470,115 @@ describe('chat — error de infraestructura (ai_unavailable)', () => {
     await waitFor(() => expect(screen.getByText('Listo, sigamos.')).toBeTruthy());
     // Clave del fix: el reintento reusa s1, no recrea sesión con sessionId:null.
     expect(mockChatTurn).toHaveBeenLastCalledWith({ sessionId: 's1', message: 'restaurantes', quickReplyId: null });
+  });
+});
+
+describe('chat — gate Plus en generación', () => {
+  // Lleva el chat a estado ready y devuelve el spy de Alert. `authed` controla
+  // si el usuario está autenticado (guest → CTA de registro antes de generar).
+  const arriveReady = async (authed = true) => {
+    mockUseAuth.mockReturnValue({ isAuthenticated: authed, isPro: false, aiPlansMonth: null });
+    mockGetSavedSessionId.mockResolvedValue(null);
+    mockUseTripContext.mockReturnValue({ city: 'Madrid' });
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({ aiMessage: 'Listo para generar tu plan.', ready: true, quickReplies: [] }),
+    );
+    render(<ChatScreen />);
+    await waitFor(() => expect(screen.getByText('chat.buildPlan')).toBeTruthy());
+    return jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  };
+
+  it('guest: tocar generar muestra CTA de registro y NO llama a chatGenerate', async () => {
+    const alertSpy = await arriveReady(false);
+
+    fireEvent.press(screen.getByText('chat.buildPlan'));
+
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith(
+        'gate.signupRequiredTitle',
+        'gate.signupRequiredBody',
+        expect.any(Array),
+      ),
+    );
+    expect(chatGenerate).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('401 en generación → CTA de registro', async () => {
+    const alertSpy = await arriveReady(true);
+    (chatGenerate as jest.Mock).mockResolvedValueOnce({
+      data: null, error: 'unauthorized', errorBody: { error: 'unauthorized' }, status: 401,
+    });
+
+    fireEvent.press(screen.getByText('chat.buildPlan'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith(
+      'gate.signupRequiredTitle', 'gate.signupRequiredBody', expect.any(Array),
+    ));
+    expect(router.push).not.toHaveBeenCalledWith(expect.stringContaining('/plan/'));
+    alertSpy.mockRestore();
+  });
+
+  it('403 plan_limit_reached → upsell de límite de planes', async () => {
+    const alertSpy = await arriveReady(true);
+    (chatGenerate as jest.Mock).mockResolvedValueOnce({
+      data: null, error: 'plan_limit_reached',
+      errorBody: { error: 'plan_limit_reached', used: 3, limit: 3, resetsAt: '2026-08-01T00:00:00Z' },
+      status: 403,
+    });
+
+    fireEvent.press(screen.getByText('chat.buildPlan'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith(
+      'gate.planLimitTitle', expect.any(String), expect.any(Array),
+    ));
+    alertSpy.mockRestore();
+  });
+
+  it('403 duration_requires_plus → upsell de duración', async () => {
+    const alertSpy = await arriveReady(true);
+    (chatGenerate as jest.Mock).mockResolvedValueOnce({
+      data: null, error: 'duration_requires_plus',
+      errorBody: { error: 'duration_requires_plus', maxDays: 3, plusMaxDays: 14 },
+      status: 403,
+    });
+
+    fireEvent.press(screen.getByText('chat.buildPlan'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith(
+      'gate.durationTitle', expect.any(String), expect.any(Array),
+    ));
+    alertSpy.mockRestore();
+  });
+
+  it('429 daily_cap_reached → throttling suave (Plus), NO rate-limit genérico', async () => {
+    const alertSpy = await arriveReady(true);
+    (chatGenerate as jest.Mock).mockResolvedValueOnce({
+      data: null, error: 'daily_cap_reached',
+      errorBody: { error: 'daily_cap_reached' }, status: 429,
+    });
+
+    fireEvent.press(screen.getByText('chat.buildPlan'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith(
+      'gate.dailyCapTitle', expect.any(String), expect.any(Array),
+    ));
+    // No debe caer en el copy de rate-limit genérico del chat.
+    expect(alertSpy).not.toHaveBeenCalledWith('chat.rateLimitTitle', expect.anything(), expect.anything());
+    alertSpy.mockRestore();
+  });
+
+  it('429 genérico (sin código gate) → rate-limit del chat', async () => {
+    const alertSpy = await arriveReady(true);
+    (chatGenerate as jest.Mock).mockResolvedValueOnce({
+      data: null, error: 'too_many', errorBody: { error: 'too_many' }, status: 429,
+    });
+
+    fireEvent.press(screen.getByText('chat.buildPlan'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('chat.rateLimitTitle', 'chat.rateLimitBody'));
+    alertSpy.mockRestore();
   });
 });
 

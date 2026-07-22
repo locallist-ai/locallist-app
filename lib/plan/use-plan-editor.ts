@@ -241,7 +241,7 @@ export function usePlanEditor(planId: string, opts: UsePlanEditorOpts = {}) {
     return () => { cancelled = true; };
   }, [planId, isNew, initialData, newPlanConfig]);
 
-  const save = useCallback(async (): Promise<{ success: boolean; error?: string; planId?: string }> => {
+  const save = useCallback(async (): Promise<{ success: boolean; error?: string; planId?: string; status?: number; errorBody?: unknown }> => {
     dispatch({ type: 'SET_SAVING', value: true });
 
     const stops: StopInput[] = state.days.flatMap((day) =>
@@ -272,7 +272,14 @@ export function usePlanEditor(planId: string, opts: UsePlanEditorOpts = {}) {
 
       if (!createRes.data) {
         dispatch({ type: 'SET_SAVING', value: false });
-        return { success: false, error: createRes.error ?? 'Failed to create plan' };
+        // Surface status + body so the caller can map gate errors (e.g.
+        // `saved_plans_limit_reached` → Plus upsell) centrally.
+        return {
+          success: false,
+          error: createRes.error ?? 'Failed to create plan',
+          status: createRes.status,
+          errorBody: createRes.errorBody,
+        };
       }
 
       const newId = createRes.data.id;

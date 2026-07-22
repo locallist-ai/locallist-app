@@ -14,7 +14,7 @@ import {
   COMPANY_SUBCATEGORIES,
 } from './constants';
 import { useWizard } from './useWizard';
-import { WizardStep } from './WizardStep';
+import { DurationStep } from './DurationStep';
 import { ChatStep } from './ChatStep';
 import { InterestsStep } from './InterestsStep';
 import { BudgetStep } from './BudgetStep';
@@ -112,6 +112,18 @@ export const HomeScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Monthly AI-plan quota — free users only, when the backend exposes it. */}
+        {!wizard.isPro && wizard.aiPlansMonth && (
+          <View style={styles.quotaRow}>
+            <Text style={styles.quotaText}>
+              {t('gate.quotaRemaining', {
+                used: wizard.aiPlansMonth.used,
+                limit: wizard.aiPlansMonth.limit,
+              })}
+            </Text>
+          </View>
+        )}
+
         {/* Decorations layer eliminada — Pablo 2026-04-25: emojis flotando
           * desentonan con el lenguaje editorial. StepDecorations + FloatingEmoji
           * quedan como dead code en el repo para reusar si en el futuro
@@ -125,12 +137,13 @@ export const HomeScreen: React.FC = () => {
           <>
           {currentStepConfig && (
             <Animated.View key={`step-${wizard.step}`} entering={entering} exiting={exiting} style={styles.stepFill}>
-              <WizardStep
-                config={currentStepConfig}
-                stepIndex={wizard.step}
-                selectedId={wizard.selections[wizard.step - 1]}
-                onSelect={wizard.handleSelect}
-                onSkip={wizard.advanceToNext}
+              {/* Duration is the only step using the standard WizardStep slot,
+                * but it needs tier-aware day pills (1..14 Plus / 1..3 free +
+                * upsell), so it renders the dedicated DurationStep. */}
+              <DurationStep
+                selectedDays={wizard.selections[0] ? parseInt(wizard.selections[0], 10) : null}
+                onSelectDays={wizard.handleSelectDays}
+                onContinue={wizard.advanceToNext}
               />
             </Animated.View>
           )}
@@ -286,6 +299,19 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodySemiBold,
     fontSize: 12,
     color: '#FFFFFF',
+  },
+  quotaRow: {
+    alignItems: 'center',
+    marginTop: -8,
+    marginBottom: 8,
+  },
+  quotaText: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   stepContent: {
     flex: 1,
