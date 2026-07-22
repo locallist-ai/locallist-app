@@ -6,8 +6,12 @@
  *  - contrato de identidad: si `logIn` falla al cambiar de usuario, configure
  *    devuelve false y NO adopta la identidad nueva (nunca ofrecer compra con
  *    el appUserID de otro usuario); el siguiente configure reintenta el logIn.
+ *  - carreras de identidad (guarda de época): un logIn tardío que resuelve
+ *    tras un logout o tras un logIn más reciente no commitea su identidad.
  *  - logOutPurchases: desvincula la identidad al cerrar sesión; el siguiente
  *    configure re-asocia vía logIn aunque el logOut del SDK falle.
+ *  - punto de venta: purchase/restore exigen identidad confirmada del usuario
+ *    de sesión (módulo Y SDK nativo) — identity_mismatch sin tocar StoreKit.
  *  - getPlusOfferings: not_configured / packages / no_offerings / network.
  *  - purchase ok + entitlement activo + backend flipeado → success y se
  *    refresca /account (vía callback refreshAccountTier).
@@ -40,6 +44,7 @@ jest.mock('react-native-purchases', () => ({
     restorePurchases: jest.fn(),
     logIn: jest.fn(),
     logOut: jest.fn(),
+    getAppUserID: jest.fn(),
     addCustomerInfoUpdateListener: jest.fn(),
     removeCustomerInfoUpdateListener: jest.fn(),
   },
@@ -76,6 +81,10 @@ beforeEach(() => {
   jest.clearAllMocks();
   resetPurchasesForTesting();
   delete process.env[API_KEY_ENV];
+  // Identidad nativa del SDK alineada con configureWithKey() por defecto; los
+  // tests de mismatch la sobreescriben.
+  mockPurchases.logOut.mockResolvedValue(undefined as never);
+  mockPurchases.getAppUserID.mockResolvedValue('user-1');
 });
 
 describe('configurePurchases', () => {
@@ -118,7 +127,7 @@ describe('configurePurchases', () => {
   // ANTERIOR — devolver true dejaría al nuevo usuario comprar bajo la cuenta
   // equivocada (el webhook daría Plus al otro, en silencio). Configure debe
   // devolver false para que el paywall degrade a "no disponible".
-  it('logIn falla en el cambio de usuario: devuelve false y NO adopta la identidad nueva', async () => {
+  it('logIn falla en el cambio de usuario: devuelve false (warn, sin invalidar el SDK)', async () => {
     await configureWithKey(); // appUserID user-1
     mockPurchases.logIn.mockRejectedValueOnce(new Error('offline'));
 
@@ -129,7 +138,7 @@ describe('configurePurchases', () => {
     expect(logger.warn).toHaveBeenCalled();
   });
 
-  it('tras un logIn fallido, el siguiente configure reintenta el logIn con el uid nuevo', async () => {
+  it('tras un logIn fallido no se adoptó la identidad: el siguiente configure reintenta el logIn', async () => {
     await configureWithKey(); // appUserID user-1
     mockPurchases.logIn.mockRejectedValueOnce(new Error('offline'));
     await configurePurchases('user-2'); // false — identidad sigue en user-1
@@ -140,12 +149,65 @@ describe('configurePurchases', () => {
     expect(mockPurchases.logIn).toHaveBeenCalledTimes(2);
     expect(mockPurchases.logIn).toHaveBeenLastCalledWith('user-2');
   });
+
+  it('ya configurado y sin uid: true solo si tampoco hay identidad previa (nunca heredarla)', async () => {
+    process.env[API_KEY_ENV] = 'appl_test_key';
+    await configurePurchases(); // anónimo desde el arranque
+    expect(await configurePurchases()).toBe(true);
+
+    resetPurchasesForTesting();
+    await configureWithKey(); // appUserID user-1
+    expect(await configurePurchases()).toBe(false);
+  });
+
+  // Carreras de identidad (guarda de época). Orden de resolución: primero el
+  // request VIEJO — es el orden que ejercita el bug (un logIn tardío pisando
+  // el estado más reciente); el orden inverso pasa incluso sin la guarda.
+  it('logout con logIn en vuelo: el logIn tardío no resucita la identidad desvinculada', async () => {
+    await configureWithKey(); // appUserID user-1
+    let resolveLogIn!: (v: unknown) => void;
+    mockPurchases.logIn.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveLogIn = resolve; }) as never,
+    );
+
+    const inFlight = configurePurchases('user-2'); // logIn de user-2 en vuelo
+    logOutPurchases(); // el usuario cierra sesión antes de que resuelva
+    resolveLogIn({});
+
+    expect(await inFlight).toBe(false); // identidad no confirmada para esa sesión
+
+    // El módulo no adoptó user-2: un nuevo configure debe volver a pasar por logIn.
+    mockPurchases.logIn.mockResolvedValueOnce({} as never);
+    await configurePurchases('user-2');
+    expect(mockPurchases.logIn).toHaveBeenCalledTimes(2);
+    expect(mockPurchases.logIn).toHaveBeenLastCalledWith('user-2');
+  });
+
+  it('dos logIn concurrentes: el que resuelve tarde no pisa la identidad más reciente', async () => {
+    await configureWithKey(); // appUserID user-1
+    let resolveOld!: (v: unknown) => void;
+    mockPurchases.logIn
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }) as never)
+      .mockResolvedValueOnce({} as never);
+
+    const oldLogin = configurePurchases('user-2'); // en vuelo, resolverá tarde
+    const newLogin = configurePurchases('user-3'); // gana: resuelve primero
+
+    expect(await newLogin).toBe(true);
+    resolveOld({}); // el logIn viejo llega tarde
+    expect(await oldLogin).toBe(false);
+
+    // La identidad vigente sigue siendo user-3: no re-loguea para user-3.
+    mockPurchases.logIn.mockClear();
+    expect(await configurePurchases('user-3')).toBe(true);
+    expect(mockPurchases.logIn).not.toHaveBeenCalled();
+  });
 });
 
 describe('logOutPurchases', () => {
   it('desvincula la identidad: el siguiente configure con otro uid pasa por logIn', async () => {
     await configureWithKey(); // appUserID user-1
-    await logOutPurchases();
+    logOutPurchases();
 
     expect(mockPurchases.logOut).toHaveBeenCalled();
 
@@ -156,25 +218,25 @@ describe('logOutPurchases', () => {
 
   it('mismo usuario tras logout: re-asocia vía logIn, no reutiliza la identidad previa', async () => {
     await configureWithKey(); // appUserID user-1
-    await logOutPurchases();
+    logOutPurchases();
 
     await configurePurchases('user-1');
 
     expect(mockPurchases.logIn).toHaveBeenCalledWith('user-1');
   });
 
-  it('logOut del SDK falla: no lanza y aun así fuerza el logIn en el siguiente configure', async () => {
+  it('logOut del SDK falla: no lanza (fire-and-forget) y fuerza el logIn en el siguiente configure', async () => {
     await configureWithKey(); // appUserID user-1
     mockPurchases.logOut.mockRejectedValueOnce(new Error('offline'));
 
-    await expect(logOutPurchases()).resolves.toBeUndefined();
+    expect(() => logOutPurchases()).not.toThrow();
 
     await configurePurchases('user-1');
     expect(mockPurchases.logIn).toHaveBeenCalledWith('user-1');
   });
 
-  it('sin SDK configurado: no-op, no llama a logOut', async () => {
-    await logOutPurchases();
+  it('sin SDK configurado: no-op, no llama a logOut', () => {
+    logOutPurchases();
     expect(mockPurchases.logOut).not.toHaveBeenCalled();
   });
 
@@ -182,7 +244,7 @@ describe('logOutPurchases', () => {
     process.env[API_KEY_ENV] = 'appl_test_key';
     await configurePurchases();
 
-    await logOutPurchases();
+    logOutPurchases();
 
     expect(mockPurchases.logOut).not.toHaveBeenCalled();
   });
@@ -275,7 +337,7 @@ describe('purchasePlusPackage', () => {
     } as never);
     const refresh = jest.fn().mockResolvedValue('pro');
 
-    const outcome = await purchasePlusPackage(PKG, refresh, { pollDelayMs: 0 });
+    const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollDelayMs: 0 });
 
     expect(outcome).toEqual({ status: 'success' });
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -286,7 +348,7 @@ describe('purchasePlusPackage', () => {
     mockPurchases.purchasePackage.mockRejectedValue({ userCancelled: true, message: 'cancelled' });
     const refresh = jest.fn();
 
-    const outcome = await purchasePlusPackage(PKG, refresh, { pollDelayMs: 0 });
+    const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollDelayMs: 0 });
 
     expect(outcome).toEqual({ status: 'cancelled' });
     expect(refresh).not.toHaveBeenCalled();
@@ -302,7 +364,7 @@ describe('purchasePlusPackage', () => {
     } as never);
     const refresh = jest.fn().mockResolvedValue('free');
 
-    const outcome = await purchasePlusPackage(PKG, refresh, { pollAttempts: 3, pollDelayMs: 0 });
+    const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollAttempts: 3, pollDelayMs: 0 });
 
     expect(outcome).toEqual({ status: 'pending_backend' });
     expect(refresh).toHaveBeenCalledTimes(3);
@@ -318,7 +380,7 @@ describe('purchasePlusPackage', () => {
       .mockResolvedValueOnce('free')
       .mockResolvedValueOnce('pro');
 
-    const outcome = await purchasePlusPackage(PKG, refresh, { pollAttempts: 5, pollDelayMs: 0 });
+    const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollAttempts: 5, pollDelayMs: 0 });
 
     expect(outcome).toEqual({ status: 'success' });
     expect(refresh).toHaveBeenCalledTimes(3);
@@ -331,7 +393,7 @@ describe('purchasePlusPackage', () => {
     } as never);
     const refresh = jest.fn();
 
-    const outcome = await purchasePlusPackage(PKG, refresh, { pollDelayMs: 0 });
+    const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollDelayMs: 0 });
 
     expect(outcome).toEqual({ status: 'no_entitlement' });
     expect(refresh).not.toHaveBeenCalled();
@@ -341,14 +403,45 @@ describe('purchasePlusPackage', () => {
     await configureWithKey();
     mockPurchases.purchasePackage.mockRejectedValue(new Error('network down'));
 
-    const outcome = await purchasePlusPackage(PKG, jest.fn(), { pollDelayMs: 0 });
+    const outcome = await purchasePlusPackage(PKG, 'user-1', jest.fn(), { pollDelayMs: 0 });
 
     expect(outcome).toEqual({ status: 'error', message: 'network down' });
   });
 
   it('sin configurar: status error sin llamar al SDK', async () => {
-    const outcome = await purchasePlusPackage(PKG, jest.fn(), { pollDelayMs: 0 });
+    const outcome = await purchasePlusPackage(PKG, 'user-1', jest.fn(), { pollDelayMs: 0 });
     expect(outcome).toEqual({ status: 'error', message: 'not_configured' });
+    expect(mockPurchases.purchasePackage).not.toHaveBeenCalled();
+  });
+
+  // Punto de venta: la invariante "nunca comprar bajo otro appUserID" vive
+  // aquí, no solo en la disciplina de los callers.
+  it('identidad del módulo distinta del usuario de sesión: identity_mismatch sin tocar StoreKit', async () => {
+    await configureWithKey(); // identidad user-1
+
+    const outcome = await purchasePlusPackage(PKG, 'user-2', jest.fn(), { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'error', message: 'identity_mismatch' });
+    expect(mockPurchases.purchasePackage).not.toHaveBeenCalled();
+  });
+
+  it('el SDK nativo reporta otra identidad (divergencia por carrera): identity_mismatch', async () => {
+    await configureWithKey(); // el módulo cree user-1...
+    mockPurchases.getAppUserID.mockResolvedValue('user-2'); // ...pero el nativo quedó en otro
+
+    const outcome = await purchasePlusPackage(PKG, 'user-1', jest.fn(), { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'error', message: 'identity_mismatch' });
+    expect(mockPurchases.purchasePackage).not.toHaveBeenCalled();
+  });
+
+  it('getAppUserID falla: se rechaza la compra (identidad no verificable ⇒ no vender)', async () => {
+    await configureWithKey();
+    mockPurchases.getAppUserID.mockRejectedValue(new Error('offline'));
+
+    const outcome = await purchasePlusPackage(PKG, 'user-1', jest.fn(), { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'error', message: 'identity_mismatch' });
     expect(mockPurchases.purchasePackage).not.toHaveBeenCalled();
   });
 });
@@ -359,7 +452,7 @@ describe('restorePlusPurchases', () => {
     mockPurchases.restorePurchases.mockResolvedValue(customerInfoWith([PLUS_ENTITLEMENT_ID]) as never);
     const refresh = jest.fn().mockResolvedValue('pro');
 
-    const outcome = await restorePlusPurchases(refresh, { pollDelayMs: 0 });
+    const outcome = await restorePlusPurchases('user-1', refresh, { pollDelayMs: 0 });
 
     expect(outcome).toEqual({ status: 'success' });
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -370,7 +463,7 @@ describe('restorePlusPurchases', () => {
     mockPurchases.restorePurchases.mockResolvedValue(customerInfoWith([]) as never);
     const refresh = jest.fn();
 
-    const outcome = await restorePlusPurchases(refresh, { pollDelayMs: 0 });
+    const outcome = await restorePlusPurchases('user-1', refresh, { pollDelayMs: 0 });
 
     expect(outcome).toEqual({ status: 'no_entitlement' });
     expect(refresh).not.toHaveBeenCalled();
@@ -380,8 +473,17 @@ describe('restorePlusPurchases', () => {
     await configureWithKey();
     mockPurchases.restorePurchases.mockRejectedValue(new Error('offline'));
 
-    const outcome = await restorePlusPurchases(jest.fn(), { pollDelayMs: 0 });
+    const outcome = await restorePlusPurchases('user-1', jest.fn(), { pollDelayMs: 0 });
 
     expect(outcome).toEqual({ status: 'error', message: 'offline' });
+  });
+
+  it('identidad distinta del usuario de sesión: identity_mismatch sin llamar al SDK', async () => {
+    await configureWithKey(); // identidad user-1
+
+    const outcome = await restorePlusPurchases('user-2', jest.fn(), { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'error', message: 'identity_mismatch' });
+    expect(mockPurchases.restorePurchases).not.toHaveBeenCalled();
   });
 });

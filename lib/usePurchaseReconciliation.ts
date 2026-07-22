@@ -45,8 +45,11 @@ export function usePurchaseReconciliation() {
     const onAppStateChange = (state: AppStateStatus) => {
       if (state !== 'active') return;
       void (async () => {
-        const ok = await configurePurchases(userId);
-        if (ok) await refreshRef.current();
+        // Re-asociación best-effort; el refresh de /account no depende de la
+        // identidad RC (el flip por webhook debe reconciliarse aunque el SDK
+        // esté inaccesible o el logIn haya fallado).
+        await configurePurchases(userId);
+        await refreshRef.current();
       })();
     };
     const sub = AppState.addEventListener('change', onAppStateChange);

@@ -69,9 +69,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     // Desvincula la identidad de RevenueCat para que el siguiente usuario del
-    // mismo proceso nunca compre bajo el appUserID anterior. No lanza nunca
-    // (try/catch interno): un fallo del SDK no bloquea el logout de la app.
-    await logOutPurchases();
+    // mismo proceso nunca compre bajo el appUserID anterior. Es síncrona y por
+    // contrato no lanza (la llamada de red del SDK va en fire-and-forget); el
+    // try/catch es defensa extra: nada de RevenueCat puede bloquear el logout.
+    try {
+      logOutPurchases();
+    } catch (error) {
+      logger.warn('logOutPurchases failed during logout', error);
+    }
     await clearTokens();
     setAnalyticsUserId(null);
     setUser(null);

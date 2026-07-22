@@ -129,7 +129,7 @@ it('pinta los packages con precio localizado y preselecciona el anual', async ()
 
   fireEvent.press(screen.getByTestId('paywall-cta'));
   await waitFor(() =>
-    expect(mockPurchase).toHaveBeenCalledWith(expect.objectContaining({ identifier: '$rc_annual' }), refreshUser),
+    expect(mockPurchase).toHaveBeenCalledWith(expect.objectContaining({ identifier: '$rc_annual' }), 'u1', refreshUser),
   );
 });
 
@@ -140,7 +140,7 @@ it('compra ok: pasa refreshUser al módulo (flip de isPro sin reinicio) y muestr
   fireEvent.press(await screen.findByTestId('paywall-cta'));
 
   expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
-  expect(mockPurchase).toHaveBeenCalledWith(expect.anything(), refreshUser);
+  expect(mockPurchase).toHaveBeenCalledWith(expect.anything(), 'u1', refreshUser);
 });
 
 it('el usuario elige otro package y el CTA compra ese', async () => {
@@ -151,7 +151,7 @@ it('el usuario elige otro package y el CTA compra ese', async () => {
   fireEvent.press(screen.getByTestId('paywall-cta'));
 
   await waitFor(() =>
-    expect(mockPurchase).toHaveBeenCalledWith(expect.objectContaining({ identifier: '$rc_monthly' }), refreshUser),
+    expect(mockPurchase).toHaveBeenCalledWith(expect.objectContaining({ identifier: '$rc_monthly' }), 'u1', refreshUser),
   );
 });
 
@@ -217,7 +217,7 @@ it('restore sin compras previas: aviso nada-que-restaurar', async () => {
   fireEvent.press(await screen.findByTestId('paywall-restore'));
 
   expect(await screen.findByText('paywall.restoreNoneTitle')).toBeOnTheScreen();
-  expect(mockRestore).toHaveBeenCalledWith(refreshUser);
+  expect(mockRestore).toHaveBeenCalledWith('u1', refreshUser);
 });
 
 it('restore con entitlement: muestra éxito', async () => {

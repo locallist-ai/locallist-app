@@ -7,6 +7,9 @@
  *    el callback del listener (entitlement plus activo por webhook retrasado)
  *    refresca /account → isPro flipea en caliente.
  *  - Vuelta a foreground: reconcilia (configure + refreshUser).
+ *  - configure=false (identidad RC no confirmada): NO registra el listener del
+ *    SDK, pero el refresh de /account en foreground se ejecuta igual — el flip
+ *    del tier por webhook no depende de la identidad RC.
  *  - Sin sesión: no configura ni registra listener.
  */
 import React from 'react';
@@ -95,6 +98,34 @@ it('foreground con estado background: no reconcilia', async () => {
 
   expect(mockConfigure).not.toHaveBeenCalled();
   expect(refreshUser).not.toHaveBeenCalled();
+  addSpy.mockRestore();
+});
+
+it('configure=false (identidad no confirmada): no registra el listener del SDK', async () => {
+  mockConfigure.mockResolvedValue(false);
+  const addSpy = jest
+    .spyOn(AppState, 'addEventListener')
+    .mockReturnValue({ remove: jest.fn() } as never);
+  render(<Harness />);
+
+  await waitFor(() => expect(mockConfigure).toHaveBeenCalledWith('u1'));
+  expect(mockAddListener).not.toHaveBeenCalled();
+  addSpy.mockRestore();
+});
+
+it('foreground con configure=false: refresca /account igualmente (el flip no depende de RC)', async () => {
+  mockConfigure.mockResolvedValue(false);
+  const addSpy = jest
+    .spyOn(AppState, 'addEventListener')
+    .mockReturnValue({ remove: jest.fn() } as never);
+  render(<Harness />);
+  await waitFor(() => expect(addSpy).toHaveBeenCalled());
+  const handler = addSpy.mock.calls[0][1] as (s: AppStateStatus) => void;
+
+  refreshUser.mockClear();
+  handler('active');
+
+  await waitFor(() => expect(refreshUser).toHaveBeenCalled());
   addSpy.mockRestore();
 });
 

@@ -19,7 +19,7 @@ jest.mock('../api', () => ({
   getAccessToken: jest.fn().mockResolvedValue(null),
 }));
 jest.mock('../analytics', () => ({ setAnalyticsUserId: jest.fn() }));
-jest.mock('../purchases', () => ({ logOutPurchases: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../purchases', () => ({ logOutPurchases: jest.fn() }));
 jest.mock('../logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
@@ -45,7 +45,6 @@ async function renderAuthedSession() {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockLogOutPurchases.mockResolvedValue(undefined);
 });
 
 it('logout desvincula la identidad de RevenueCat además de limpiar tokens y usuario', async () => {
@@ -57,6 +56,21 @@ it('logout desvincula la identidad de RevenueCat además de limpiar tokens y usu
 
   expect(mockLogOutPurchases).toHaveBeenCalledTimes(1);
   expect(mockClearTokens).toHaveBeenCalledTimes(1);
+  expect(result.current.user).toBeNull();
+  expect(result.current.isAuthenticated).toBe(false);
+});
+
+it('si logOutPurchases lanzara (rotura de su contrato), el logout completa la limpieza igual', async () => {
+  const { result } = await renderAuthedSession();
+  mockLogOutPurchases.mockImplementation(() => {
+    throw new Error('sdk broke its no-throw contract');
+  });
+
+  await act(async () => {
+    await result.current.logout();
+  });
+
+  expect(mockClearTokens).toHaveBeenCalled();
   expect(result.current.user).toBeNull();
   expect(result.current.isAuthenticated).toBe(false);
 });

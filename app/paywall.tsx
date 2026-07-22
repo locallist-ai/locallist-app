@@ -86,11 +86,13 @@ export default function PaywallScreen() {
   };
 
   const onPurchase = async () => {
-    if (!selected || busy) return;
+    if (!selected || busy || !user?.id) return;
     const productId = selected.product.identifier;
     setBusy(true);
     track({ event: 'purchase_started', productId });
-    const outcome = await purchasePlusPackage(selected, refreshUser);
+    // user.id como identidad esperada: la lib rechaza la compra si el SDK no
+    // está asociado exactamente a este usuario (identity_mismatch).
+    const outcome = await purchasePlusPackage(selected, user.id, refreshUser);
     setBusy(false);
 
     switch (outcome.status) {
@@ -113,9 +115,9 @@ export default function PaywallScreen() {
   };
 
   const onRestore = async () => {
-    if (busy) return;
+    if (busy || !user?.id) return;
     setBusy(true);
-    const outcome = await restorePlusPurchases(refreshUser);
+    const outcome = await restorePlusPurchases(user.id, refreshUser);
     setBusy(false);
 
     switch (outcome.status) {
