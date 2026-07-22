@@ -128,6 +128,37 @@ export function isPurchasesConfigured(): boolean {
   return configured;
 }
 
+// ─── Storefront (caché para analytics) ───────────────────
+// País del storefront de Apple (p. ej. 'ESP'/'USA'), independiente de la
+// identidad del usuario. Lo consume lib/analytics como prop global de eventos.
+
+let cachedStorefront: string | null = null;
+/** Fetch en vuelo: configures concurrentes comparten UNA llamada nativa. */
+let storefrontFetch: Promise<void> | null = null;
+
+/**
+ * País del storefront cacheado tras un `configurePurchases` exitoso.
+ * `null` hasta que el fetch resuelva (o si el SDK/StoreKit no lo expone).
+ */
+export function getCachedStorefront(): string | null {
+  return cachedStorefront;
+}
+
+/** Fire-and-forget: rellena el caché de storefront si aún no lo está. */
+function refreshStorefrontCache(): void {
+  if (cachedStorefront !== null || storefrontFetch !== null) return;
+  storefrontFetch = (async () => {
+    // Guarda por si el SDK instalado no expone la API (v10.4+ sí la tiene).
+    if (typeof Purchases.getStorefront !== 'function') return;
+    const storefront = await Purchases.getStorefront();
+    cachedStorefront = storefront?.countryCode ?? null;
+  })()
+    .catch((err) => logger.debug('RevenueCat: getStorefront failed', err))
+    .finally(() => {
+      storefrontFetch = null;
+    });
+}
+
 /**
  * Inicializa el SDK (idempotente). Devuelve false si no hay uid, no hay API
  * key o la plataforma no está soportada — el caller degrada a "no disponible".
@@ -153,6 +184,8 @@ export async function configurePurchases(appUserID?: string | null): Promise<boo
   if (!uid) return false;
 
   if (configured) {
+    // Aditivo (analytics): reintenta el fetch de storefront si el primero falló.
+    refreshStorefrontCache();
     if (uid === currentAppUserID) return true;
 
     // Coalescing: un logIn en vuelo para este mismo uid ya representa esta
@@ -196,6 +229,7 @@ export async function configurePurchases(appUserID?: string | null): Promise<boo
     configured = true;
     currentAppUserID = uid;
     nativeIdentityDirty = true;
+    refreshStorefrontCache();
     return true;
   } catch (err) {
     logger.error('RevenueCat: configure failed', err);
@@ -245,6 +279,8 @@ export function resetPurchasesForTesting() {
   pendingLogIn = null;
   nativeIdentityDirty = false;
   pendingIdentityOps = 0;
+  cachedStorefront = null;
+  storefrontFetch = null;
 }
 
 // ─── Offerings ───────────────────────────────────────────
