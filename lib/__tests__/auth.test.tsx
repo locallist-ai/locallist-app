@@ -60,6 +60,33 @@ it('logout desvincula la identidad de RevenueCat además de limpiar tokens y usu
   expect(result.current.isAuthenticated).toBe(false);
 });
 
+// Orden del logout: la sesión muere y RC se desvincula en el MISMO bloque
+// síncrono, antes de cualquier await. Si hubiera un await en medio, un handler
+// de foreground (usePurchaseReconciliation) podría colarse con la sesión aún
+// "viva" y re-adoptar la identidad RC recién desvinculada.
+it('logout mata la sesión y desvincula RC antes de cualquier await (sin ventana para handlers)', async () => {
+  const { result } = await renderAuthedSession();
+  let releaseClearTokens!: () => void;
+  mockClearTokens.mockImplementationOnce(
+    () => new Promise<void>((resolve) => { releaseClearTokens = resolve; }),
+  );
+
+  let logoutPromise!: Promise<void>;
+  act(() => {
+    logoutPromise = result.current.logout();
+  });
+
+  // clearTokens sigue colgado: la sesión ya murió y RC ya está desvinculado.
+  expect(result.current.user).toBeNull();
+  expect(result.current.isAuthenticated).toBe(false);
+  expect(mockLogOutPurchases).toHaveBeenCalledTimes(1);
+
+  releaseClearTokens();
+  await act(async () => {
+    await logoutPromise;
+  });
+});
+
 it('si logOutPurchases lanzara (rotura de su contrato), el logout completa la limpieza igual', async () => {
   const { result } = await renderAuthedSession();
   mockLogOutPurchases.mockImplementation(() => {

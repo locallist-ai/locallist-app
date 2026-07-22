@@ -110,6 +110,13 @@ export default function PaywallScreen() {
         break;
       default:
         track({ event: 'purchase_failed', productId });
+        if (outcome.status === 'error' && outcome.message === 'identity_mismatch') {
+          // La identidad RC quedó invalidada (divergencia/carrera): un re-load
+          // re-configura (logIn fresco) y refetch — re-pulsar comprar vuelve a
+          // funcionar en vez de repetir el mismatch hasta salir de la pantalla.
+          await load();
+          break;
+        }
         setModal({ title: t('paywall.errorTitle'), body: t('paywall.errorBody') });
     }
   };
@@ -134,6 +141,11 @@ export default function PaywallScreen() {
         setModal({ title: t('paywall.restoreNoneTitle'), body: t('paywall.restoreNoneBody') });
         break;
       default:
+        if (outcome.status === 'error' && outcome.message === 'identity_mismatch') {
+          // Misma recuperación que en la compra: re-configure + refetch.
+          await load();
+          break;
+        }
         setModal({ title: t('paywall.errorTitle'), body: t('paywall.errorBody') });
     }
   };

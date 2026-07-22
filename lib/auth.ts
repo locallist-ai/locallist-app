@@ -68,19 +68,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    // Desvincula la identidad de RevenueCat para que el siguiente usuario del
-    // mismo proceso nunca compre bajo el appUserID anterior. Es síncrona y por
-    // contrato no lanza (la llamada de red del SDK va en fire-and-forget); el
-    // try/catch es defensa extra: nada de RevenueCat puede bloquear el logout.
+    // La sesión muere ANTES de tocar RevenueCat y sin ningún await entre la
+    // limpieza de estado y logOutPurchases: si hubiera un await en medio, un
+    // handler de foreground (usePurchaseReconciliation) podría colarse con la
+    // sesión aún "viva" y re-adoptar la identidad RC recién desvinculada.
+    setUser(null);
+    setTierOverride(null);
+    setAnalyticsUserId(null);
+    // logOutPurchases es síncrona y por contrato no lanza (la llamada de red
+    // del SDK va encolada en fire-and-forget); el try/catch es defensa extra:
+    // nada de RevenueCat puede bloquear el logout.
     try {
       logOutPurchases();
     } catch (error) {
       logger.warn('logOutPurchases failed during logout', error);
     }
     await clearTokens();
-    setAnalyticsUserId(null);
-    setUser(null);
-    setTierOverride(null);
   }, []);
 
   // Re-fetch /account (e.g. after purchase/restore) so `isPro` flips without

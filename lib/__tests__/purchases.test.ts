@@ -2,14 +2,17 @@
  * Tests de comportamiento de lib/purchases.ts (RevenueCat mockeado).
  *
  * Cubre:
- *  - configure: sin API key degrada (no crash), con key configura el SDK.
+ *  - configure: sin API key o sin uid degrada (no crash), con key configura el
+ *    SDK. Sin uid SIEMPRE false: las compras van atadas a un usuario de sesión.
  *  - contrato de identidad: si `logIn` falla al cambiar de usuario, configure
  *    devuelve false y NO adopta la identidad nueva (nunca ofrecer compra con
  *    el appUserID de otro usuario); el siguiente configure reintenta el logIn.
- *  - carreras de identidad (guarda de época): un logIn tardío que resuelve
- *    tras un logout o tras un logIn más reciente no commitea su identidad.
- *  - logOutPurchases: desvincula la identidad al cerrar sesión; el siguiente
- *    configure re-asocia vía logIn aunque el logOut del SDK falle.
+ *  - carreras de identidad (cola + guarda de época): las operaciones nativas de
+ *    identidad se serializan; un logIn cuya época quedó atrás (logout o logIn
+ *    más reciente) no commitea su identidad.
+ *  - logOutPurchases: desvincula la identidad al cerrar sesión (logOut nativo
+ *    encolado, nunca bloquea); el siguiente configure re-asocia vía logIn
+ *    aunque el logOut del SDK falle.
  *  - punto de venta: purchase/restore exigen identidad confirmada del usuario
  *    de sesión (módulo Y SDK nativo) — identity_mismatch sin tocar StoreKit.
  *  - getPlusOfferings: not_configured / packages / no_offerings / network.
@@ -19,6 +22,9 @@
  *  - entitlement activo pero backend sin flipear → retry con techo →
  *    'pending_backend'; y flip en un intento intermedio → 'success'.
  *  - restore: con entitlement → success; sin él → 'no_entitlement'; fallo → error.
+ *
+ * Los interleavings adversariales (TOCTOU de venta, coalescing, logOut tras
+ * logIn en vuelo) viven en purchases.identity-contract.test.ts.
  */
 import Purchases from 'react-native-purchases';
 import {
@@ -75,6 +81,12 @@ const API_KEY_ENV = 'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY';
 async function configureWithKey(): Promise<boolean> {
   process.env[API_KEY_ENV] = 'appl_test_key';
   return configurePurchases('user-1');
+}
+
+/** Da la vuelta al event loop: las operaciones encoladas en la cola de
+ *  identidad arrancan en microtask, no síncronamente. */
+function flushAsync(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 beforeEach(() => {
@@ -150,19 +162,22 @@ describe('configurePurchases', () => {
     expect(mockPurchases.logIn).toHaveBeenLastCalledWith('user-2');
   });
 
-  it('ya configurado y sin uid: true solo si tampoco hay identidad previa (nunca heredarla)', async () => {
+  it('sin uid: false siempre y no configura — sin sesión no hay identidad que confirmar', async () => {
     process.env[API_KEY_ENV] = 'appl_test_key';
-    await configurePurchases(); // anónimo desde el arranque
-    expect(await configurePurchases()).toBe(true);
+    expect(await configurePurchases()).toBe(false);
+    expect(await configurePurchases(null)).toBe(false);
+    expect(mockPurchases.configure).not.toHaveBeenCalled();
 
-    resetPurchasesForTesting();
+    // Ya configurado con usuario, tampoco: un caller sin sesión (paywall tras
+    // logout) degrada a "no disponible", nunca hereda la identidad previa.
     await configureWithKey(); // appUserID user-1
     expect(await configurePurchases()).toBe(false);
   });
 
-  // Carreras de identidad (guarda de época). Orden de resolución: primero el
-  // request VIEJO — es el orden que ejercita el bug (un logIn tardío pisando
-  // el estado más reciente); el orden inverso pasa incluso sin la guarda.
+  // Carreras de identidad (cola + guarda de época). Orden de resolución:
+  // primero el request VIEJO — es el orden que ejercita el bug (un logIn
+  // tardío pisando el estado más reciente); el orden inverso pasa incluso sin
+  // la guarda.
   it('logout con logIn en vuelo: el logIn tardío no resucita la identidad desvinculada', async () => {
     await configureWithKey(); // appUserID user-1
     let resolveLogIn!: (v: unknown) => void;
@@ -170,7 +185,8 @@ describe('configurePurchases', () => {
       () => new Promise((resolve) => { resolveLogIn = resolve; }) as never,
     );
 
-    const inFlight = configurePurchases('user-2'); // logIn de user-2 en vuelo
+    const inFlight = configurePurchases('user-2'); // logIn de user-2 encolado
+    await flushAsync(); // el logIn ya está en vuelo
     logOutPurchases(); // el usuario cierra sesión antes de que resuelva
     resolveLogIn({});
 
@@ -183,21 +199,22 @@ describe('configurePurchases', () => {
     expect(mockPurchases.logIn).toHaveBeenLastCalledWith('user-2');
   });
 
-  it('dos logIn concurrentes: el que resuelve tarde no pisa la identidad más reciente', async () => {
+  it('dos logIn concurrentes de usuarios distintos: la época más nueva gana, el viejo no commitea', async () => {
     await configureWithKey(); // appUserID user-1
     let resolveOld!: (v: unknown) => void;
     mockPurchases.logIn
       .mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }) as never)
       .mockResolvedValueOnce({} as never);
 
-    const oldLogin = configurePurchases('user-2'); // en vuelo, resolverá tarde
-    const newLogin = configurePurchases('user-3'); // gana: resuelve primero
+    const oldLogin = configurePurchases('user-2'); // en vuelo, quedará obsoleto
+    const newLogin = configurePurchases('user-3'); // época más nueva, encolado detrás
+    await flushAsync(); // el logIn de user-2 ya está en vuelo
+    resolveOld({});
 
+    expect(await oldLogin).toBe(false); // su época quedó atrás: no adopta user-2
     expect(await newLogin).toBe(true);
-    resolveOld({}); // el logIn viejo llega tarde
-    expect(await oldLogin).toBe(false);
 
-    // La identidad vigente sigue siendo user-3: no re-loguea para user-3.
+    // La identidad vigente es user-3: no re-loguea para user-3.
     mockPurchases.logIn.mockClear();
     expect(await configurePurchases('user-3')).toBe(true);
     expect(mockPurchases.logIn).not.toHaveBeenCalled();
@@ -205,15 +222,18 @@ describe('configurePurchases', () => {
 });
 
 describe('logOutPurchases', () => {
-  it('desvincula la identidad: el siguiente configure con otro uid pasa por logIn', async () => {
+  it('desvincula la identidad: logOut nativo encolado y el siguiente configure pasa por logIn', async () => {
     await configureWithKey(); // appUserID user-1
     logOutPurchases();
 
-    expect(mockPurchases.logOut).toHaveBeenCalled();
-
+    // El logIn del siguiente configure queda serializado detrás del logOut.
     const ok = await configurePurchases('user-2');
     expect(ok).toBe(true);
+    expect(mockPurchases.logOut).toHaveBeenCalled();
     expect(mockPurchases.logIn).toHaveBeenCalledWith('user-2');
+    expect(mockPurchases.logIn.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mockPurchases.logOut.mock.invocationCallOrder[0],
+    );
   });
 
   it('mismo usuario tras logout: re-asocia vía logIn, no reutiliza la identidad previa', async () => {
@@ -240,13 +260,13 @@ describe('logOutPurchases', () => {
     expect(mockPurchases.logOut).not.toHaveBeenCalled();
   });
 
-  it('configurado sin appUserID (anónimo): no llama a logOut (lanzaría en el SDK)', async () => {
-    process.env[API_KEY_ENV] = 'appl_test_key';
-    await configurePurchases();
-
+  it('doble logout: el segundo no encola otro logOut nativo (ya no hay identidad que limpiar)', async () => {
+    await configureWithKey(); // appUserID user-1
+    logOutPurchases();
     logOutPurchases();
 
-    expect(mockPurchases.logOut).not.toHaveBeenCalled();
+    await flushAsync();
+    expect(mockPurchases.logOut).toHaveBeenCalledTimes(1);
   });
 });
 

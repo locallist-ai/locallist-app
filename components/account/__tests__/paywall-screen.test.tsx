@@ -210,6 +210,45 @@ it('fallo de compra: modal de error y el paywall sigue usable', async () => {
   expect(screen.getByTestId('paywall-cta')).toBeOnTheScreen();
 });
 
+// Contrato de recuperación de identity_mismatch: la identidad RC quedó
+// invalidada (divergencia/carrera) y un re-load re-configura con logIn fresco.
+// Antes el modal genérico dejaba la fase en 'ready' y re-pulsar repetía el
+// mismatch hasta salir de la pantalla.
+it('identity_mismatch en compra: re-load (re-configure + refetch) en vez de modal terminal', async () => {
+  mockPurchase.mockResolvedValue({ status: 'error', message: 'identity_mismatch' });
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+
+  // load inicial + re-load de recuperación.
+  await waitFor(() => expect(mockConfigure).toHaveBeenCalledTimes(2));
+  expect(await screen.findByTestId('paywall-cta')).toBeOnTheScreen(); // vuelve a ready
+  expect(screen.queryByText('paywall.errorTitle')).toBeNull();        // sin modal genérico
+});
+
+it('identity_mismatch en restore: misma recuperación vía re-load', async () => {
+  mockRestore.mockResolvedValue({ status: 'error', message: 'identity_mismatch' });
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-restore'));
+
+  await waitFor(() => expect(mockConfigure).toHaveBeenCalledTimes(2));
+  expect(await screen.findByTestId('paywall-cta')).toBeOnTheScreen();
+  expect(screen.queryByText('paywall.errorTitle')).toBeNull();
+});
+
+it('identity_mismatch con identidad irrecuperable: el re-load degrada a no-disponible (no vende)', async () => {
+  mockPurchase.mockResolvedValue({ status: 'error', message: 'identity_mismatch' });
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+  // El re-configure del re-load tampoco confirma la identidad.
+  mockConfigure.mockResolvedValue(false);
+
+  expect(await screen.findByText('paywall.unavailableTitle')).toBeOnTheScreen();
+  expect(screen.queryByTestId('paywall-cta')).toBeNull();
+});
+
 it('restore sin compras previas: aviso nada-que-restaurar', async () => {
   mockRestore.mockResolvedValue({ status: 'no_entitlement' });
   render(<PaywallScreen />);

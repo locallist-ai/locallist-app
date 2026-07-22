@@ -13,6 +13,23 @@
  * (ver `usePurchaseReconciliation`). Así el flip llega en caliente, sin cold
  * start ni Restore manual.
  *
+ * Invariante de identidad (por construcción, no por disciplina de callers):
+ * NUNCA se vende ni restaura bajo un `appUserID` distinto del usuario de
+ * sesión. Tres mecanismos la sostienen:
+ *
+ *  1. Cola de identidad: todas las operaciones nativas que mutan o dependen
+ *     de la identidad del SDK (logIn, logOut, purchase, restore) se encadenan
+ *     en una cola de promesas del módulo. Nunca hay dos en vuelo, y una venta
+ *     jamás se despacha con operaciones de identidad pendientes.
+ *  2. Época de identidad: se incrementa en cada logout y en cada intento de
+ *     logIn. Cualquier verificación que cruce un `await` re-valida la época al
+ *     volver — un cambio de usuario o logout DURANTE la verificación invalida
+ *     la venta (cierre del TOCTOU).
+ *  3. Verificación en el punto de venta: además del estado del módulo se
+ *     confirma la identidad real del SDK nativo (`getAppUserID`), y la última
+ *     re-validación corre síncrona dentro del slot de la cola, inmediatamente
+ *     antes de tocar StoreKit.
+ *
  * Sin API key configurada el módulo degrada a "not_configured" (nunca crash):
  * el paywall muestra un estado de no-disponible. Esto cubre dev/simulador y
  * el periodo previo a crear los productos en App Store Connect.
@@ -51,52 +68,116 @@ let currentAppUserID: string | null = null;
  * Época de identidad: se incrementa en cada logout y en cada intento de logIn.
  * Un `logIn` en vuelo solo puede commitear su identidad si la época no cambió
  * durante el await — sin esto, un logIn tardío pisaría el estado de un logout
- * o de un logIn más reciente y dejaría identidad de un usuario anterior.
+ * o de un logIn más reciente y dejaría identidad de un usuario anterior. La
+ * misma época re-valida las verificaciones de venta tras cada await (TOCTOU).
  */
 let identityEpoch = 0;
+/**
+ * Cola de identidad: cadena de promesas que serializa TODA operación nativa
+ * que mute o dependa de la identidad del SDK (logIn / logOut / purchase /
+ * restore). Garantiza que nunca hay dos operaciones de identidad en vuelo y
+ * que una venta no se despacha con logIn/logOut pendientes.
+ */
+let identityQueue: Promise<void> = Promise.resolve();
+/**
+ * logIn en vuelo, para coalescer configures concurrentes del MISMO uid en una
+ * única operación nativa (hook de reconciliación + load() del paywall llegan a
+ * la vez tras un cambio de usuario). Sin esto, el primero en resolver recibía
+ * un false espurio por la guarda de época.
+ */
+let pendingLogIn: { uid: string; promise: Promise<boolean> } | null = null;
+/**
+ * True si el SDK nativo puede tener una identidad no-anónima (configure con
+ * uid, o un logIn ENCOLADO aunque aún no haya commiteado en el módulo). Decide
+ * si un logout debe encolar el `Purchases.logOut` nativo: un logIn en vuelo
+ * que el módulo descartó por época puede aún así dejar al SDK logueado, y sin
+ * este flag ese logOut se omitía y la identidad nativa quedaba huérfana.
+ */
+let nativeIdentityDirty = false;
+/** Operaciones de identidad encoladas y aún no terminadas. */
+let pendingIdentityOps = 0;
+
+/** Encadena una operación en la cola de identidad. Los errores de una operación
+ *  no envenenan la cola (el tail siempre resuelve). */
+function enqueueIdentityOp<T>(op: () => Promise<T>): Promise<T> {
+  pendingIdentityOps += 1;
+  const result = identityQueue.then(op);
+  identityQueue = result.then(
+    () => {
+      pendingIdentityOps -= 1;
+    },
+    () => {
+      pendingIdentityOps -= 1;
+    },
+  );
+  return result;
+}
+
+/**
+ * Espera a que la cola de identidad quede vacía (incluidas operaciones que se
+ * encolen mientras se drena). Con la cola ya vacía no hay await alguno: el
+ * caller continúa síncrono, sin ceder el event loop.
+ */
+async function identityQueueDrained(): Promise<void> {
+  while (pendingIdentityOps > 0) {
+    await identityQueue;
+  }
+}
 
 export function isPurchasesConfigured(): boolean {
   return configured;
 }
 
 /**
- * Inicializa el SDK (idempotente). Devuelve false si no hay API key o la
- * plataforma no está soportada — el caller degrada a estado "no disponible".
+ * Inicializa el SDK (idempotente). Devuelve false si no hay uid, no hay API
+ * key o la plataforma no está soportada — el caller degrada a "no disponible".
+ *
+ * Sin uid SIEMPRE es false y no se configura nada: las compras de LocalList
+ * van atadas a un usuario con sesión (el webhook acredita Plus por appUserID);
+ * un SDK anónimo solo podría vender a nadie o heredar identidades. Esto además
+ * impide que un paywall llegue a 'ready' tras un logout.
  *
  * Ya configurado, si el `appUserID` cambia (login con otra cuenta en la misma
- * sesión de proceso) re-asocia vía `Purchases.logIn` para no dejar las compras
- * colgadas del usuario anterior. Si ese re-login falla, devuelve `false` SIN
- * adoptar la identidad nueva: el SDK seguiría asociado al usuario anterior y
- * una compra saldría bajo su cuenta (el webhook daría Plus al usuario
- * equivocado, en silencio). El caller degrada a "no disponible" con retry;
- * la siguiente llamada reintenta el logIn.
+ * sesión de proceso) re-asocia vía `Purchases.logIn` — encolado en la cola de
+ * identidad y con guarda de época: si durante el await hubo un logout u otro
+ * logIn más reciente, esa identidad no se adopta y devuelve false. Configures
+ * concurrentes del MISMO uid coalescen en la misma operación (una sola llamada
+ * nativa, mismo resultado para todos los callers). Si el logIn falla, devuelve
+ * `false` SIN adoptar la identidad nueva: el SDK seguiría asociado al usuario
+ * anterior y una compra saldría bajo su cuenta (el webhook daría Plus al
+ * usuario equivocado, en silencio). El caller degrada a "no disponible" con
+ * retry; la siguiente llamada reintenta el logIn.
  */
 export async function configurePurchases(appUserID?: string | null): Promise<boolean> {
   const uid = appUserID ?? null;
+  if (!uid) return false;
 
   if (configured) {
-    // Sin uid no hay identidad que confirmar: solo es válido si tampoco queda
-    // identidad previa asociada (nunca heredar la de otro usuario).
-    if (!uid) return currentAppUserID === null;
+    if (uid === currentAppUserID) return true;
 
-    if (uid !== currentAppUserID) {
-      // Limitación aceptada: dos configure concurrentes con el MISMO uid se
-      // invalidan mutuamente por época y el primero en resolver devuelve un
-      // false espurio (fail-safe, ventana estrecha). Se cura en el siguiente
-      // configure/retry, que ya ve la identidad commiteada por el rival.
-      const epoch = ++identityEpoch;
+    // Coalescing: un logIn en vuelo para este mismo uid ya representa esta
+    // misma transición de identidad — compartir su resultado.
+    if (pendingLogIn?.uid === uid) return pendingLogIn.promise;
+
+    const epoch = ++identityEpoch;
+    nativeIdentityDirty = true;
+    const promise = enqueueIdentityOp(async () => {
       try {
         await Purchases.logIn(uid);
-        // Si durante el await hubo un logout u otro logIn más reciente, esta
-        // identidad ya no representa la sesión actual: no se adopta.
-        if (epoch !== identityEpoch) return false;
-        currentAppUserID = uid;
       } catch (err) {
         logger.warn('RevenueCat: logIn on user change failed', err);
         return false;
       }
-    }
-    return true;
+      // Si durante el await hubo un logout u otro logIn más reciente, esta
+      // identidad ya no representa la sesión actual: no se adopta.
+      if (epoch !== identityEpoch) return false;
+      currentAppUserID = uid;
+      return true;
+    }).finally(() => {
+      if (pendingLogIn?.promise === promise) pendingLogIn = null;
+    });
+    pendingLogIn = { uid, promise };
+    return promise;
   }
 
   const apiKey = getApiKey();
@@ -111,9 +192,10 @@ export async function configurePurchases(appUserID?: string | null): Promise<boo
 
   try {
     Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
-    Purchases.configure({ apiKey, appUserID: uid ?? undefined });
+    Purchases.configure({ apiKey, appUserID: uid });
     configured = true;
     currentAppUserID = uid;
+    nativeIdentityDirty = true;
     return true;
   } catch (err) {
     logger.error('RevenueCat: configure failed', err);
@@ -128,20 +210,30 @@ export async function configurePurchases(appUserID?: string | null): Promise<boo
  * la cuenta equivocada.
  *
  * Síncrona y nunca lanza: el reset del estado interno (identidad + época, que
- * invalida cualquier `logIn` en vuelo) es inmediato, y la llamada de red
- * `Purchases.logOut` se dispara sin esperarla — un SDK sin red no debe
- * bloquear el logout de la app. El siguiente `configurePurchases` pasa sí o
- * sí por `logIn` (identidad confirmada o paywall no disponible).
+ * invalida cualquier `logIn` en vuelo y cualquier verificación de venta en
+ * curso) es inmediato. El `Purchases.logOut` nativo se ENCOLA en la cola de
+ * identidad sin esperarlo — el logout de la app no bloquea por red, pero el
+ * logOut queda serializado DETRÁS de cualquier logIn en vuelo: aunque ese
+ * logIn no llegara a commitear en el módulo, el SDK nativo sí pudo quedar
+ * logueado y este logOut lo limpia igualmente. El siguiente
+ * `configurePurchases` pasa sí o sí por `logIn` (identidad confirmada o
+ * paywall no disponible).
  */
 export function logOutPurchases(): void {
   identityEpoch += 1;
-  const hadIdentity = currentAppUserID !== null;
+  // Un logIn en vuelo ya no representa ninguna sesión: los coalescidos reciben
+  // false y un re-login posterior encola un logIn fresco (no se cuelga del
+  // condenado).
+  pendingLogIn = null;
   currentAppUserID = null;
-  // Sin identidad asociada el SDK está en usuario anónimo y logOut lanzaría.
-  if (!configured || !hadIdentity) return;
-  Purchases.logOut().catch((err) => {
-    logger.warn('RevenueCat: logOut failed', err);
-  });
+  if (!configured || !nativeIdentityDirty) return;
+  nativeIdentityDirty = false;
+  enqueueIdentityOp(() => Purchases.logOut()).then(
+    () => undefined,
+    (err) => {
+      logger.warn('RevenueCat: logOut failed', err);
+    },
+  );
 }
 
 /** Solo para tests: resetea el estado del módulo. */
@@ -149,6 +241,10 @@ export function resetPurchasesForTesting() {
   configured = false;
   currentAppUserID = null;
   identityEpoch = 0;
+  identityQueue = Promise.resolve();
+  pendingLogIn = null;
+  nativeIdentityDirty = false;
+  pendingIdentityOps = 0;
 }
 
 // ─── Offerings ───────────────────────────────────────────
@@ -248,28 +344,45 @@ function isUserCancelled(err: unknown): boolean {
  * tocar StoreKit. Comprueba el estado del módulo Y la identidad real del SDK
  * nativo (`getAppUserID`), porque pueden divergir si RC resolvió logIns
  * concurrentes fuera de orden.
+ *
+ * Cierre del TOCTOU: la época y el estado del módulo se re-validan DESPUÉS del
+ * await de `getAppUserID`. Un logout o cambio de usuario que ocurra durante la
+ * verificación (la respuesta "vieja" del nativo llegaría aprobando una sesión
+ * que ya no existe) invalida la venta. Nota: este false por época NO invalida
+ * la identidad del módulo — puede ser la identidad fresca de otro usuario
+ * recién commiteada, y pisarla rompería SU sesión.
  */
 async function confirmSessionIdentity(expectedAppUserID: string): Promise<boolean> {
   if (!expectedAppUserID || currentAppUserID !== expectedAppUserID) return false;
+  const epoch = identityEpoch;
+
+  let sdkAppUserID: string;
   try {
-    const sdkAppUserID = await Purchases.getAppUserID();
-    if (sdkAppUserID === expectedAppUserID) return true;
-    // Divergencia módulo/nativo (un logOut/logIn nativo resuelto fuera de
-    // orden): sin esto el mismatch sería terminal hasta cold start, porque el
-    // siguiente configure vería uid === currentAppUserID y devolvería true sin
-    // re-loguear. Invalidar la identidad del módulo (y la época, por logIns en
-    // vuelo) fuerza el logIn en el siguiente configure — el retry del paywall
-    // se cura solo.
-    logger.warn('RevenueCat: native identity diverged from module state, invalidating');
-    identityEpoch += 1;
-    currentAppUserID = null;
-    return false;
+    sdkAppUserID = await Purchases.getAppUserID();
   } catch (err) {
     // Fallo de verificación (p. ej. sin red): no es divergencia confirmada —
     // se rechaza la venta pero se conserva la identidad para reintentar.
     logger.warn('RevenueCat: getAppUserID failed', err);
     return false;
   }
+
+  // Re-validación post-await: si la época cambió (logout / logIn más reciente)
+  // o el módulo ya apunta a otro usuario, esta verificación quedó obsoleta.
+  if (epoch !== identityEpoch || currentAppUserID !== expectedAppUserID) return false;
+
+  if (sdkAppUserID !== expectedAppUserID) {
+    // Divergencia módulo/nativo confirmada con época intacta (un logOut/logIn
+    // nativo resuelto fuera de orden): sin esto el mismatch sería terminal
+    // hasta cold start, porque el siguiente configure vería uid ===
+    // currentAppUserID y devolvería true sin re-loguear. Invalidar la
+    // identidad del módulo (y la época, por logIns en vuelo) fuerza el logIn
+    // en el siguiente configure — el retry del paywall se cura solo.
+    logger.warn('RevenueCat: native identity diverged from module state, invalidating');
+    identityEpoch += 1;
+    currentAppUserID = null;
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -294,8 +407,12 @@ async function settleTierWithBackend(
 /**
  * Compra un package del offering. `expectedAppUserID` es el `user.id` de la
  * sesión actual: si la identidad asociada al SDK no coincide, la compra se
- * rechaza sin tocar StoreKit (`identity_mismatch`). La cancelación del usuario
- * devuelve `{ status: 'cancelled' }` (no es error y no se loguea como tal).
+ * rechaza sin tocar StoreKit (`identity_mismatch`). La venta espera a que la
+ * cola de identidad drene (nunca se vende con logIn/logOut pendientes), y el
+ * dispatch entra él mismo en la cola con una re-validación final síncrona en
+ * el slot — ninguna operación de identidad puede interleavarse con la venta.
+ * La cancelación del usuario devuelve `{ status: 'cancelled' }` (no es error y
+ * no se loguea como tal).
  */
 export async function purchasePlusPackage(
   pkg: PurchasesPackage,
@@ -304,30 +421,53 @@ export async function purchasePlusPackage(
   pollOptions: PollOptions = {},
 ): Promise<PurchaseOutcome> {
   if (!configured) return { status: 'error', message: 'not_configured' };
+
+  // Nunca vender con operaciones de identidad pendientes: los logIn/logOut en
+  // vuelo commitean (o fallan) ANTES de verificar. Operaciones encoladas más
+  // tarde bumpean la época y las cazan las re-validaciones de abajo. El check
+  // síncrono evita ceder el event loop cuando la cola ya está vacía (la
+  // verificación arranca en el mismo tick que la pulsación de compra).
+  if (pendingIdentityOps > 0) await identityQueueDrained();
+  const entryEpoch = identityEpoch;
+
   if (!(await confirmSessionIdentity(expectedAppUserID))) {
     logger.error('RevenueCat: purchase blocked, SDK identity does not match session user');
     return { status: 'error', message: 'identity_mismatch' };
   }
 
+  let purchase: { customerInfo: CustomerInfo } | null;
   try {
-    const { customerInfo } = await Purchases.purchasePackage(pkg);
-    if (!hasPlusEntitlement(customerInfo)) {
-      logger.error('RevenueCat: purchase completed without plus entitlement (check dashboard mapping)');
-      return { status: 'no_entitlement' };
-    }
-    return settleTierWithBackend(refreshAccountTier, pollOptions);
+    purchase = await enqueueIdentityOp<{ customerInfo: CustomerInfo } | null>(async () => {
+      // Última línea de defensa, síncrona e inmediatamente antes de StoreKit,
+      // dentro del slot de la cola: si la identidad cambió entre la
+      // verificación y este instante (cualquier microtask pudo commitear un
+      // logIn o procesar un logout), la venta no se despacha.
+      if (identityEpoch !== entryEpoch || currentAppUserID !== expectedAppUserID) return null;
+      return Purchases.purchasePackage(pkg);
+    });
   } catch (err) {
     if (isUserCancelled(err)) return { status: 'cancelled' };
     logger.warn('RevenueCat: purchase failed', err);
     const message = err instanceof Error ? err.message : 'purchase_failed';
     return { status: 'error', message };
   }
+
+  if (purchase === null) {
+    logger.error('RevenueCat: purchase blocked, session identity changed during verification');
+    return { status: 'error', message: 'identity_mismatch' };
+  }
+  if (!hasPlusEntitlement(purchase.customerInfo)) {
+    logger.error('RevenueCat: purchase completed without plus entitlement (check dashboard mapping)');
+    return { status: 'no_entitlement' };
+  }
+  return settleTierWithBackend(refreshAccountTier, pollOptions);
 }
 
 /**
  * Restaura compras previas (reinstalación / nuevo dispositivo). Igual que la
  * compra, exige identidad confirmada del usuario de sesión (`identity_mismatch`
- * si no coincide). Sin entitlement activo devuelve `no_entitlement`.
+ * si no coincide), espera la cola de identidad y re-valida dentro del slot.
+ * Sin entitlement activo devuelve `no_entitlement`.
  */
 export async function restorePlusPurchases(
   expectedAppUserID: string,
@@ -335,20 +475,33 @@ export async function restorePlusPurchases(
   pollOptions: PollOptions = {},
 ): Promise<PurchaseOutcome> {
   if (!configured) return { status: 'error', message: 'not_configured' };
+
+  if (pendingIdentityOps > 0) await identityQueueDrained();
+  const entryEpoch = identityEpoch;
+
   if (!(await confirmSessionIdentity(expectedAppUserID))) {
     logger.error('RevenueCat: restore blocked, SDK identity does not match session user');
     return { status: 'error', message: 'identity_mismatch' };
   }
 
+  let customerInfo: CustomerInfo | null;
   try {
-    const customerInfo = await Purchases.restorePurchases();
-    if (!hasPlusEntitlement(customerInfo)) {
-      return { status: 'no_entitlement' };
-    }
-    return settleTierWithBackend(refreshAccountTier, pollOptions);
+    customerInfo = await enqueueIdentityOp<CustomerInfo | null>(async () => {
+      if (identityEpoch !== entryEpoch || currentAppUserID !== expectedAppUserID) return null;
+      return Purchases.restorePurchases();
+    });
   } catch (err) {
     logger.warn('RevenueCat: restore failed', err);
     const message = err instanceof Error ? err.message : 'restore_failed';
     return { status: 'error', message };
   }
+
+  if (customerInfo === null) {
+    logger.error('RevenueCat: restore blocked, session identity changed during verification');
+    return { status: 'error', message: 'identity_mismatch' };
+  }
+  if (!hasPlusEntitlement(customerInfo)) {
+    return { status: 'no_entitlement' };
+  }
+  return settleTierWithBackend(refreshAccountTier, pollOptions);
 }

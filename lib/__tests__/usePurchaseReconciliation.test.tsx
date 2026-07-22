@@ -8,9 +8,12 @@
  *    refresca /account → isPro flipea en caliente.
  *  - Vuelta a foreground: reconcilia (configure + refreshUser).
  *  - configure=false (identidad RC no confirmada): NO registra el listener del
- *    SDK, pero el refresh de /account en foreground se ejecuta igual — el flip
- *    del tier por webhook no depende de la identidad RC.
+ *    SDK en el montaje, pero el refresh de /account en foreground se ejecuta
+ *    igual — el flip del tier por webhook no depende de la identidad RC.
  *  - Sin sesión: no configura ni registra listener.
+ *
+ * Las carreras (re-attach del listener en foreground, handlers obsoletos tras
+ * logout/cambio de cuenta) viven en usePurchaseReconciliation.contract.test.tsx.
  */
 import React from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
