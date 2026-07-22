@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { api, setTokens, clearTokens, getAccessToken } from './api';
 import { logger } from './logger';
 import { setAnalyticsUserId } from './analytics';
+import { logOutPurchases } from './purchases';
 
 interface User {
   id: string;
@@ -67,6 +68,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Desvincula la identidad de RevenueCat para que el siguiente usuario del
+    // mismo proceso nunca compre bajo el appUserID anterior. No lanza nunca
+    // (try/catch interno): un fallo del SDK no bloquea el logout de la app.
+    await logOutPurchases();
     await clearTokens();
     setAnalyticsUserId(null);
     setUser(null);

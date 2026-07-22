@@ -89,6 +89,29 @@ it('sin API key configurada: estado no-disponible con retry, sin crash', async (
   expect(mockGetOfferings).not.toHaveBeenCalled();
 });
 
+// Contrato de identidad IAP: configure=false significa identidad RC no confirmada
+// (p. ej. logIn fallido tras cambio de usuario). El paywall NUNCA debe llegar a
+// ready en ese estado — comprar acreditaría Plus a la cuenta equivocada.
+it('configure falla (identidad no confirmada): nunca llega a ready ni expone compra/restore', async () => {
+  mockConfigure.mockResolvedValue(false);
+  render(<PaywallScreen />);
+
+  expect(await screen.findByText('paywall.unavailableTitle')).toBeOnTheScreen();
+  expect(screen.queryByTestId('paywall-cta')).toBeNull();
+  expect(screen.queryByTestId('paywall-restore')).toBeNull();
+  expect(mockPurchase).not.toHaveBeenCalled();
+  expect(mockRestore).not.toHaveBeenCalled();
+});
+
+it('retry desde no-disponible: si configure ya confirma la identidad, llega a ready', async () => {
+  mockConfigure.mockResolvedValueOnce(false);
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByText('paywall.retry'));
+
+  expect(await screen.findByTestId('paywall-cta')).toBeOnTheScreen();
+});
+
 it('offering sin packages (productos ASC no creados): degrada a no-disponible', async () => {
   mockGetOfferings.mockResolvedValue({ packages: [], error: 'no_offerings' });
   render(<PaywallScreen />);

@@ -3,6 +3,11 @@
  *
  * Cubre:
  *  - configure: sin API key degrada (no crash), con key configura el SDK.
+ *  - contrato de identidad: si `logIn` falla al cambiar de usuario, configure
+ *    devuelve false y NO adopta la identidad nueva (nunca ofrecer compra con
+ *    el appUserID de otro usuario); el siguiente configure reintenta el logIn.
+ *  - logOutPurchases: desvincula la identidad al cerrar sesión; el siguiente
+ *    configure re-asocia vía logIn aunque el logOut del SDK falle.
  *  - getPlusOfferings: not_configured / packages / no_offerings / network.
  *  - purchase ok + entitlement activo + backend flipeado → success y se
  *    refresca /account (vía callback refreshAccountTier).
@@ -15,6 +20,7 @@ import Purchases from 'react-native-purchases';
 import {
   configurePurchases,
   isPurchasesConfigured,
+  logOutPurchases,
   resetPurchasesForTesting,
   getPlusOfferings,
   purchasePlusPackage,
@@ -33,6 +39,7 @@ jest.mock('react-native-purchases', () => ({
     purchasePackage: jest.fn(),
     restorePurchases: jest.fn(),
     logIn: jest.fn(),
+    logOut: jest.fn(),
     addCustomerInfoUpdateListener: jest.fn(),
     removeCustomerInfoUpdateListener: jest.fn(),
   },
@@ -107,15 +114,77 @@ describe('configurePurchases', () => {
     expect(mockPurchases.logIn).not.toHaveBeenCalled();
   });
 
-  it('logIn falla en el cambio de usuario: no invalida el SDK (sigue true, warn)', async () => {
-    await configureWithKey();
+  // Contrato de identidad: con logIn fallido el SDK seguiría asociado al usuario
+  // ANTERIOR — devolver true dejaría al nuevo usuario comprar bajo la cuenta
+  // equivocada (el webhook daría Plus al otro, en silencio). Configure debe
+  // devolver false para que el paywall degrade a "no disponible".
+  it('logIn falla en el cambio de usuario: devuelve false y NO adopta la identidad nueva', async () => {
+    await configureWithKey(); // appUserID user-1
     mockPurchases.logIn.mockRejectedValueOnce(new Error('offline'));
 
     const ok = await configurePurchases('user-2');
 
-    expect(ok).toBe(true);
+    expect(ok).toBe(false);
     const { logger } = jest.requireMock('../logger');
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('tras un logIn fallido, el siguiente configure reintenta el logIn con el uid nuevo', async () => {
+    await configureWithKey(); // appUserID user-1
+    mockPurchases.logIn.mockRejectedValueOnce(new Error('offline'));
+    await configurePurchases('user-2'); // false — identidad sigue en user-1
+
+    const retry = await configurePurchases('user-2');
+
+    expect(retry).toBe(true);
+    expect(mockPurchases.logIn).toHaveBeenCalledTimes(2);
+    expect(mockPurchases.logIn).toHaveBeenLastCalledWith('user-2');
+  });
+});
+
+describe('logOutPurchases', () => {
+  it('desvincula la identidad: el siguiente configure con otro uid pasa por logIn', async () => {
+    await configureWithKey(); // appUserID user-1
+    await logOutPurchases();
+
+    expect(mockPurchases.logOut).toHaveBeenCalled();
+
+    const ok = await configurePurchases('user-2');
+    expect(ok).toBe(true);
+    expect(mockPurchases.logIn).toHaveBeenCalledWith('user-2');
+  });
+
+  it('mismo usuario tras logout: re-asocia vía logIn, no reutiliza la identidad previa', async () => {
+    await configureWithKey(); // appUserID user-1
+    await logOutPurchases();
+
+    await configurePurchases('user-1');
+
+    expect(mockPurchases.logIn).toHaveBeenCalledWith('user-1');
+  });
+
+  it('logOut del SDK falla: no lanza y aun así fuerza el logIn en el siguiente configure', async () => {
+    await configureWithKey(); // appUserID user-1
+    mockPurchases.logOut.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(logOutPurchases()).resolves.toBeUndefined();
+
+    await configurePurchases('user-1');
+    expect(mockPurchases.logIn).toHaveBeenCalledWith('user-1');
+  });
+
+  it('sin SDK configurado: no-op, no llama a logOut', async () => {
+    await logOutPurchases();
+    expect(mockPurchases.logOut).not.toHaveBeenCalled();
+  });
+
+  it('configurado sin appUserID (anónimo): no llama a logOut (lanzaría en el SDK)', async () => {
+    process.env[API_KEY_ENV] = 'appl_test_key';
+    await configurePurchases();
+
+    await logOutPurchases();
+
+    expect(mockPurchases.logOut).not.toHaveBeenCalled();
   });
 });
 

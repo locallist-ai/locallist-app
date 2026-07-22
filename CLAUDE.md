@@ -98,8 +98,8 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | File | Description |
 |---|---|
 | `api.ts` | API client: auto JWT refresh, SecureStore token storage |
-| `auth.ts` | AuthContext: user state, logout, isPro flag, refreshUser (re-fetch /account post-compra) |
-| `purchases.ts` | RevenueCat: configure (key por `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY`), offerings, purchase/restore con poll de `GET /account` hasta el flip del tier; cancelación de usuario no es error |
+| `auth.ts` | AuthContext: user state, logout (desvincula identidad RevenueCat vía `logOutPurchases`), isPro flag, refreshUser (re-fetch /account post-compra) |
+| `purchases.ts` | RevenueCat: configure (key por `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY`; logIn fallido en cambio de usuario ⇒ false, nunca compra con identidad no confirmada), logOutPurchases, offerings, purchase/restore con poll de `GET /account` hasta el flip del tier; cancelación de usuario no es error |
 | `auth/useAuthForm.ts` | Login/register flow hook: choose↔credentials step, Apple/Google OAuth, email validation, password strength (powers `app/login.tsx`) |
 | `theme.ts` | Brand tokens: colors, typography, spacing, borderRadius |
 | `types.ts` | Shared TypeScript types (Plan, Place, PlanStop, etc.) |

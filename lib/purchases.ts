@@ -58,8 +58,11 @@ export function isPurchasesConfigured(): boolean {
  *
  * Ya configurado, si el `appUserID` cambia (login con otra cuenta en la misma
  * sesión de proceso) re-asocia vía `Purchases.logIn` para no dejar las compras
- * colgadas del usuario anterior. Un fallo del re-login no invalida el SDK: se
- * loguea y se sigue (la siguiente compra/restore reintentará el flujo).
+ * colgadas del usuario anterior. Si ese re-login falla, devuelve `false` SIN
+ * adoptar la identidad nueva: el SDK seguiría asociado al usuario anterior y
+ * una compra saldría bajo su cuenta (el webhook daría Plus al usuario
+ * equivocado, en silencio). El caller degrada a "no disponible" con retry;
+ * la siguiente llamada reintenta el logIn.
  */
 export async function configurePurchases(appUserID?: string | null): Promise<boolean> {
   const uid = appUserID ?? null;
@@ -71,6 +74,7 @@ export async function configurePurchases(appUserID?: string | null): Promise<boo
         currentAppUserID = uid;
       } catch (err) {
         logger.warn('RevenueCat: logIn on user change failed', err);
+        return false;
       }
     }
     return true;
@@ -95,6 +99,29 @@ export async function configurePurchases(appUserID?: string | null): Promise<boo
   } catch (err) {
     logger.error('RevenueCat: configure failed', err);
     return false;
+  }
+}
+
+/**
+ * Desvincula la identidad de RevenueCat al cerrar sesión en la app. Sin esto,
+ * el siguiente usuario que inicie sesión en el mismo proceso heredaría el
+ * `appUserID` anterior si su `logIn` fallara, y su compra acreditaría Plus a
+ * la cuenta equivocada.
+ *
+ * Nunca lanza: un fallo del SDK no debe bloquear el logout de la app. El
+ * estado interno se resetea incluso si `Purchases.logOut` falla, de modo que
+ * el siguiente `configurePurchases` pase sí o sí por `logIn` (identidad
+ * confirmada o paywall no disponible — nunca identidad heredada).
+ */
+export async function logOutPurchases(): Promise<void> {
+  const hadIdentity = currentAppUserID !== null;
+  currentAppUserID = null;
+  // Sin identidad asociada el SDK está en usuario anónimo y logOut lanzaría.
+  if (!configured || !hadIdentity) return;
+  try {
+    await Purchases.logOut();
+  } catch (err) {
+    logger.warn('RevenueCat: logOut failed', err);
   }
 }
 
