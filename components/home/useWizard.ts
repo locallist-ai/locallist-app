@@ -82,6 +82,12 @@ export interface UseWizardResult {
 export const useWizard = (): UseWizardResult => {
   const { t } = useTranslation();
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Synchronous double-tap guard, mirror del chat (app/chat/index.tsx). `loading`
+  // vive en el closure y llega stale entre dos taps del mismo frame; el await de
+  // getAccessToken() abajo garantiza el yield y ensancha la ventana. Este ref se
+  // reclama SÍNCRONAMENTE al entrar en handleGenerate, antes de cualquier await,
+  // para que dos taps no disparen ambos un POST /builder/chat (quema 2 planes).
+  const pendingRef = useRef(false);
   const { city: tripCity } = useTripContext();
   const { isPro, aiPlansMonth, refreshAiPlansQuota } = useAuth();
   const { presentGate, presentClamped } = useGateHandler();
@@ -262,7 +268,12 @@ export const useWizard = (): UseWizardResult => {
   }, []);
 
   const handleGenerate = useCallback(async () => {
-    if (loading) return;
+    if (loading || pendingRef.current) return;
+
+    // Claim the synchronous double-tap guard BEFORE any await (the token read
+    // below yields): two taps in the same batch must not both slip through and
+    // fire two POST /builder/chat, each burning a free monthly plan.
+    pendingRef.current = true;
 
     // Client-side validation — espejo de ValidateMinimumInput del backend (PR #48 api-net).
     // Evita roundtrip innecesario al backend cuando sabemos que va a devolver 400.
@@ -275,6 +286,7 @@ export const useWizard = (): UseWizardResult => {
     const wizardSignals = [hasCity, hasDays, hasGroupType, hasBudget, hasInterests]
       .filter(Boolean).length;
     if (wizardSignals < 3) {
+      pendingRef.current = false;
       hapticImpact(ImpactFeedbackStyle.Heavy);
       setError(t('wizard.errorInsufficientInput'));
       return;
@@ -288,6 +300,7 @@ export const useWizard = (): UseWizardResult => {
     // still round-trips and is handled by the 401 fallback below.
     const token = await getAccessToken();
     if (!token) {
+      pendingRef.current = false;
       hapticImpact(ImpactFeedbackStyle.Heavy);
       // Signup is a gate, not an error: show ONLY the Alert, never the error
       // overlay with a Retry that would just re-trigger the same wall (g2).
@@ -379,6 +392,7 @@ export const useWizard = (): UseWizardResult => {
       logger.error('[builder/chat] THROW', e);
       setError(t('wizard.errorDefault'));
     } finally {
+      pendingRef.current = false;
       setLoading(false);
     }
   }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, companySubs, t, isPro, presentGate, presentClamped, refreshAiPlansQuota]);

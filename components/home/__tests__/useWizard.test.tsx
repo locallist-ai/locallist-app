@@ -272,3 +272,42 @@ describe('useWizard — g3: refresco de cuota tras generar', () => {
     expect(mockRefreshAiPlansQuota).not.toHaveBeenCalled();
   });
 });
+
+describe('useWizard — guard síncrono anti-doble-tap', () => {
+  it('doble-tap: dos handleGenerate() sin await entre medias → EXACTAMENTE 1 POST /builder/chat', async () => {
+    // El await de getAccessToken() cede el hilo; sin el pendingRef síncrono, el
+    // segundo tap del mismo frame se colaría (loading vive stale en el closure) y
+    // dispararía un segundo /builder/chat, quemando 2 de los 3 planes gratis del mes.
+    mockApi.mockResolvedValue(okResponse());
+    const { result } = renderHook(() => useWizard());
+
+    act(() => { result.current.toggleInterest('food'); });
+    act(() => { result.current.handleSelectDays(2); });
+
+    await act(async () => {
+      // Dos invocaciones en el mismo batch, sin await entre medias.
+      const p1 = result.current.handleGenerate();
+      const p2 = result.current.handleGenerate();
+      await Promise.all([p1, p2]);
+    });
+
+    expect(mockApi).toHaveBeenCalledTimes(1);
+    expect(
+      mockApi.mock.calls.filter(([path]) => path === '/builder/chat'),
+    ).toHaveLength(1);
+  });
+
+  it('segundo tap tras completar la primera generación SÍ dispara (ref no queda pegado)', async () => {
+    mockApi.mockResolvedValue(okResponse());
+    const { result } = renderHook(() => useWizard());
+
+    await generateWith(result, 2);
+    expect(mockApi).toHaveBeenCalledTimes(1);
+
+    // Ya no está pendiente: el finally reseteó pendingRef. Un tap posterior con
+    // las mismas señales debe volver a generar (no dejamos el ref bloqueado).
+    await act(async () => { await result.current.handleGenerate(); });
+
+    expect(mockApi).toHaveBeenCalledTimes(2);
+  });
+});
