@@ -84,6 +84,19 @@ describe('mapGateError', () => {
     expect(mapGateError(0, null)).toEqual({ type: 'generic' });
   });
 
+  it('normaliza el case/espacios del código antes de comparar (g5)', () => {
+    // Un drift de casing/espacios del backend no debe misroutear el gate.
+    expect(mapGateError(403, { error: 'PLAN_LIMIT_REACHED' })).toMatchObject({
+      type: 'upsell',
+      code: 'plan_limit_reached',
+    });
+    expect(mapGateError(403, { error: '  Duration_Requires_Plus  ' })).toMatchObject({
+      type: 'upsell',
+      code: 'duration_requires_plus',
+    });
+    expect(mapGateError(429, { error: 'Daily_Cap_Reached' })).toEqual({ type: 'soft_throttle' });
+  });
+
   it('parseo tolerante: campos no numéricos o body no-objeto degradan a null', () => {
     const action = mapGateError(403, {
       error: 'plan_limit_reached',
@@ -98,38 +111,55 @@ describe('mapGateError', () => {
 });
 
 describe('parseAiPlansQuota', () => {
-  it('lee ai_plans_month (snake_case) a nivel raíz', () => {
-    const body = { user: { id: 'u1' }, ai_plans_month: { used: 1, limit: 3, resetsAt: '2026-08-01' } };
-    expect(parseAiPlansQuota(body)).toEqual({ used: 1, limit: 3, resetsAt: '2026-08-01' });
+  // Contrato fijado (feat/iap-backend-tier): /account devuelve
+  // `{ user, aiPlansMonth: { used, limit, resetsAt } }` a nivel raíz.
+  it('lee aiPlansMonth a nivel raíz (free)', () => {
+    const body = { user: { id: 'u1' }, aiPlansMonth: { used: 2, limit: 3, resetsAt: '2026-08-01T00:00:00Z' } };
+    expect(parseAiPlansQuota(body)).toEqual({ used: 2, limit: 3, resetsAt: '2026-08-01T00:00:00Z' });
   });
 
-  it('lee aiPlansMonth (camelCase) anidado bajo user', () => {
-    const body = { user: { aiPlansMonth: { used: 2, limit: 3 } } };
-    expect(parseAiPlansQuota(body)).toEqual({ used: 2, limit: 3, resetsAt: null });
+  it('resetsAt ausente → null (used/limit presentes)', () => {
+    const body = { user: {}, aiPlansMonth: { used: 1, limit: 3 } };
+    expect(parseAiPlansQuota(body)).toEqual({ used: 1, limit: 3, resetsAt: null });
+  });
+
+  it('Plus: limit omitido (ilimitado) → null, la UI oculta la línea', () => {
+    // El backend omite `limit` para Plus (WhenWritingNull); sin límite concreto
+    // no hay "X de N" que pintar.
+    expect(parseAiPlansQuota({ user: {}, aiPlansMonth: { used: 0, resetsAt: '2026-08-01' } })).toBeNull();
   });
 
   it('null cuando falta o está malformado', () => {
     expect(parseAiPlansQuota(null)).toBeNull();
     expect(parseAiPlansQuota({ user: { id: 'u1' } })).toBeNull();
-    expect(parseAiPlansQuota({ ai_plans_month: { used: 'x', limit: 3 } })).toBeNull();
+    expect(parseAiPlansQuota({ aiPlansMonth: { used: 'x', limit: 3 } })).toBeNull();
+    // Ya no se lee snake_case ni anidado bajo user — contrato bloqueado.
+    expect(parseAiPlansQuota({ ai_plans_month: { used: 1, limit: 3 } })).toBeNull();
+    expect(parseAiPlansQuota({ user: { aiPlansMonth: { used: 1, limit: 3 } } })).toBeNull();
   });
 });
 
 describe('parseClampedHint', () => {
-  it('boolean clamped:true con días adyacentes', () => {
-    expect(parseClampedHint({ clamped: true, appliedDays: 3, requestedDays: 7 })).toEqual({
+  // Contrato fijado: `clamped: { field, requested, applied, upsell }`, presente
+  // solo cuando hubo recorte (omitido si no).
+  it('objeto clamped con field/requested/applied/upsell → días', () => {
+    expect(
+      parseClampedHint({ clamped: { field: 'days', requested: 10, applied: 3, upsell: true } }),
+    ).toEqual({ appliedDays: 3, requestedDays: 10 });
+  });
+
+  it('applied presente sin requested → requestedDays null', () => {
+    expect(parseClampedHint({ clamped: { field: 'days', applied: 3, upsell: true } })).toEqual({
       appliedDays: 3,
-      requestedDays: 7,
+      requestedDays: null,
     });
   });
 
-  it('objeto clamped con días', () => {
-    expect(parseClampedHint({ clamped: { days: 3 } })).toEqual({ appliedDays: 3, requestedDays: null });
-  });
-
   it('null cuando no hay clamp', () => {
-    expect(parseClampedHint({ clamped: false })).toBeNull();
     expect(parseClampedHint({})).toBeNull();
     expect(parseClampedHint(null)).toBeNull();
+    // Formas antiguas ya no se aceptan (contrato bloqueado).
+    expect(parseClampedHint({ clamped: true, appliedDays: 3 })).toBeNull();
+    expect(parseClampedHint({ clamped: false })).toBeNull();
   });
 });

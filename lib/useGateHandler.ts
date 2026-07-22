@@ -3,13 +3,14 @@
  *
  * Keeps the code→copy→CTA mapping in ONE place so screens don't each re-invent
  * the upsell/signup wording. Uses `Alert` (consistent with the app's existing
- * upsell and city-unsupported prompts); the dedicated paywall route ships with
- * PR #77, and `openPlus` is the single hook to retarget once it lands.
+ * upsell and city-unsupported prompts); the upsell CTA routes to the dedicated
+ * `/paywall` route (shipped in PR #77) via the single `openPlus` entry point.
  */
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from './auth';
 import type { GateAction } from './gate-errors';
 
 type TFunc = (key: string, opts?: Record<string, unknown>) => string;
@@ -54,11 +55,12 @@ function upsellCopy(
 
 export function useGateHandler() {
   const { t } = useTranslation();
+  const { isPro } = useAuth();
 
   const openPlus = useCallback(() => {
-    // Plus entry point. The paywall route ships with PR #77; until then the
-    // Account tab hosts the Plus upsell card. Centralised so it retargets once.
-    router.push('/(tabs)/account');
+    // Single Plus entry point — the RevenueCat paywall (PR #77). Centralised so
+    // every gate upsell CTA routes to the same place.
+    router.push('/paywall');
   }, []);
 
   /**
@@ -104,6 +106,10 @@ export function useGateHandler() {
    */
   const presentClamped = useCallback(
     (appliedDays: number | null) => {
+      // A Plus user can still trip the clamp (over-requesting past their 14-day
+      // cap). Never upsell an existing Plus subscriber — the backend only emits
+      // `clamped` for the free cap today, but this is the client-side guard (g4).
+      if (isPro) return;
       Alert.alert(
         t('gate.clampedTitle'),
         appliedDays != null
@@ -115,7 +121,7 @@ export function useGateHandler() {
         ],
       );
     },
-    [t, openPlus],
+    [t, openPlus, isPro],
   );
 
   return { presentGate, presentClamped };

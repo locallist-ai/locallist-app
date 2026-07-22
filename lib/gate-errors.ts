@@ -8,10 +8,13 @@
  * presentation lives in `useGateHandler`; the parsing lives here so it is pure
  * and trivially testable.
  *
- * Field parsing is deliberately TOLERANT: the exact field names of the gate
- * catalogue are still being finalised with the API task (api-gates-fixes.md).
- * Unknown/missing fields degrade to `null`, never throw. See the TODOs below
- * for the specific names that need locking once the backend contract is fixed.
+ * Field parsing stays defensive (unknown/missing fields degrade to `null`,
+ * never throw), but the names are now LOCKED against the backend contract
+ * (`feat/iap-backend-tier`, documented in `Features/Billing/README.md`):
+ *   - generation response → `clamped: { field, requested, applied, upsell }`
+ *     (omitted entirely when nothing was clamped)
+ *   - `GET /account` → `aiPlansMonth: { used, limit, resetsAt }`
+ *     (`limit` omitted = unlimited, for Plus)
  */
 
 /** 403 gate codes that lead to a Plus upsell. */
@@ -42,10 +45,14 @@ export type GateAction =
   /** Anything else — fall back to the caller's generic error copy. */
   | { type: 'generic' };
 
-/** Monthly AI-plan quota, surfaced by `GET /account` (api-gates-fixes.md m4). */
+/**
+ * Monthly AI-plan quota, surfaced by `GET /account` as `aiPlansMonth`. Only
+ * populated for free users with a concrete `limit`; Plus omits `limit`
+ * (unlimited), so the parser yields `null` and the "X of N" line stays hidden.
+ */
 export type AiPlansQuota = { used: number; limit: number; resetsAt: string | null };
 
-/** Hint that a generated plan's duration was clamped to the free cap (m3). */
+/** Hint that a generated plan's duration was clamped to the tier cap (`clamped`). */
 export type ClampedHint = { appliedDays: number | null; requestedDays: number | null };
 
 const UPSELL_CODES: readonly string[] = [
@@ -68,6 +75,18 @@ function strOrNull(v: unknown): string | null {
 }
 
 /**
+ * Normalise an error code before matching: trim + lowercase, so a casing/whitespace
+ * drift from the backend never silently misroutes a gate (g5). Mirrors the tolerant
+ * field extraction elsewhere in this module.
+ */
+function normalizeCode(v: unknown): string | null {
+  const s = strOrNull(v);
+  if (!s) return null;
+  const normalized = s.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+}
+
+/**
  * Map an API `{ status, errorBody }` pair to a client action.
  *
  * Precedence:
@@ -82,7 +101,7 @@ export function mapGateError(status: number, errorBody: unknown): GateAction {
   if (status === 401) return { type: 'signup_required' };
 
   const body = asRecord(errorBody);
-  const code = body ? strOrNull(body.error) : null;
+  const code = body ? normalizeCode(body.error) : null;
 
   if (code && UPSELL_CODES.includes(code)) {
     return {
@@ -107,21 +126,17 @@ export function mapGateError(status: number, errorBody: unknown): GateAction {
 /**
  * Extract the monthly AI-plan quota from a `GET /account` response body.
  *
- * TODO(gate-api): the field name is not finalised with api-gates-fixes.md m4.
- * We accept snake_case (`ai_plans_month`) and camelCase (`aiPlansMonth`), at
- * the top level or nested under `user`. Once the backend contract is locked,
- * drop the extra candidates and keep only the real one. Returns `null` when
- * absent or malformed — the UI simply hides the quota line in that case.
+ * Locked contract: the quota lives at the top level under `aiPlansMonth` as
+ * `{ used, limit, resetsAt }`. For Plus users `limit` is omitted (unlimited),
+ * so `used`/`limit` won't both be numbers → returns `null` and the UI hides the
+ * "X of N" line (which it only renders for free users anyway). Returns `null`
+ * when absent or malformed — never throws.
  */
 export function parseAiPlansQuota(accountBody: unknown): AiPlansQuota | null {
   const body = asRecord(accountBody);
   if (!body) return null;
 
-  const user = asRecord(body.user);
-  const raw =
-    asRecord(body.ai_plans_month) ??
-    asRecord(body.aiPlansMonth) ??
-    (user ? asRecord(user.ai_plans_month) ?? asRecord(user.aiPlansMonth) : null);
+  const raw = asRecord(body.aiPlansMonth);
   if (!raw) return null;
 
   const used = numOrNull(raw.used);
@@ -132,32 +147,21 @@ export function parseAiPlansQuota(accountBody: unknown): AiPlansQuota | null {
 }
 
 /**
- * Detect the "duration clamped to the free cap" hint on a generation response.
+ * Detect the "duration clamped to the tier cap" hint on a generation response.
  *
- * TODO(gate-api): the hint shape is not finalised with api-gates-fixes.md m3.
- * We accept either a boolean `clamped` (with day fields alongside) or an object
- * under a few candidate keys. Returns `null` when there is no clamp. Lock the
- * real shape once the backend contract is fixed.
+ * Locked contract: `clamped: { field, requested, applied, upsell }`, present
+ * only when something was actually clamped (omitted otherwise). We read the
+ * day figures from `applied`/`requested`. Returns `null` when there is no clamp.
  */
 export function parseClampedHint(generateBody: unknown): ClampedHint | null {
   const body = asRecord(generateBody);
   if (!body) return null;
 
-  const flag = body.clamped;
-  if (flag === true) {
-    return {
-      appliedDays: numOrNull(body.appliedDays) ?? numOrNull(body.days),
-      requestedDays: numOrNull(body.requestedDays),
-    };
-  }
+  const clamped = asRecord(body.clamped);
+  if (!clamped) return null;
 
-  const obj = asRecord(flag) ?? asRecord(body.clampedDuration) ?? asRecord(body.duration_clamped);
-  if (obj) {
-    return {
-      appliedDays: numOrNull(obj.appliedDays) ?? numOrNull(obj.days),
-      requestedDays: numOrNull(obj.requestedDays),
-    };
-  }
-
-  return null;
+  return {
+    appliedDays: numOrNull(clamped.applied),
+    requestedDays: numOrNull(clamped.requested),
+  };
 }

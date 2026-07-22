@@ -19,7 +19,7 @@ import { Alert } from 'react-native';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import ChatScreen from '../../../app/chat/index';
-import { chatTurn, chatGenerate } from '../../../lib/api';
+import { chatTurn, chatGenerate, getAccessToken } from '../../../lib/api';
 import { track } from '../../../lib/analytics';
 import { getSavedSessionId, saveSessionId } from '../../../lib/chat-store';
 import { useTripContext } from '../../../lib/trip-context-store';
@@ -48,8 +48,10 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 jest.mock('../../../lib/auth', () => ({
   // Generación es [Authorize]: por defecto autenticado para los tests que
-  // llegan a generar. Los tests de guest lo sobreescriben a isAuthenticated:false.
-  useAuth: jest.fn(() => ({ isAuthenticated: true, isPro: false, aiPlansMonth: null })),
+  // llegan a generar. Los tests de guest lo sobreescriben (token null).
+  useAuth: jest.fn(() => ({
+    isAuthenticated: true, isPro: false, aiPlansMonth: null, refreshAiPlansQuota: jest.fn(),
+  })),
 }));
 jest.mock('../../../lib/trip-context-store', () => ({
   useTripContext: jest.fn(),
@@ -59,6 +61,7 @@ jest.mock('../../../lib/api', () => ({
   chatGenerate: jest.fn(),
   deleteChatSession: jest.fn(),
   upsertProfile: jest.fn(),
+  getAccessToken: jest.fn(),
 }));
 jest.mock('../../../lib/chat-store', () => ({
   getSavedSessionId: jest.fn(),
@@ -77,6 +80,7 @@ const mockChatTurn = chatTurn as jest.Mock;
 const mockGetSavedSessionId = getSavedSessionId as jest.Mock;
 const mockUseTripContext = useTripContext as jest.Mock;
 const mockUseAuth = useAuth as jest.Mock;
+const mockGetAccessToken = getAccessToken as jest.Mock;
 
 const SLOTS: ChatSlots = {
   city: 'Madrid',
@@ -123,9 +127,12 @@ const renderPreSeeded = async () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // Default: autenticado. Los tests de guest lo sobreescriben. Se fija en
-  // beforeEach porque clearAllMocks no restaura implementaciones de mockReturnValue.
-  mockUseAuth.mockReturnValue({ isAuthenticated: true, isPro: false, aiPlansMonth: null });
+  // Default: autenticado con token. Los tests de guest lo sobreescriben. Se fija
+  // en beforeEach porque clearAllMocks no restaura implementaciones de mockReturnValue.
+  mockUseAuth.mockReturnValue({
+    isAuthenticated: true, isPro: false, aiPlansMonth: null, refreshAiPlansQuota: jest.fn(),
+  });
+  mockGetAccessToken.mockResolvedValue('valid-token');
 });
 
 describe('chat — init con preSeededCity', () => {
@@ -475,9 +482,12 @@ describe('chat — error de infraestructura (ai_unavailable)', () => {
 
 describe('chat — gate Plus en generación', () => {
   // Lleva el chat a estado ready y devuelve el spy de Alert. `authed` controla
-  // si el usuario está autenticado (guest → CTA de registro antes de generar).
+  // la PRESENCIA DE TOKEN (G1): guest real = sin token → CTA de registro.
   const arriveReady = async (authed = true) => {
-    mockUseAuth.mockReturnValue({ isAuthenticated: authed, isPro: false, aiPlansMonth: null });
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: authed, isPro: false, aiPlansMonth: null, refreshAiPlansQuota: jest.fn(),
+    });
+    mockGetAccessToken.mockResolvedValue(authed ? 'valid-token' : null);
     mockGetSavedSessionId.mockResolvedValue(null);
     mockUseTripContext.mockReturnValue({ city: 'Madrid' });
     mockChatTurn.mockResolvedValueOnce(
@@ -502,6 +512,32 @@ describe('chat — gate Plus en generación', () => {
     );
     expect(chatGenerate).not.toHaveBeenCalled();
     expect(router.push).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('G1: token presente pero user null (auto-login falló) → genera, NO signup', async () => {
+    // Blip transitorio de /account: isAuthenticated=false pero el token vive en
+    // SecureStore. El gate por presencia de token deja pasar la generación.
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: false, isPro: false, aiPlansMonth: null, refreshAiPlansQuota: jest.fn(),
+    });
+    mockGetAccessToken.mockResolvedValue('valid-token');
+    mockGetSavedSessionId.mockResolvedValue(null);
+    mockUseTripContext.mockReturnValue({ city: 'Madrid' });
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({ aiMessage: 'Listo para generar tu plan.', ready: true, quickReplies: [] }),
+    );
+    render(<ChatScreen />);
+    await waitFor(() => expect(screen.getByText('chat.buildPlan')).toBeTruthy());
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (chatGenerate as jest.Mock).mockResolvedValueOnce({
+      data: { plan: { id: 'p1', durationDays: 2 } }, error: null, errorBody: null, status: 200,
+    });
+
+    fireEvent.press(screen.getByText('chat.buildPlan'));
+
+    await waitFor(() => expect(chatGenerate).toHaveBeenCalled());
+    expect(alertSpy).not.toHaveBeenCalledWith('gate.signupRequiredTitle', expect.anything(), expect.anything());
     alertSpy.mockRestore();
   });
 

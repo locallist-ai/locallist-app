@@ -33,6 +33,12 @@ interface AuthContextType {
    * flips the tier server-side). Returns the fresh tier, or null on failure.
    */
   refreshUser: () => Promise<'free' | 'pro' | null>;
+  /**
+   * Re-fetch `GET /account` and refresh `aiPlansMonth`. Best-effort (never
+   * throws). Called after an interactive `login()` and after a successful
+   * generation so the "X of N plans" line reflects the latest usage (g3).
+   */
+  refreshAiPlansQuota: () => Promise<void>;
   /** Override tier locally for testing. Pass null to reset to real tier. */
   setTierOverride: (tier: 'free' | 'pro' | null) => void;
 }
@@ -54,6 +60,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => { },
   logout: async () => { },
   refreshUser: async () => null,
+  refreshAiPlansQuota: async () => { },
   setTierOverride: () => { },
 });
 
@@ -70,11 +77,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = !!user?.email?.endsWith(ADMIN_DOMAIN);
   const effectiveTier = tierOverride ?? user?.tier ?? 'free';
 
+  // Best-effort refresh of the monthly AI-plan quota from `GET /account`. Kept
+  // separate from `refreshUser` so callers can update just the quota (after a
+  // generation) without re-touching user/tier. Never throws.
+  const refreshAiPlansQuota = useCallback(async () => {
+    try {
+      const res = await api<{ user: User }>('/account');
+      setAiPlansMonth(parseAiPlansQuota(res.data));
+    } catch (error) {
+      logger.warn('refreshAiPlansQuota failed', error);
+    }
+  }, []);
+
   const login = useCallback(async (userData: User, accessToken: string, refreshToken: string) => {
     await setTokens(accessToken, refreshToken);
     setAnalyticsUserId(userData.id);
     setUser(userData);
-  }, []);
+    // Populate the quota right after an interactive login — the startup
+    // auto-login effect only fires on cold start, so without this a freshly
+    // registered free user never sees their "X of N plans" line (g3).
+    await refreshAiPlansQuota();
+  }, [refreshAiPlansQuota]);
 
   const logout = useCallback(async () => {
     // La sesión muere ANTES de tocar RevenueCat y sin ningún await entre la
@@ -149,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         refreshUser,
+        refreshAiPlansQuota,
         setTierOverride,
       },
     },

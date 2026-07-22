@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ImpactFeedbackStyle } from 'expo-haptics';
-import { api } from '../../lib/api';
+import { api, getAccessToken } from '../../lib/api';
 import { track } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan/plan-store';
@@ -83,7 +83,7 @@ export const useWizard = (): UseWizardResult => {
   const { t } = useTranslation();
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { city: tripCity } = useTripContext();
-  const { isAuthenticated, isPro, aiPlansMonth } = useAuth();
+  const { isPro, aiPlansMonth, refreshAiPlansQuota } = useAuth();
   const { presentGate, presentClamped } = useGateHandler();
 
   // City is pre-selected via the city-picker home screen; wizard starts at step 1.
@@ -280,13 +280,18 @@ export const useWizard = (): UseWizardResult => {
       return;
     }
 
-    // Generation is now `[Authorize]` on the backend: a guest can no longer
-    // generate. Prompt register/login BEFORE hitting the endpoint (avoids a
-    // wasted 401 roundtrip); the 401 response is still handled below as a
-    // fallback in case the token expires mid-flow.
-    if (!isAuthenticated) {
+    // Generation is `[Authorize]` on the backend. Gate on TOKEN PRESENCE, not on
+    // the in-memory `user`: a transient `/account` failure at startup leaves
+    // `user` null while the token still lives in SecureStore and `api()` keeps
+    // sending it (G1). A returning user must never be walled out of generation by
+    // that blip. A real guest has no token → prompt signup; an expired token
+    // still round-trips and is handled by the 401 fallback below.
+    const token = await getAccessToken();
+    if (!token) {
       hapticImpact(ImpactFeedbackStyle.Heavy);
-      setError(presentGate({ type: 'signup_required' }));
+      // Signup is a gate, not an error: show ONLY the Alert, never the error
+      // overlay with a Retry that would just re-trigger the same wall (g2).
+      presentGate({ type: 'signup_required' });
       return;
     }
 
@@ -351,13 +356,19 @@ export const useWizard = (): UseWizardResult => {
         const clamped = parseClampedHint(res.data);
         router.push('/plan/preview');
         if (clamped) presentClamped(clamped.appliedDays ?? res.data.plan.durationDays);
+        // A successful generation consumes one of the free monthly plans —
+        // refresh the quota so the "X of N" line reflects it (g3).
+        void refreshAiPlansQuota();
       } else {
         logger.debug('[builder/chat] ERROR body', res.errorBody);
         // Centralised gate mapping: 401 → signup, 403 structured → upsell,
         // 429 daily_cap → soft throttle (Plus, no upsell), else rate_limit/generic.
         const action = mapGateError(res.status, res.errorBody);
         if (action.type === 'signup_required' || action.type === 'upsell' || action.type === 'soft_throttle') {
-          setError(presentGate(action));
+          // Gate states (signup / monetization upsell / soft-throttle) surface
+          // ONLY their Alert. They must not land in the generic error overlay,
+          // whose Retry would just re-fire the same gate (g2).
+          presentGate(action);
         } else if (action.type === 'rate_limit') {
           setError(t('wizard.errorRateLimit'));
         } else {
@@ -370,7 +381,7 @@ export const useWizard = (): UseWizardResult => {
     } finally {
       setLoading(false);
     }
-  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, companySubs, t, isAuthenticated, isPro, presentGate, presentClamped]);
+  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, companySubs, t, isPro, presentGate, presentClamped, refreshAiPlansQuota]);
 
   // Mantener el ref siempre apuntando al último handleGenerate. advanceToNext
   // lo invoca cuando el usuario completa el último step de prefs y necesitamos

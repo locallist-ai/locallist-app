@@ -2,7 +2,7 @@
  * Tests de `lib/useGateHandler.ts` — presentación de cada GateAction como UI.
  *
  * Verifica que cada rama dispara el Alert correcto (título/cuerpo por código) y
- * que los CTAs navegan al destino esperado (login para signup, Account tab para
+ * que los CTAs navegan al destino esperado (login para signup, /paywall para
  * upsell/clamped). `t` se mockea como identidad, así que asertamos sobre keys.
  */
 
@@ -10,6 +10,7 @@ import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { renderHook } from '@testing-library/react-native';
 import { useGateHandler } from '../useGateHandler';
+import { useAuth } from '../auth';
 import type { GateAction } from '../gate-errors';
 
 jest.mock('react-native', () => ({
@@ -21,9 +22,17 @@ jest.mock('expo-router', () => ({
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
+jest.mock('../auth', () => ({ useAuth: jest.fn() }));
 
 const mockAlert = Alert.alert as jest.Mock;
 const mockPush = router.push as jest.Mock;
+const mockUseAuth = useAuth as jest.Mock;
+
+// Por defecto, usuario free (los gates de upsell aplican). Los tests de Plus lo
+// sobreescriben.
+beforeEach(() => {
+  mockUseAuth.mockReturnValue({ isPro: false });
+});
 
 type AlertButton = { text: string; style?: string; onPress?: () => void };
 
@@ -67,7 +76,7 @@ describe('useGateHandler.presentGate', () => {
     expect(msg).toBe('gate.planLimitBodyReset');
     expect(lastAlert().title).toBe('gate.planLimitTitle');
     pressCta('gate.upgradeCta');
-    expect(mockPush).toHaveBeenCalledWith('/(tabs)/account');
+    expect(mockPush).toHaveBeenCalledWith('/paywall');
   });
 
   it('upsell plan_limit_reached (sin reset) → cuerpo sin fecha', () => {
@@ -119,18 +128,26 @@ describe('useGateHandler.presentGate', () => {
 describe('useGateHandler.presentClamped', () => {
   afterEach(() => jest.clearAllMocks());
 
-  it('con días → cuerpo con {{days}} y CTA a Plus', () => {
+  it('con días → cuerpo con {{days}} y CTA a /paywall', () => {
     const { result } = renderHook(() => useGateHandler());
     result.current.presentClamped(3);
     expect(lastAlert().title).toBe('gate.clampedTitle');
     expect(lastAlert().body).toBe('gate.clampedBody');
     pressCta('gate.upgradeCta');
-    expect(mockPush).toHaveBeenCalledWith('/(tabs)/account');
+    expect(mockPush).toHaveBeenCalledWith('/paywall');
   });
 
   it('sin días → cuerpo genérico', () => {
     const { result } = renderHook(() => useGateHandler());
     result.current.presentClamped(null);
     expect(lastAlert().body).toBe('gate.clampedBodyGeneric');
+  });
+
+  it('usuario Plus → NO se presenta upsell de clamp (guard isPro, g4)', () => {
+    mockUseAuth.mockReturnValue({ isPro: true });
+    const { result } = renderHook(() => useGateHandler());
+    result.current.presentClamped(14);
+    expect(mockAlert).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

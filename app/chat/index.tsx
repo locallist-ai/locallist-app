@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { chatTurn, chatGenerate, deleteChatSession, upsertProfile } from '../../lib/api';
+import { chatTurn, chatGenerate, deleteChatSession, upsertProfile, getAccessToken } from '../../lib/api';
 import { getSavedSessionId, saveSessionId, clearSessionId } from '../../lib/chat-store';
 import { BlurView } from 'expo-blur';
 import { MessageBubble } from '../../components/chat/MessageBubble';
@@ -46,7 +46,7 @@ export default function ChatScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { isAuthenticated, isPro, aiPlansMonth } = useAuth();
+  const { isAuthenticated, isPro, aiPlansMonth, refreshAiPlansQuota } = useAuth();
   const { presentGate, presentClamped } = useGateHandler();
   const { city: preSeededCity } = useTripContext();
 
@@ -293,15 +293,21 @@ export default function ChatScreen() {
   const handleGenerate = useCallback(async () => {
     if (!sessionId || pendingRef.current || generating) return;
 
-    // Generation is `[Authorize]` on the backend now: a guest can chat but not
-    // generate. Prompt register/login before the request (the 401 response is
-    // still mapped below as a fallback).
-    if (!isAuthenticated) {
+    // Claim the synchronous double-tap guard BEFORE any await (the token read
+    // below yields): two taps in the same batch must not both slip through.
+    pendingRef.current = true;
+
+    // Generation is `[Authorize]` on the backend. Gate on TOKEN PRESENCE, not on
+    // the in-memory `user`: a transient `/account` failure at startup leaves
+    // `user` null while the token still lives in SecureStore (G1). A real guest
+    // has no token → prompt signup; an expired token is caught by the 401 map.
+    const token = await getAccessToken();
+    if (!token) {
+      pendingRef.current = false;
       presentGate({ type: 'signup_required' });
       return;
     }
 
-    pendingRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGenerating(true);
 
@@ -342,9 +348,13 @@ export default function ChatScreen() {
       track({ event: 'chat_generated', sessionId: sessionId!, planId: plan.id, turnCount });
       await clearSessionId();
 
-      // Soft upsell if the plan's duration was clamped to the free cap (m3 hint).
+      // Soft upsell if the plan's duration was clamped to the free cap (`clamped`).
       const clamped = parseClampedHint(result.data);
       if (clamped) presentClamped(clamped.appliedDays ?? plan.durationDays);
+
+      // A successful generation consumes one of the free monthly plans — refresh
+      // the quota so the "X of N" line stays current for the rest of the session (g3).
+      void refreshAiPlansQuota();
 
       // Offer to save profile preferences if user is authenticated and has meaningful slots
       if (isAuthenticated && (slots.groupType || slots.pace || slots.budget || slots.dietary?.length)) {
@@ -357,7 +367,7 @@ export default function ChatScreen() {
       pendingRef.current = false;
       setGenerating(false);
     }
-  }, [sessionId, generating, slots, turnCount, isAuthenticated, handleSwitchCity, t, presentGate, presentClamped]);
+  }, [sessionId, generating, slots, turnCount, isAuthenticated, handleSwitchCity, t, presentGate, presentClamped, refreshAiPlansQuota]);
 
   const handleReset = useCallback(() => {
     setResetConfirmVisible(true);
