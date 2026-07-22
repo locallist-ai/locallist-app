@@ -14,8 +14,9 @@ import {
   purchasePlusPackage,
   restorePlusPurchases,
 } from '../lib/purchases';
+import type { PlusEntitlementPeriodType } from '../lib/purchases';
 import { track, type PaywallSource } from '../lib/analytics';
-import { scheduleTrialReminderAfterPurchase } from '../lib/trial-reminder';
+import { syncTrialReminderAfterPurchase } from '../lib/trial-reminder';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 
 type Phase = 'loading' | 'ready' | 'unavailable' | 'success' | 'pending';
@@ -192,17 +193,25 @@ export default function PaywallScreen() {
     setBusy(false);
 
     // Promesa "recordatorio el día 5": tras una compra efectiva del plan anual
-    // con trial se programa la notificación local (el módulo pide el permiso
-    // en este momento, con el contexto en pantalla — nunca en el arranque).
+    // con trial REAL se programa la notificación local (el módulo pide el
+    // permiso en este momento, con el contexto en pantalla — nunca en el
+    // arranque). El criterio es `entitlementPeriodType === 'TRIAL'` del
+    // outcome (elegibilidad del USUARIO), no el introPrice del producto: a
+    // quien ya consumió su trial Apple le cobra ya, y avisarle de "tu prueba
+    // acaba" sería mentira. Una compra efectiva SIN trial cancela cualquier
+    // aviso pendiente obsoleto (cambio de plan durante el trial).
     // Fire-and-forget: nunca lanza y no puede romper el flujo de compra.
-    const scheduleReminderIfTrial = () => {
-      const applies = selected.packageType === 'ANNUAL' && props.hasTrial;
-      setTrialReminderApplies(applies);
-      if (!applies) return;
-      void scheduleTrialReminderAfterPurchase({
+    const syncReminder = (
+      entitlementPeriodType: PlusEntitlementPeriodType | null,
+      outcomeStatus: 'success' | 'pending_backend',
+    ) => {
+      setTrialReminderApplies(
+        selected.packageType === 'ANNUAL' && entitlementPeriodType === 'TRIAL',
+      );
+      void syncTrialReminderAfterPurchase({
         packageType: selected.packageType,
-        hasIntroTrial: props.hasTrial,
-        outcomeStatus: outcome.status,
+        entitlementPeriodType,
+        outcomeStatus,
         purchasedAt: new Date(),
       });
     };
@@ -211,13 +220,13 @@ export default function PaywallScreen() {
       case 'success':
         purchaseOutcomeRef.current = true;
         track({ event: 'purchase_completed', ...props, pendingBackend: false });
-        scheduleReminderIfTrial();
+        syncReminder(outcome.entitlementPeriodType, outcome.status);
         setPhase('success');
         break;
       case 'pending_backend':
         purchaseOutcomeRef.current = true;
         track({ event: 'purchase_completed', ...props, pendingBackend: true });
-        scheduleReminderIfTrial();
+        syncReminder(outcome.entitlementPeriodType, outcome.status);
         setPhase('pending');
         break;
       case 'cancelled':

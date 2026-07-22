@@ -21,7 +21,7 @@ import {
 } from '../../../lib/purchases';
 import { useAuth } from '../../../lib/auth';
 import { track } from '../../../lib/analytics';
-import { scheduleTrialReminderAfterPurchase } from '../../../lib/trial-reminder';
+import { syncTrialReminderAfterPurchase } from '../../../lib/trial-reminder';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn() },
@@ -45,7 +45,7 @@ jest.mock('../../../lib/purchases', () => ({
 }));
 // Evita el wiring nativo (expo-notifications + init real de i18n) en jsdom.
 jest.mock('../../../lib/trial-reminder', () => ({
-  scheduleTrialReminderAfterPurchase: jest.fn().mockResolvedValue('scheduled'),
+  syncTrialReminderAfterPurchase: jest.fn().mockResolvedValue('scheduled'),
 }));
 // Stub que expone title/body cuando está visible, para asertar los modales.
 jest.mock('../../../components/ui/ConfirmModal', () => {
@@ -66,7 +66,7 @@ const mockGetOfferings = getPlusOfferings as jest.Mock;
 const mockPurchase = purchasePlusPackage as jest.Mock;
 const mockRestore = restorePlusPurchases as jest.Mock;
 const mockUseAuth = useAuth as jest.Mock;
-const mockScheduleTrialReminder = scheduleTrialReminderAfterPurchase as jest.Mock;
+const mockSyncTrialReminder = syncTrialReminderAfterPurchase as jest.Mock;
 
 const refreshUser = jest.fn().mockResolvedValue('pro');
 
@@ -202,8 +202,8 @@ it('entitlement activo pero tier sin flipear (pending_backend): estado compra re
 
 // ─── Trial reminder (día 5): enganche del outcome de compra ───
 
-it('compra anual con trial ok: programa el recordatorio del día 5 y muestra el contexto del aviso', async () => {
-  mockPurchase.mockResolvedValue({ status: 'success' });
+it('compra anual con trial REAL (entitlement TRIAL): sincroniza el recordatorio y muestra el contexto del aviso', async () => {
+  mockPurchase.mockResolvedValue({ status: 'success', entitlementPeriodType: 'TRIAL' });
   render(<PaywallScreen />);
 
   // El anual (con trial) viene preseleccionado.
@@ -211,32 +211,50 @@ it('compra anual con trial ok: programa el recordatorio del día 5 y muestra el 
 
   expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
   expect(screen.getByTestId('paywall-trial-notice')).toBeOnTheScreen();
-  expect(mockScheduleTrialReminder).toHaveBeenCalledTimes(1);
-  expect(mockScheduleTrialReminder).toHaveBeenCalledWith(
+  expect(mockSyncTrialReminder).toHaveBeenCalledTimes(1);
+  expect(mockSyncTrialReminder).toHaveBeenCalledWith(
     expect.objectContaining({
       packageType: 'ANNUAL',
-      hasIntroTrial: true,
+      entitlementPeriodType: 'TRIAL',
       outcomeStatus: 'success',
       purchasedAt: expect.any(Date),
     }),
   );
 });
 
-it('compra anual con trial pending_backend: también programa el recordatorio', async () => {
-  mockPurchase.mockResolvedValue({ status: 'pending_backend' });
+it('compra anual con trial pending_backend: también sincroniza el recordatorio', async () => {
+  mockPurchase.mockResolvedValue({ status: 'pending_backend', entitlementPeriodType: 'TRIAL' });
   render(<PaywallScreen />);
 
   fireEvent.press(await screen.findByTestId('paywall-cta'));
 
   expect(await screen.findByText('paywall.pendingTitle')).toBeOnTheScreen();
   expect(screen.getByTestId('paywall-trial-notice')).toBeOnTheScreen();
-  expect(mockScheduleTrialReminder).toHaveBeenCalledWith(
-    expect.objectContaining({ outcomeStatus: 'pending_backend' }),
+  expect(mockSyncTrialReminder).toHaveBeenCalledWith(
+    expect.objectContaining({ outcomeStatus: 'pending_backend', entitlementPeriodType: 'TRIAL' }),
   );
 });
 
-it('compra mensual (sin trial): ni programa recordatorio ni muestra el aviso', async () => {
-  mockPurchase.mockResolvedValue({ status: 'success' });
+// Escenario del review (M2): el producto anual OFRECE trial (introPrice 0)
+// pero este usuario ya consumió el suyo — Apple cobra YA y el entitlement
+// llega como NORMAL. Prometerle un aviso de fin de trial sería mentira.
+it('compra anual con trial ya consumido (entitlement NORMAL): sin aviso en pantalla y el sync recibe NORMAL (cancela, no programa)', async () => {
+  mockPurchase.mockResolvedValue({ status: 'success', entitlementPeriodType: 'NORMAL' });
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+
+  expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
+  expect(screen.queryByTestId('paywall-trial-notice')).toBeNull();
+  expect(mockSyncTrialReminder).toHaveBeenCalledWith(
+    expect.objectContaining({ packageType: 'ANNUAL', entitlementPeriodType: 'NORMAL' }),
+  );
+});
+
+// MINOR-1 del review: una compra efectiva SIN trial (cambio de plan durante
+// el trial) también pasa por el sync — el módulo cancela el aviso obsoleto.
+it('compra mensual efectiva: sin aviso en pantalla y el sync recibe la compra para cancelar pendientes', async () => {
+  mockPurchase.mockResolvedValue({ status: 'success', entitlementPeriodType: 'NORMAL' });
   render(<PaywallScreen />);
 
   fireEvent.press(await screen.findByTestId('paywall-pkg-$rc_monthly'));
@@ -244,17 +262,20 @@ it('compra mensual (sin trial): ni programa recordatorio ni muestra el aviso', a
 
   expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
   expect(screen.queryByTestId('paywall-trial-notice')).toBeNull();
-  expect(mockScheduleTrialReminder).not.toHaveBeenCalled();
+  expect(mockSyncTrialReminder).toHaveBeenCalledTimes(1);
+  expect(mockSyncTrialReminder).toHaveBeenCalledWith(
+    expect.objectContaining({ packageType: 'MONTHLY', entitlementPeriodType: 'NORMAL' }),
+  );
 });
 
-it('compra cancelada: no programa recordatorio', async () => {
+it('compra cancelada: no toca el recordatorio', async () => {
   mockPurchase.mockResolvedValue({ status: 'cancelled' });
   render(<PaywallScreen />);
 
   fireEvent.press(await screen.findByTestId('paywall-cta'));
   await waitFor(() => expect(mockPurchase).toHaveBeenCalled());
 
-  expect(mockScheduleTrialReminder).not.toHaveBeenCalled();
+  expect(mockSyncTrialReminder).not.toHaveBeenCalled();
 });
 
 it('pending: si isPro flipa en caliente (reconciliación app-level), avanza a éxito solo', async () => {

@@ -71,9 +71,9 @@ const PKG = {
   product: { identifier: 'plus_annual', title: 'Plus Annual', priceString: '39,99 €' },
 } as unknown as PurchasesPackage;
 
-function customerInfoWith(entitlements: string[]): CustomerInfo {
+function customerInfoWith(entitlements: string[], periodType?: string): CustomerInfo {
   const active: Record<string, object> = {};
-  for (const e of entitlements) active[e] = { isActive: true };
+  for (const e of entitlements) active[e] = { isActive: true, ...(periodType ? { periodType } : {}) };
   return { entitlements: { active } } as unknown as CustomerInfo;
 }
 
@@ -365,8 +365,47 @@ describe('purchasePlusPackage', () => {
 
     const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollDelayMs: 0 });
 
-    expect(outcome).toEqual({ status: 'success' });
+    expect(outcome).toEqual({ status: 'success', entitlementPeriodType: null });
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  // Contrato M2 del trial reminder: el outcome expone el periodType REAL del
+  // entitlement (elegibilidad del USUARIO), no la del producto. 'TRIAL' solo
+  // cuando Apple concedió el trial de verdad.
+  it('entitlement en periodo TRIAL: el outcome lo expone (entitlementPeriodType TRIAL)', async () => {
+    await configureWithKey();
+    mockPurchases.purchasePackage.mockResolvedValue({
+      customerInfo: customerInfoWith([PLUS_ENTITLEMENT_ID], 'TRIAL'),
+    } as never);
+    const refresh = jest.fn().mockResolvedValue('pro');
+
+    const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'success', entitlementPeriodType: 'TRIAL' });
+  });
+
+  it('trial ya consumido (entitlement NORMAL pese a producto con intro): el outcome dice NORMAL', async () => {
+    await configureWithKey();
+    mockPurchases.purchasePackage.mockResolvedValue({
+      customerInfo: customerInfoWith([PLUS_ENTITLEMENT_ID], 'NORMAL'),
+    } as never);
+    const refresh = jest.fn().mockResolvedValue('free');
+
+    const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollAttempts: 1, pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'pending_backend', entitlementPeriodType: 'NORMAL' });
+  });
+
+  it('periodType desconocido del SDK: el outcome degrada a null (nunca inventa TRIAL)', async () => {
+    await configureWithKey();
+    mockPurchases.purchasePackage.mockResolvedValue({
+      customerInfo: customerInfoWith([PLUS_ENTITLEMENT_ID], 'SOMETHING_NEW'),
+    } as never);
+    const refresh = jest.fn().mockResolvedValue('pro');
+
+    const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'success', entitlementPeriodType: null });
   });
 
   it('cancelación del usuario: status cancelled, no es error y NO refresca account', async () => {
@@ -392,7 +431,7 @@ describe('purchasePlusPackage', () => {
 
     const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollAttempts: 3, pollDelayMs: 0 });
 
-    expect(outcome).toEqual({ status: 'pending_backend' });
+    expect(outcome).toEqual({ status: 'pending_backend', entitlementPeriodType: null });
     expect(refresh).toHaveBeenCalledTimes(3);
   });
 
@@ -408,7 +447,7 @@ describe('purchasePlusPackage', () => {
 
     const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollAttempts: 5, pollDelayMs: 0 });
 
-    expect(outcome).toEqual({ status: 'success' });
+    expect(outcome).toEqual({ status: 'success', entitlementPeriodType: null });
     expect(refresh).toHaveBeenCalledTimes(3);
   });
 
@@ -477,7 +516,7 @@ describe('purchasePlusPackage', () => {
     } as never);
     const refresh = jest.fn().mockResolvedValue('pro');
     const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollDelayMs: 0 });
-    expect(outcome).toEqual({ status: 'success' });
+    expect(outcome).toEqual({ status: 'success', entitlementPeriodType: null });
   });
 
   it('getAppUserID falla (no es divergencia confirmada): conserva la identidad para reintentar', async () => {
@@ -518,7 +557,7 @@ describe('restorePlusPurchases', () => {
 
     const outcome = await restorePlusPurchases('user-1', refresh, { pollDelayMs: 0 });
 
-    expect(outcome).toEqual({ status: 'success' });
+    expect(outcome).toEqual({ status: 'success', entitlementPeriodType: null });
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 

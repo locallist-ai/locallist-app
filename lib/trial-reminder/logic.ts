@@ -73,23 +73,37 @@ export interface ReminderScheduler {
 export interface TrialPurchaseInput {
   /** `packageType` de RevenueCat ('ANNUAL' | 'MONTHLY' | ...). */
   packageType: string;
-  /** Intro price gratuito del producto (el trial de 7 días vive en el plan anual). */
-  hasIntroTrial: boolean;
+  /**
+   * `periodType` REAL del entitlement "plus" del customerInfo de la compra
+   * ('TRIAL' | 'INTRO' | 'NORMAL' | 'PREPAID' | null). OJO: no confundir con
+   * el `introPrice` del producto — ese dice que el plan OFRECE trial; a un
+   * usuario que ya consumió el suyo Apple le cobra YA y el entitlement llega
+   * como 'NORMAL'. Programarle un aviso de "tu trial acaba" sería mentirle.
+   */
+  entitlementPeriodType: string | null;
   /** Outcome de `purchasePlusPackage`. */
   outcomeStatus: string;
 }
 
+export type PurchaseReminderAction = 'schedule' | 'cancel_stale' | 'none';
+
 /**
- * Solo se programa recordatorio para la compra del plan ANUAL con trial y con
- * outcome de compra efectiva ('success' o 'pending_backend'). El mensual no
- * tiene trial y una compra cancelada/fallida no cobra nada que recordar.
+ * Decide qué hacer con el recordatorio tras un outcome de compra:
+ *  - 'schedule': plan ANUAL con el entitlement en periodo 'TRIAL' real y
+ *    compra efectiva ('success' | 'pending_backend') — hay trial que recordar.
+ *  - 'cancel_stale': compra efectiva SIN trial real (mensual, o anual con el
+ *    trial ya consumido). Además de no programar, CANCELA cualquier pendiente:
+ *    un cambio de plan durante el trial dejaría un aviso obsoleto ("tu prueba
+ *    acaba en 2 días") sobre una suscripción ya cobrada.
+ *  - 'none': compra no efectiva (cancelled / no_entitlement / error) — no se
+ *    cobró nada nuevo, el estado del recordatorio no cambia.
  */
-export function isTrialReminderPurchase(input: TrialPurchaseInput): boolean {
-  return (
-    input.packageType === 'ANNUAL' &&
-    input.hasIntroTrial &&
-    (input.outcomeStatus === 'success' || input.outcomeStatus === 'pending_backend')
-  );
+export function decideReminderActionForPurchase(input: TrialPurchaseInput): PurchaseReminderAction {
+  const effective = input.outcomeStatus === 'success' || input.outcomeStatus === 'pending_backend';
+  if (!effective) return 'none';
+  return input.packageType === 'ANNUAL' && input.entitlementPeriodType === 'TRIAL'
+    ? 'schedule'
+    : 'cancel_stale';
 }
 
 /**

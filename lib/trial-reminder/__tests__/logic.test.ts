@@ -14,8 +14,8 @@ import {
   TRIAL_REMINDER_ID,
   computeFirstChargeDate,
   computeReminderTriggerDate,
+  decideReminderActionForPurchase,
   ensureReminderScheduled,
-  isTrialReminderPurchase,
   shouldCancelReminder,
   type PendingReminder,
   type ReminderScheduler,
@@ -61,23 +61,49 @@ describe('computeReminderTriggerDate', () => {
   });
 });
 
-// ─── Qué compras programan recordatorio ──────────────────
+// ─── Qué hace cada compra con el recordatorio ────────────
 
-describe('isTrialReminderPurchase', () => {
-  const base = { packageType: 'ANNUAL', hasIntroTrial: true, outcomeStatus: 'success' };
+describe('decideReminderActionForPurchase', () => {
+  const base = {
+    packageType: 'ANNUAL',
+    entitlementPeriodType: 'TRIAL' as string | null,
+    outcomeStatus: 'success',
+  };
 
-  it.each(['success', 'pending_backend'])('anual con trial y outcome %s programa', (outcomeStatus) => {
-    expect(isTrialReminderPurchase({ ...base, outcomeStatus })).toBe(true);
+  it.each(['success', 'pending_backend'])(
+    'anual con entitlement en TRIAL y outcome %s programa',
+    (outcomeStatus) => {
+      expect(decideReminderActionForPurchase({ ...base, outcomeStatus })).toBe('schedule');
+    },
+  );
+
+  // Escenario del review: el PRODUCTO anual ofrece trial (introPrice 0) pero
+  // este usuario ya consumió el suyo — Apple le cobra YA y el entitlement
+  // llega como NORMAL. Programarle "tu prueba acaba en 2 días" sería mentira:
+  // NO se programa, y además se limpia cualquier pendiente obsoleto.
+  it('anual con trial ya consumido (entitlement NORMAL) NO programa: cancela pendiente', () => {
+    expect(
+      decideReminderActionForPurchase({ ...base, entitlementPeriodType: 'NORMAL' }),
+    ).toBe('cancel_stale');
   });
 
   it.each([
-    ['mensual', { ...base, packageType: 'MONTHLY' }],
-    ['sin trial', { ...base, hasIntroTrial: false }],
+    ['mensual sin trial', { ...base, packageType: 'MONTHLY', entitlementPeriodType: 'NORMAL' }],
+    ['anual con periodType INTRO (intro de pago, no trial)', { ...base, entitlementPeriodType: 'INTRO' }],
+    ['anual sin periodType expuesto por el SDK', { ...base, entitlementPeriodType: null }],
+    // Cambio de plan durante el trial: compra efectiva nueva ⇒ el aviso del
+    // trial anterior queda obsoleto y debe cancelarse (MINOR-1 del review).
+    ['mensual comprada durante un trial anual', { ...base, packageType: 'MONTHLY', entitlementPeriodType: 'NORMAL', outcomeStatus: 'pending_backend' }],
+  ])('compra efectiva sin trial real (%s) cancela el pendiente', (_label, input) => {
+    expect(decideReminderActionForPurchase(input)).toBe('cancel_stale');
+  });
+
+  it.each([
     ['cancelada', { ...base, outcomeStatus: 'cancelled' }],
     ['sin entitlement', { ...base, outcomeStatus: 'no_entitlement' }],
     ['error', { ...base, outcomeStatus: 'error' }],
-  ])('%s NO programa', (_label, input) => {
-    expect(isTrialReminderPurchase(input)).toBe(false);
+  ])('compra no efectiva (%s) no toca nada', (_label, input) => {
+    expect(decideReminderActionForPurchase(input)).toBe('none');
   });
 });
 
@@ -190,6 +216,56 @@ describe('shouldCancelReminder', () => {
       shouldCancelReminder({ tier: 'free', wasPro: false, pendingPurchasedAt: null, now }),
     ).toBe(false);
   });
+});
+
+// ─── Property-test: margen entre el aviso y el primer cobro ──
+//
+// La promesa del aviso incluye "cancela hasta 24h antes sin pagar": el
+// recordatorio DEBE llegar siempre con más de 24h de margen hasta el cobro.
+// Analíticamente: margen = 2d + horaLocalDeCompra − 10h ∈ [38h01m, 61h59m]
+// para compras a 00:01–23:59… ±1h si un cambio de hora DST cae entre el
+// disparo y no afecta al cobro (que es compra + 7d en ms absolutos).
+// Verificado empíricamente en Europe/Madrid (DST 2026: 29-mar / 25-oct):
+//   min = 37.02h (compra 20-oct 00:01 CEST → aviso 25-oct 10:00 CET, otoño −1h)
+//   max = 61.98h (compra 23:59 sin cruce DST)
+// Nota: el bound manual del review ([38h, 62h]) no contemplaba el cruce de
+// otoño; el bound real es [37h, 62h]. En TZs sin DST el margen queda en
+// [38h, 62h] ⊂ [37h, 62h], así que la aserción vale en cualquier runner.
+describe('margen aviso → primer cobro', () => {
+  const MARGIN_MIN_H = 37;
+  const MARGIN_MAX_H = 62;
+
+  function marginHours(purchasedAt: Date): number {
+    return (
+      (computeFirstChargeDate(purchasedAt).getTime() -
+        computeReminderTriggerDate(purchasedAt).getTime()) /
+      HOUR_MS
+    );
+  }
+
+  const probes: Date[] = [];
+  // Barrido horario en un día sin cambios de hora cercanos.
+  for (let h = 0; h < 24; h++) probes.push(new Date(2026, 6, 22, h, 0, 0));
+  // Bordes 23:59 / 00:01 alrededor de los dos cambios DST europeos de 2026
+  // (primavera 29-mar, otoño 25-oct): compras cuyo día 5 cruza el cambio.
+  for (let day = 20; day <= 31; day++) {
+    for (const [hh, mm] of [[23, 59], [0, 1]] as const) {
+      probes.push(new Date(2026, 2, day, hh, mm, 0)); // marzo
+      probes.push(new Date(2026, 9, day, hh, mm, 0)); // octubre
+    }
+  }
+
+  it.each(probes.map((p) => [p.toISOString(), p] as const))(
+    'compra %s: margen dentro de [37h, 62h] y SIEMPRE > 24h',
+    (_iso, purchasedAt) => {
+      const margin = marginHours(purchasedAt);
+      expect(margin).toBeGreaterThanOrEqual(MARGIN_MIN_H);
+      expect(margin).toBeLessThanOrEqual(MARGIN_MAX_H);
+      // Invariante de la promesa: la ventana de cancelación de 24h sigue
+      // abierta (con holgura) cuando suena el aviso.
+      expect(margin).toBeGreaterThan(24);
+    },
+  );
 });
 
 // ─── Constantes del contrato ─────────────────────────────

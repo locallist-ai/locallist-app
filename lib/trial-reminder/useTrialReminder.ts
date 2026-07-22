@@ -23,14 +23,37 @@
  *     intenta detectar la cancelación del trial en tiempo real.
  *     Nota: el override de tier de DevTools también mueve `isPro`; aceptado
  *     (solo founders, y la ventana de gracia protege la compra recién hecha).
+ *
+ * Guarda del módulo nativo: la disponibilidad de expo-notifications se decide
+ * UNA vez a nivel de módulo (require perezoso y guardado en `native-module`).
+ * `useLastNotificationResponse` es un hook y no puede envolverse en try/catch
+ * por llamada: sin módulo se monta una alternativa no-op ESTABLE para todo el
+ * proceso — la elección nunca cambia entre renders, así que el orden de hooks
+ * se mantiene. La reconciliación sigue llamándose (reconcile ya es no-op sin
+ * módulo).
  */
 import { useEffect, useRef } from 'react';
 import { router } from 'expo-router';
-import * as Notifications from 'expo-notifications';
 import { useAuth } from '../auth';
 import { track } from '../analytics';
+import { getNotificationsModule } from './native-module';
 import { reconcileTrialReminder, TRIAL_REMINDER_ID } from './index';
 import { TRIAL_REMINDER_DAY } from './logic';
+
+/** Decidido una vez por proceso (ver docstring). */
+const Notifications = getNotificationsModule();
+
+type LastNotificationResponse = ReturnType<
+  NonNullable<typeof Notifications>['useLastNotificationResponse']
+>;
+
+/** Alternativa no-op cuando el binario no trae el módulo nativo. */
+function useLastNotificationResponseUnavailable(): LastNotificationResponse {
+  return undefined;
+}
+
+const useLastNotificationResponseSafe =
+  Notifications?.useLastNotificationResponse ?? useLastNotificationResponseUnavailable;
 
 /**
  * Dedupe a nivel de módulo (no ref): sobrevive al remontaje del AppStack
@@ -49,7 +72,7 @@ export function useTrialReminder(): void {
 
   // ── Presentación en foreground ──
   useEffect(() => {
-    Notifications.setNotificationHandler({
+    Notifications?.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowBanner: true,
         shouldShowList: true,
@@ -62,7 +85,7 @@ export function useTrialReminder(): void {
   }, []);
 
   // ── Tap: evento + deep link a cuenta ──
-  const lastResponse = Notifications.useLastNotificationResponse();
+  const lastResponse = useLastNotificationResponseSafe();
 
   useEffect(() => {
     if (!lastResponse) return;
