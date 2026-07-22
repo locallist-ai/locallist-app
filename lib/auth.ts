@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { api, setTokens, clearTokens, getAccessToken } from './api';
 import { logger } from './logger';
 import { setAnalyticsUserId } from './analytics';
+import { logOutPurchases } from './purchases';
 
 interface User {
   id: string;
@@ -20,6 +21,11 @@ interface AuthContextType {
   isLoading: boolean;
   login: (userData: User, accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
+  /**
+   * Re-fetch `GET /account` and update user state (e.g. after an IAP purchase
+   * flips the tier server-side). Returns the fresh tier, or null on failure.
+   */
+  refreshUser: () => Promise<'free' | 'pro' | null>;
   /** Override tier locally for testing. Pass null to reset to real tier. */
   setTierOverride: (tier: 'free' | 'pro' | null) => void;
 }
@@ -39,6 +45,7 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   login: async () => { },
   logout: async () => { },
+  refreshUser: async () => null,
   setTierOverride: () => { },
 });
 
@@ -61,10 +68,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await clearTokens();
-    setAnalyticsUserId(null);
+    // La sesión muere ANTES de tocar RevenueCat y sin ningún await entre la
+    // limpieza de estado y logOutPurchases: si hubiera un await en medio, un
+    // handler de foreground (usePurchaseReconciliation) podría colarse con la
+    // sesión aún "viva" y re-adoptar la identidad RC recién desvinculada.
     setUser(null);
     setTierOverride(null);
+    setAnalyticsUserId(null);
+    // logOutPurchases es síncrona y por contrato no lanza (la llamada de red
+    // del SDK va encolada en fire-and-forget); el try/catch es defensa extra:
+    // nada de RevenueCat puede bloquear el logout.
+    try {
+      logOutPurchases();
+    } catch (error) {
+      logger.warn('logOutPurchases failed during logout', error);
+    }
+    await clearTokens();
+  }, []);
+
+  // Re-fetch /account (e.g. after purchase/restore) so `isPro` flips without
+  // an app restart. Does not touch tierOverride: dev override keeps winning.
+  const refreshUser = useCallback(async (): Promise<'free' | 'pro' | null> => {
+    try {
+      const res = await api<{ user: User }>('/account');
+      if (res.data?.user) {
+        setUser(res.data.user);
+        return res.data.user.tier;
+      }
+      return null;
+    } catch (error) {
+      logger.warn('refreshUser failed', error);
+      return null;
+    }
   }, []);
 
   // Auto-login: try to load user from stored token on mount
@@ -100,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         login,
         logout,
+        refreshUser,
         setTierOverride,
       },
     },
