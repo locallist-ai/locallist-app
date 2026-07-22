@@ -3,6 +3,7 @@ import { api, setTokens, clearTokens, getAccessToken } from './api';
 import { logger } from './logger';
 import { setAnalyticsUserId } from './analytics';
 import { logOutPurchases } from './purchases';
+import { cancelTrialReminder } from './trial-reminder';
 
 interface User {
   id: string;
@@ -82,6 +83,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logOutPurchases();
     } catch (error) {
       logger.warn('logOutPurchases failed during logout', error);
+    }
+    // El recordatorio de trial pertenece a la sesión que compró: al cerrar
+    // sesión se cancela (síncrona, por contrato nunca lanza; try/catch como
+    // defensa extra — nada puede bloquear el logout).
+    try {
+      cancelTrialReminder('logout');
+    } catch (error) {
+      logger.warn('cancelTrialReminder failed during logout', error);
     }
     await clearTokens();
   }, []);

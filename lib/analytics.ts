@@ -197,8 +197,9 @@ export type AppEvent =
   | { event: 'restore_completed'; found: boolean }
   // 403 estructurado de un gate del catálogo Plus (ver trackPlanLimitIfGate403).
   | { event: 'plan_limit_hit'; gate: string }
-  // Aviso de fin de trial (día 5 de 7). Sin call site aún: lo emitirá la
-  // feature de trial reminder (Fase 3, task 5). Tipado ya para cerrar taxonomía.
+  // Aviso de fin de trial (día 5 de 7). Se emite AL TAP de la notificación
+  // local (lib/trial-reminder/useTrialReminder): la entrega en background no
+  // es observable client-side, el tap es la única señal fiable.
   | { event: 'trial_reminder_shown'; day: number };
 
 /** @deprecated Use AppEvent */

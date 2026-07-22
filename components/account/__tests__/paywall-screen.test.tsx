@@ -21,6 +21,7 @@ import {
 } from '../../../lib/purchases';
 import { useAuth } from '../../../lib/auth';
 import { track } from '../../../lib/analytics';
+import { scheduleTrialReminderAfterPurchase } from '../../../lib/trial-reminder';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn() },
@@ -42,6 +43,10 @@ jest.mock('../../../lib/purchases', () => ({
   purchasePlusPackage: jest.fn(),
   restorePlusPurchases: jest.fn(),
 }));
+// Evita el wiring nativo (expo-notifications + init real de i18n) en jsdom.
+jest.mock('../../../lib/trial-reminder', () => ({
+  scheduleTrialReminderAfterPurchase: jest.fn().mockResolvedValue('scheduled'),
+}));
 // Stub que expone title/body cuando está visible, para asertar los modales.
 jest.mock('../../../components/ui/ConfirmModal', () => {
   const ReactActual = jest.requireActual('react');
@@ -61,6 +66,7 @@ const mockGetOfferings = getPlusOfferings as jest.Mock;
 const mockPurchase = purchasePlusPackage as jest.Mock;
 const mockRestore = restorePlusPurchases as jest.Mock;
 const mockUseAuth = useAuth as jest.Mock;
+const mockScheduleTrialReminder = scheduleTrialReminderAfterPurchase as jest.Mock;
 
 const refreshUser = jest.fn().mockResolvedValue('pro');
 
@@ -192,6 +198,63 @@ it('entitlement activo pero tier sin flipear (pending_backend): estado compra re
   fireEvent.press(await screen.findByTestId('paywall-cta'));
 
   expect(await screen.findByText('paywall.pendingTitle')).toBeOnTheScreen();
+});
+
+// ─── Trial reminder (día 5): enganche del outcome de compra ───
+
+it('compra anual con trial ok: programa el recordatorio del día 5 y muestra el contexto del aviso', async () => {
+  mockPurchase.mockResolvedValue({ status: 'success' });
+  render(<PaywallScreen />);
+
+  // El anual (con trial) viene preseleccionado.
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+
+  expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
+  expect(screen.getByTestId('paywall-trial-notice')).toBeOnTheScreen();
+  expect(mockScheduleTrialReminder).toHaveBeenCalledTimes(1);
+  expect(mockScheduleTrialReminder).toHaveBeenCalledWith(
+    expect.objectContaining({
+      packageType: 'ANNUAL',
+      hasIntroTrial: true,
+      outcomeStatus: 'success',
+      purchasedAt: expect.any(Date),
+    }),
+  );
+});
+
+it('compra anual con trial pending_backend: también programa el recordatorio', async () => {
+  mockPurchase.mockResolvedValue({ status: 'pending_backend' });
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+
+  expect(await screen.findByText('paywall.pendingTitle')).toBeOnTheScreen();
+  expect(screen.getByTestId('paywall-trial-notice')).toBeOnTheScreen();
+  expect(mockScheduleTrialReminder).toHaveBeenCalledWith(
+    expect.objectContaining({ outcomeStatus: 'pending_backend' }),
+  );
+});
+
+it('compra mensual (sin trial): ni programa recordatorio ni muestra el aviso', async () => {
+  mockPurchase.mockResolvedValue({ status: 'success' });
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-pkg-$rc_monthly'));
+  fireEvent.press(screen.getByTestId('paywall-cta'));
+
+  expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
+  expect(screen.queryByTestId('paywall-trial-notice')).toBeNull();
+  expect(mockScheduleTrialReminder).not.toHaveBeenCalled();
+});
+
+it('compra cancelada: no programa recordatorio', async () => {
+  mockPurchase.mockResolvedValue({ status: 'cancelled' });
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+  await waitFor(() => expect(mockPurchase).toHaveBeenCalled());
+
+  expect(mockScheduleTrialReminder).not.toHaveBeenCalled();
 });
 
 it('pending: si isPro flipa en caliente (reconciliación app-level), avanza a éxito solo', async () => {

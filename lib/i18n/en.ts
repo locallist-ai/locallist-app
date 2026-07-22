@@ -336,6 +336,11 @@ export default {
     restoreNoneBody: "We couldn't find a previous purchase for this Apple ID.",
     close: 'Close',
     done: 'Done',
+    trialReminderNotice: "We'll remind you 2 days before your free trial ends. First charge on day 8 — never before.",
+  },
+  trialReminder: {
+    notificationTitle: 'Your free trial ends in 2 days',
+    notificationBody: "Your first LocalList Plus charge is on {{date}}. Not for you? Cancel in your App Store settings up to 24 hours before and you won't pay a thing.",
   },
   placeSearch: {
     placeholder: 'Search places in {{city}}...',

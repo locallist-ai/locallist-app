@@ -336,6 +336,11 @@ export default {
     restoreNoneBody: 'No encontramos una compra anterior para este ID de Apple.',
     close: 'Cerrar',
     done: 'Listo',
+    trialReminderNotice: 'Te avisaremos 2 días antes de que acabe tu prueba gratis. Primer cobro el día 8 — nunca antes.',
+  },
+  trialReminder: {
+    notificationTitle: 'Tu prueba gratis acaba en 2 días',
+    notificationBody: 'El primer cobro de LocalList Plus será el {{date}}. ¿No te convence? Cancela en los ajustes del App Store hasta 24 horas antes y no pagarás nada.',
   },
   placeSearch: {
     placeholder: 'Buscar lugares en {{city}}...',
