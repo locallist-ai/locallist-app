@@ -319,11 +319,31 @@ export async function getPlusOfferings(): Promise<OfferingsResult> {
 /** Callback que refresca `GET /account` y devuelve el tier actual (o null si falla). */
 export type RefreshAccountTier = () => Promise<'free' | 'pro' | null>;
 
+/**
+ * Tipo de periodo del entitlement "plus" según RevenueCat (`periodType` del
+ * `EntitlementInfo`). Es la ELEGIBILIDAD REAL del usuario, no la del producto:
+ * un `introPrice` gratuito en el product dice que el plan OFRECE trial, pero a
+ * quien ya lo consumió Apple le cobra ya y su entitlement llega como 'NORMAL'.
+ * Lo consume el trial reminder: solo se programa aviso con 'TRIAL'.
+ */
+export type PlusEntitlementPeriodType = 'NORMAL' | 'INTRO' | 'TRIAL' | 'PREPAID';
+
+function getPlusEntitlementPeriodType(customerInfo: CustomerInfo): PlusEntitlementPeriodType | null {
+  const periodType = customerInfo.entitlements.active?.[PLUS_ENTITLEMENT_ID]?.periodType;
+  return periodType === 'NORMAL' || periodType === 'INTRO' || periodType === 'TRIAL' || periodType === 'PREPAID'
+    ? periodType
+    : null;
+}
+
 export type PurchaseOutcome =
-  /** Entitlement activo y backend ya devuelve tier 'pro' — isPro flipea sin reiniciar. */
-  | { status: 'success' }
+  /**
+   * Entitlement activo y backend ya devuelve tier 'pro' — isPro flipea sin
+   * reiniciar. `entitlementPeriodType` = periodo real del entitlement "plus"
+   * del customerInfo de la operación (null si el SDK no lo expone).
+   */
+  | { status: 'success'; entitlementPeriodType: PlusEntitlementPeriodType | null }
   /** Entitlement activo en RevenueCat pero el backend aún no flipeó dentro del techo del poll. */
-  | { status: 'pending_backend' }
+  | { status: 'pending_backend'; entitlementPeriodType: PlusEntitlementPeriodType | null }
   /** El usuario canceló el flujo de compra de Apple. NO es un error. */
   | { status: 'cancelled' }
   /** Compra/restore sin el entitlement "plus" activo (nada que restaurar o misconfig). */
@@ -428,16 +448,17 @@ async function confirmSessionIdentity(expectedAppUserID: string): Promise<boolea
 async function settleTierWithBackend(
   refreshAccountTier: RefreshAccountTier,
   { pollAttempts = TIER_POLL_ATTEMPTS, pollDelayMs = TIER_POLL_DELAY_MS }: PollOptions,
+  entitlementPeriodType: PlusEntitlementPeriodType | null,
 ): Promise<PurchaseOutcome> {
   for (let attempt = 0; attempt < pollAttempts; attempt++) {
     const tier = await refreshAccountTier();
-    if (tier === 'pro') return { status: 'success' };
+    if (tier === 'pro') return { status: 'success', entitlementPeriodType };
     if (attempt < pollAttempts - 1) await sleep(pollDelayMs);
   }
   // El webhook de RevenueCat aún no llegó al backend: la compra es válida,
   // el tier flipeará solo. El caller informa sin alarmar (no es un fallo).
   logger.warn('RevenueCat: entitlement active but backend tier not flipped yet');
-  return { status: 'pending_backend' };
+  return { status: 'pending_backend', entitlementPeriodType };
 }
 
 /**
@@ -496,7 +517,11 @@ export async function purchasePlusPackage(
     logger.error('RevenueCat: purchase completed without plus entitlement (check dashboard mapping)');
     return { status: 'no_entitlement' };
   }
-  return settleTierWithBackend(refreshAccountTier, pollOptions);
+  return settleTierWithBackend(
+    refreshAccountTier,
+    pollOptions,
+    getPlusEntitlementPeriodType(purchase.customerInfo),
+  );
 }
 
 /**
@@ -539,5 +564,9 @@ export async function restorePlusPurchases(
   if (!hasPlusEntitlement(customerInfo)) {
     return { status: 'no_entitlement' };
   }
-  return settleTierWithBackend(refreshAccountTier, pollOptions);
+  return settleTierWithBackend(
+    refreshAccountTier,
+    pollOptions,
+    getPlusEntitlementPeriodType(customerInfo),
+  );
 }

@@ -11,6 +11,7 @@ import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { AuthProvider, useAuth } from '../auth';
 import { clearTokens } from '../api';
 import { logOutPurchases } from '../purchases';
+import { cancelTrialReminder } from '../trial-reminder';
 
 jest.mock('../api', () => ({
   api: jest.fn().mockResolvedValue({ data: null }),
@@ -20,12 +21,14 @@ jest.mock('../api', () => ({
 }));
 jest.mock('../analytics', () => ({ setAnalyticsUserId: jest.fn() }));
 jest.mock('../purchases', () => ({ logOutPurchases: jest.fn() }));
+jest.mock('../trial-reminder', () => ({ cancelTrialReminder: jest.fn() }));
 jest.mock('../logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
 const mockLogOutPurchases = logOutPurchases as jest.Mock;
 const mockClearTokens = clearTokens as jest.Mock;
+const mockCancelTrialReminder = cancelTrialReminder as jest.Mock;
 
 const USER = { id: 'user-1', email: 'ana@example.com', name: 'Ana', tier: 'free' as const };
 
@@ -91,6 +94,34 @@ it('si logOutPurchases lanzara (rotura de su contrato), el logout completa la li
   const { result } = await renderAuthedSession();
   mockLogOutPurchases.mockImplementation(() => {
     throw new Error('sdk broke its no-throw contract');
+  });
+
+  await act(async () => {
+    await result.current.logout();
+  });
+
+  expect(mockClearTokens).toHaveBeenCalled();
+  expect(result.current.user).toBeNull();
+  expect(result.current.isAuthenticated).toBe(false);
+});
+
+// El recordatorio del día 5 pertenece a la sesión que compró el trial: cerrar
+// sesión lo cancela (spec del trial reminder — cancelación por logout).
+it('logout cancela el trial reminder programado', async () => {
+  const { result } = await renderAuthedSession();
+
+  await act(async () => {
+    await result.current.logout();
+  });
+
+  expect(mockCancelTrialReminder).toHaveBeenCalledTimes(1);
+  expect(mockCancelTrialReminder).toHaveBeenCalledWith('logout');
+});
+
+it('si cancelTrialReminder lanzara (rotura de su contrato), el logout completa la limpieza igual', async () => {
+  const { result } = await renderAuthedSession();
+  mockCancelTrialReminder.mockImplementation(() => {
+    throw new Error('reminder broke its no-throw contract');
   });
 
   await act(async () => {
