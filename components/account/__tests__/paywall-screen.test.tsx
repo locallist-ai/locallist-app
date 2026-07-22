@@ -20,9 +20,11 @@ import {
   restorePlusPurchases,
 } from '../../../lib/purchases';
 import { useAuth } from '../../../lib/auth';
+import { track } from '../../../lib/analytics';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn() },
+  useLocalSearchParams: jest.fn(() => ({})),
 }));
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn() }));
 jest.mock('expo-linear-gradient', () => {
@@ -65,12 +67,29 @@ const refreshUser = jest.fn().mockResolvedValue('pro');
 const MONTHLY = {
   identifier: '$rc_monthly',
   packageType: 'MONTHLY',
-  product: { identifier: 'plus_monthly', title: 'Plus Monthly', priceString: '4,99 €' },
+  presentedOfferingContext: { offeringIdentifier: 'default' },
+  product: {
+    identifier: 'plus_monthly',
+    title: 'Plus Monthly',
+    priceString: '4,99 €',
+    price: 4.99,
+    currencyCode: 'EUR',
+    introPrice: null,
+  },
 };
 const ANNUAL = {
   identifier: '$rc_annual',
   packageType: 'ANNUAL',
-  product: { identifier: 'plus_annual', title: 'Plus Annual', priceString: '39,99 €' },
+  presentedOfferingContext: { offeringIdentifier: 'default' },
+  product: {
+    identifier: 'plus_annual',
+    title: 'Plus Annual',
+    priceString: '39,99 €',
+    price: 39.99,
+    currencyCode: 'EUR',
+    // Trial de 7 días del plan anual: intro price gratuito.
+    introPrice: { price: 0, periodNumberOfUnits: 7, periodUnit: 'DAY' },
+  },
 };
 
 beforeEach(() => {
@@ -266,4 +285,97 @@ it('restore con entitlement: muestra éxito', async () => {
   fireEvent.press(await screen.findByTestId('paywall-restore'));
 
   expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
+});
+
+// ─── Analytics de monetización (paywall_viewed / dismissed / purchase props) ──
+
+const mockTrack = track as jest.Mock;
+const eventsOf = (name: string) =>
+  mockTrack.mock.calls.map(([p]) => p).filter((p) => p.event === name);
+
+it('paywall_viewed se emite UNA vez al resolver el load, con offeringId y source', async () => {
+  render(<PaywallScreen />);
+  await screen.findByTestId('paywall-cta');
+
+  const viewed = eventsOf('paywall_viewed');
+  expect(viewed).toHaveLength(1);
+  expect(viewed[0]).toEqual({ event: 'paywall_viewed', source: 'account_upsell', offeringId: 'default' });
+});
+
+it('paywall no disponible: paywall_viewed sale con offeringId null (el funnel no pierde la vista)', async () => {
+  mockConfigure.mockResolvedValue(false);
+  render(<PaywallScreen />);
+  await screen.findByText('paywall.unavailableTitle');
+
+  const viewed = eventsOf('paywall_viewed');
+  expect(viewed).toHaveLength(1);
+  expect(viewed[0].offeringId).toBeNull();
+});
+
+it('cierre sin comprar: paywall_dismissed con source y msOnScreen numérico', async () => {
+  const { unmount } = render(<PaywallScreen />);
+  await screen.findByTestId('paywall-cta');
+
+  unmount();
+
+  const dismissed = eventsOf('paywall_dismissed');
+  expect(dismissed).toHaveLength(1);
+  expect(dismissed[0].source).toBe('account_upsell');
+  expect(typeof dismissed[0].msOnScreen).toBe('number');
+  expect(dismissed[0].msOnScreen).toBeGreaterThanOrEqual(0);
+});
+
+it('compra completada: NO se emite paywall_dismissed al cerrar', async () => {
+  mockPurchase.mockResolvedValue({ status: 'success' });
+  const { unmount } = render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+  await screen.findByText('paywall.successTitle');
+  unmount();
+
+  expect(eventsOf('paywall_dismissed')).toHaveLength(0);
+});
+
+it('purchase_started/completed llevan las props de precio del package (anual con trial)', async () => {
+  mockPurchase.mockResolvedValue({ status: 'success' });
+  render(<PaywallScreen />);
+
+  // Preselección anual (mejor precio) → las props salen del product del anual.
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+  await screen.findByText('paywall.successTitle');
+
+  const expected = {
+    productId: 'plus_annual',
+    priceString: '39,99 €',
+    price: 39.99,
+    currency: 'EUR',
+    period: 'annual',
+    hasTrial: true,
+  };
+  expect(eventsOf('purchase_started')[0]).toEqual({ event: 'purchase_started', ...expected });
+  expect(eventsOf('purchase_completed')[0]).toEqual({
+    event: 'purchase_completed',
+    pendingBackend: false,
+    ...expected,
+  });
+});
+
+it('cancelación: purchase_cancelled con props del package mensual (sin trial)', async () => {
+  mockPurchase.mockResolvedValue({ status: 'cancelled' });
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-pkg-$rc_monthly'));
+  fireEvent.press(screen.getByTestId('paywall-cta'));
+  await waitFor(() => expect(mockPurchase).toHaveBeenCalled());
+
+  const cancelled = eventsOf('purchase_cancelled');
+  expect(cancelled[0]).toEqual({
+    event: 'purchase_cancelled',
+    productId: 'plus_monthly',
+    priceString: '4,99 €',
+    price: 4.99,
+    currency: 'EUR',
+    period: 'monthly',
+    hasTrial: false,
+  });
 });

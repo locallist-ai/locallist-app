@@ -36,6 +36,7 @@ import {
   purchasePlusPackage,
   restorePlusPurchases,
   addPlusActivationListener,
+  getCachedStorefront,
   PLUS_ENTITLEMENT_ID,
 } from '../purchases';
 import type { PurchasesPackage, CustomerInfo } from 'react-native-purchases';
@@ -51,6 +52,7 @@ jest.mock('react-native-purchases', () => ({
     logIn: jest.fn(),
     logOut: jest.fn(),
     getAppUserID: jest.fn(),
+    getStorefront: jest.fn(),
     addCustomerInfoUpdateListener: jest.fn(),
     removeCustomerInfoUpdateListener: jest.fn(),
   },
@@ -97,7 +99,11 @@ beforeEach(() => {
   // tests de mismatch la sobreescriben.
   mockPurchases.logOut.mockResolvedValue(undefined as never);
   mockPurchases.getAppUserID.mockResolvedValue('user-1');
+  mockPurchases.getStorefront.mockResolvedValue(null);
 });
+
+/** Drena la cola de microtasks/macrotasks (fire-and-forget del storefront). */
+const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe('configurePurchases', () => {
   it('sin API key: devuelve false y no crashea ni llama al SDK', async () => {
@@ -543,5 +549,62 @@ describe('restorePlusPurchases', () => {
 
     expect(outcome).toEqual({ status: 'error', message: 'identity_mismatch' });
     expect(mockPurchases.restorePurchases).not.toHaveBeenCalled();
+  });
+});
+
+describe('getCachedStorefront (caché para analytics)', () => {
+  it('null antes de configurar (nunca llama al SDK sin configure)', () => {
+    expect(getCachedStorefront()).toBeNull();
+    expect(mockPurchases.getStorefront).not.toHaveBeenCalled();
+  });
+
+  it('tras configure exitoso cachea el countryCode del storefront', async () => {
+    mockPurchases.getStorefront.mockResolvedValue({ countryCode: 'ESP' });
+    await configureWithKey();
+    await flush();
+
+    expect(getCachedStorefront()).toBe('ESP');
+  });
+
+  it('storefront no disponible (null del SDK): getter queda en null sin crash', async () => {
+    mockPurchases.getStorefront.mockResolvedValue(null);
+    await configureWithKey();
+    await flush();
+
+    expect(getCachedStorefront()).toBeNull();
+  });
+
+  it('fetch falla y el siguiente configure reintenta y rellena el caché', async () => {
+    mockPurchases.getStorefront.mockRejectedValueOnce(new Error('offline'));
+    await configureWithKey();
+    await flush();
+    expect(getCachedStorefront()).toBeNull();
+
+    mockPurchases.getStorefront.mockResolvedValue({ countryCode: 'USA' });
+    await configurePurchases('user-1'); // idempotente, pero reintenta el storefront
+    await flush();
+
+    expect(getCachedStorefront()).toBe('USA');
+  });
+
+  it('con caché ya poblado no vuelve a llamar al SDK', async () => {
+    mockPurchases.getStorefront.mockResolvedValue({ countryCode: 'ESP' });
+    await configureWithKey();
+    await flush();
+    await configurePurchases('user-1');
+    await flush();
+
+    expect(mockPurchases.getStorefront).toHaveBeenCalledTimes(1);
+    expect(getCachedStorefront()).toBe('ESP');
+  });
+
+  it('resetPurchasesForTesting limpia el caché', async () => {
+    mockPurchases.getStorefront.mockResolvedValue({ countryCode: 'ESP' });
+    await configureWithKey();
+    await flush();
+    expect(getCachedStorefront()).toBe('ESP');
+
+    resetPurchasesForTesting();
+    expect(getCachedStorefront()).toBeNull();
   });
 });
