@@ -99,7 +99,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 |---|---|
 | `api.ts` | API client: auto JWT refresh, SecureStore token storage |
 | `auth.ts` | AuthContext: user state, logout (desvincula identidad RevenueCat vía `logOutPurchases`), isPro flag, refreshUser (re-fetch /account post-compra) |
-| `purchases.ts` | RevenueCat: configure (key por `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY`; logIn fallido en cambio de usuario ⇒ false; guarda de época contra logIns tardíos), logOutPurchases (síncrono, no bloqueante), offerings, purchase/restore exigen `expectedAppUserID` de sesión (mismatch módulo/SDK ⇒ `identity_mismatch`, nunca compra con identidad ajena) con poll de `GET /account` hasta el flip del tier; cancelación de usuario no es error |
+| `purchases.ts` | RevenueCat: configure (key por `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY`; logIn fallido en cambio de usuario ⇒ false; guarda de época contra logIns tardíos), logOutPurchases (síncrono, no bloqueante), offerings, purchase/restore exigen `expectedAppUserID` de sesión (mismatch módulo/SDK ⇒ `identity_mismatch`, nunca compra con identidad ajena; divergencia nativa invalida la identidad y el retry se cura vía logIn) con poll de `GET /account` hasta el flip del tier; cancelación de usuario no es error |
 | `auth/useAuthForm.ts` | Login/register flow hook: choose↔credentials step, Apple/Google OAuth, email validation, password strength (powers `app/login.tsx`) |
 | `theme.ts` | Brand tokens: colors, typography, spacing, borderRadius |
 | `types.ts` | Shared TypeScript types (Plan, Place, PlanStop, etc.) |

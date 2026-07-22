@@ -435,6 +435,44 @@ describe('purchasePlusPackage', () => {
     expect(mockPurchases.purchasePackage).not.toHaveBeenCalled();
   });
 
+  it('la divergencia nativa no es terminal: invalida la identidad y el retry se cura vía logIn', async () => {
+    await configureWithKey(); // módulo user-1, nativo divergido:
+    mockPurchases.getAppUserID.mockResolvedValueOnce('user-2');
+    await purchasePlusPackage(PKG, 'user-1', jest.fn(), { pollDelayMs: 0 }); // mismatch ⇒ invalida
+
+    // El retry del paywall re-configura: debe forzar logIn (no asumir user-1).
+    mockPurchases.logIn.mockResolvedValueOnce({} as never);
+    expect(await configurePurchases('user-1')).toBe(true);
+    expect(mockPurchases.logIn).toHaveBeenCalledWith('user-1');
+
+    // Con el nativo re-alineado (beforeEach: user-1), la compra vuelve a funcionar.
+    mockPurchases.purchasePackage.mockResolvedValue({
+      customerInfo: customerInfoWith([PLUS_ENTITLEMENT_ID]),
+    } as never);
+    const refresh = jest.fn().mockResolvedValue('pro');
+    const outcome = await purchasePlusPackage(PKG, 'user-1', refresh, { pollDelayMs: 0 });
+    expect(outcome).toEqual({ status: 'success' });
+  });
+
+  it('getAppUserID falla (no es divergencia confirmada): conserva la identidad para reintentar', async () => {
+    await configureWithKey();
+    mockPurchases.getAppUserID.mockRejectedValueOnce(new Error('offline'));
+    await purchasePlusPackage(PKG, 'user-1', jest.fn(), { pollDelayMs: 0 }); // mismatch sin invalidar
+
+    // Sin divergencia confirmada, configure no necesita re-logIn.
+    expect(await configurePurchases('user-1')).toBe(true);
+    expect(mockPurchases.logIn).not.toHaveBeenCalled();
+  });
+
+  it('expectedAppUserID vacío: identity_mismatch sin llamar al SDK', async () => {
+    await configureWithKey();
+
+    const outcome = await purchasePlusPackage(PKG, '', jest.fn(), { pollDelayMs: 0 });
+
+    expect(outcome).toEqual({ status: 'error', message: 'identity_mismatch' });
+    expect(mockPurchases.purchasePackage).not.toHaveBeenCalled();
+  });
+
   it('getAppUserID falla: se rechaza la compra (identidad no verificable ⇒ no vender)', async () => {
     await configureWithKey();
     mockPurchases.getAppUserID.mockRejectedValue(new Error('offline'));

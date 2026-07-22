@@ -80,6 +80,10 @@ export async function configurePurchases(appUserID?: string | null): Promise<boo
     if (!uid) return currentAppUserID === null;
 
     if (uid !== currentAppUserID) {
+      // Limitación aceptada: dos configure concurrentes con el MISMO uid se
+      // invalidan mutuamente por época y el primero en resolver devuelve un
+      // false espurio (fail-safe, ventana estrecha). Se cura en el siguiente
+      // configure/retry, que ya ve la identidad commiteada por el rival.
       const epoch = ++identityEpoch;
       try {
         await Purchases.logIn(uid);
@@ -249,8 +253,20 @@ async function confirmSessionIdentity(expectedAppUserID: string): Promise<boolea
   if (!expectedAppUserID || currentAppUserID !== expectedAppUserID) return false;
   try {
     const sdkAppUserID = await Purchases.getAppUserID();
-    return sdkAppUserID === expectedAppUserID;
+    if (sdkAppUserID === expectedAppUserID) return true;
+    // Divergencia módulo/nativo (un logOut/logIn nativo resuelto fuera de
+    // orden): sin esto el mismatch sería terminal hasta cold start, porque el
+    // siguiente configure vería uid === currentAppUserID y devolvería true sin
+    // re-loguear. Invalidar la identidad del módulo (y la época, por logIns en
+    // vuelo) fuerza el logIn en el siguiente configure — el retry del paywall
+    // se cura solo.
+    logger.warn('RevenueCat: native identity diverged from module state, invalidating');
+    identityEpoch += 1;
+    currentAppUserID = null;
+    return false;
   } catch (err) {
+    // Fallo de verificación (p. ej. sin red): no es divergencia confirmada —
+    // se rechaza la venta pero se conserva la identidad para reintentar.
     logger.warn('RevenueCat: getAppUserID failed', err);
     return false;
   }
