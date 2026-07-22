@@ -89,7 +89,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `plan-editor/SwipeableStopCard.tsx` | Swipe-to-delete stop row |
 | `plan-editor/MoveToDay.tsx` | Move stop between days modal |
 | `plan-editor/PlaceSearchModal.tsx` | Search places to add to a plan |
-| `home/HomeScreen.tsx` | AI wizard step flow (used by `builder/wizard.tsx`): WizardStep, InterestsStep + SubcategorySheet, BudgetStep, RefineableStep, ChatStep (legacy), `useWizard` state hook, `useTaxonomy`, constants |
+| `home/HomeScreen.tsx` | AI wizard step flow (used by `builder/wizard.tsx`): DurationStep (tier-aware day pills 1..14 Plus / 1..3 free + upsell), InterestsStep + SubcategorySheet, BudgetStep, RefineableStep, ChatStep (legacy), `useWizard` state hook (guest gate + gate-error mapping + quota), `useTaxonomy`, constants |
 | `home/CityCard.tsx` + `home/HeroSkiaBg.tsx` | City picker card + Skia hero background (home tab) |
 | `home/TypingDots.tsx` | Typing indicator (shared with chat) |
 
@@ -98,7 +98,9 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | File | Description |
 |---|---|
 | `api.ts` | API client: auto JWT refresh, SecureStore token storage |
-| `auth.ts` | AuthContext: user state, logout, isPro flag |
+| `gate-errors.ts` | Pure mapping of `{status, errorBody}` → `GateAction` (signup_required / upsell / soft_throttle / rate_limit / generic) for the Plus gate, plus tolerant parsers for `/account` `ai_plans_month` quota and the generation `clamped` hint |
+| `useGateHandler.ts` | Hook: presents a `GateAction` as UI (Alert upsell/signup/throttle, CTA to `/login` or the Account Plus entry) + `presentClamped` notice. Single place for gate copy/CTA |
+| `auth.ts` | AuthContext: user state, logout, isPro flag, `aiPlansMonth` quota (parsed from `/account`) |
 | `auth/useAuthForm.ts` | Login/register flow hook: choose↔credentials step, Apple/Google OAuth, email validation, password strength (powers `app/login.tsx`) |
 | `theme.ts` | Brand tokens: colors, typography, spacing, borderRadius |
 | `types.ts` | Shared TypeScript types (Plan, Place, PlanStop, etc.) |
