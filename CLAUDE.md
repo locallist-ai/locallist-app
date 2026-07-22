@@ -5,13 +5,13 @@
 | **Tech** | Expo SDK 54, React Native 0.81, Expo Router 6, TypeScript |
 | **Deploy** | EAS Build (local) → TestFlight → App Store |
 | **Auth** | Apple Sign In + Google OAuth + email/password (HS256 JWT, auto-refresh) |
-| **Payments** | RevenueCat SDK (Apple IAP) — **planned, not yet installed** |
+| **Payments** | RevenueCat SDK (Apple IAP) — `react-native-purchases`, entitlement `plus`. Paywall `app/paywall.tsx`, lógica `lib/purchases.ts`. **Pendiente**: API key + productos en dashboard/ASC (sin key el paywall degrada a "no disponible") |
 | **Storage** | SecureStore (tokens), in-memory cache (api-cache.ts) |
 | **iOS Target** | iOS 16.0+ |
 | **Privacy** | Privacy manifest configured (4 API types, 3 data types, no tracking) |
 | **Security** | Cert pinning ATS (`NSPinnedDomains`) vía config plugin `plugins/withCertPinning.js` — pins CA de ISRG contra el dominio de la API; rotación y riesgos documentados en el propio plugin |
 | **i18n** | i18next + expo-localization. EN + ES (España). Parity test: `lib/i18n/__tests__/parity.test.ts` |
-| **Tests** | Jest (jest-expo) — `npm test`. Suites in `lib/__tests__/`, `lib/plan/__tests__/`, `lib/follow/__tests__/`, `components/map/__tests__/`, `components/chat/__tests__/` |
+| **Tests** | Jest (jest-expo) — `npm test`. Suites in `lib/__tests__/`, `lib/plan/__tests__/`, `lib/follow/__tests__/`, `components/map/__tests__/`, `components/chat/__tests__/`, `components/account/__tests__/` |
 | **Analytics** | PostHog via REST (`lib/analytics.ts`) — no-op unless `EXPO_PUBLIC_POSTHOG_KEY` is set |
 | **Errors** | Sentry (`@sentry/react-native`), init in `lib/sentry.ts` |
 
@@ -51,6 +51,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `(tabs)/plans.tsx` | Plans list: PhotoHero covers, category filter chips, skeleton loading; CTA → `/builder/custom` |
 | `(tabs)/account.tsx` | Profile (useProfile: pace/budget/dietary), tier badge, language selector, sign out |
 | `login.tsx` | Apple Sign In, Google OAuth, email/password, password strength rules |
+| `paywall.tsx` | LocalList Plus paywall (modal iOS): offerings de RevenueCat con precio localizado, compra, restore, links legales; degrada a "no disponible" sin API key/productos |
 | `chat/index.tsx` | **Main plan-creation flow**: conversational AI chat — slot extraction (SlotBadges), quick replies, `chatGenerate` → plan, SaveProfileSheet, escape hatch to wizard |
 | `builder/wizard.tsx` | AI plan wizard (renders `components/home/HomeScreen` step flow) — escape hatch from chat |
 | `builder/custom.tsx` | Manual plan builder: name + debounced city search + days (1–3) → opens `/plan/new` editor |
@@ -98,9 +99,10 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | File | Description |
 |---|---|
 | `api.ts` | API client: auto JWT refresh, SecureStore token storage |
-| `gate-errors.ts` | Pure mapping of `{status, errorBody}` → `GateAction` (signup_required / upsell / soft_throttle / rate_limit / generic) for the Plus gate, plus tolerant parsers for `/account` `ai_plans_month` quota and the generation `clamped` hint |
-| `useGateHandler.ts` | Hook: presents a `GateAction` as UI (Alert upsell/signup/throttle, CTA to `/login` or the Account Plus entry) + `presentClamped` notice. Single place for gate copy/CTA |
-| `auth.ts` | AuthContext: user state, logout, isPro flag, `aiPlansMonth` quota (parsed from `/account`) |
+| `gate-errors.ts` | Pure mapping of `{status, errorBody}` → `GateAction` (signup_required / upsell / soft_throttle / rate_limit / generic) for the Plus gate, plus tolerant parsers for `/account` `aiPlansMonth` quota and the generation `clamped` hint |
+| `useGateHandler.ts` | Hook: presents a `GateAction` as UI (Alert upsell/signup/throttle, CTA to `/login` or `/paywall`) + `presentClamped` notice (guarded by `isPro`). Single place for gate copy/CTA |
+| `auth.ts` | AuthContext: user state, logout (desvincula identidad RevenueCat vía `logOutPurchases`), isPro flag, refreshUser (re-fetch /account post-compra), `aiPlansMonth` quota (parsed from `/account`, poblada tras auto-login y `login()` interactivo) |
+| `purchases.ts` | RevenueCat: configure (key por `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY`; sin uid SIEMPRE false — sin sesión no hay paywall; logIn fallido en cambio de usuario ⇒ false; configures concurrentes del mismo uid coalescen), cola de identidad que serializa logIn/logOut/purchase/restore (nunca se vende con ops de identidad pendientes), guarda de época contra logIns tardíos y TOCTOU (re-validación tras cada await y dentro del slot de venta), logOutPurchases (síncrono, no bloqueante; logOut nativo encolado tras logIns en vuelo), offerings, purchase/restore exigen `expectedAppUserID` de sesión (mismatch ⇒ `identity_mismatch`, nunca compra con identidad ajena; divergencia nativa invalida y el retry se cura vía logIn; el paywall se recupera con re-load) con poll de `GET /account` hasta el flip del tier; cancelación de usuario no es error. Contratos de carreras: `purchases.identity-contract.test.ts` |
 | `auth/useAuthForm.ts` | Login/register flow hook: choose↔credentials step, Apple/Google OAuth, email validation, password strength (powers `app/login.tsx`) |
 | `theme.ts` | Brand tokens: colors, typography, spacing, borderRadius |
 | `types.ts` | Shared TypeScript types (Plan, Place, PlanStop, etc.) |

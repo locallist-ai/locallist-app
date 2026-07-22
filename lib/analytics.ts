@@ -6,6 +6,7 @@
  * is a no-op.
  */
 import { logger } from './logger';
+import type { OfferingsError } from './purchases';
 
 const POSTHOG_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '';
 const POSTHOG_HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://eu.i.posthog.com';
@@ -40,7 +41,17 @@ export type AppEvent =
   | { event: 'chat_ai_unavailable'; sessionId: string | null }
   // Profile
   | { event: 'profile_saved'; fields: string[] }
-  | { event: 'profile_reset' };
+  | { event: 'profile_reset' }
+  // Monetization (paywall / IAP)
+  | { event: 'paywall_viewed'; source: 'account_upsell' }
+  // `OfferingsError` ya cubre 'not_configured' | 'no_offerings' | 'network', los
+  // dos call sites del paywall (configure fallido / getPlusOfferings con error).
+  | { event: 'paywall_unavailable'; reason: OfferingsError }
+  | { event: 'purchase_started'; productId: string }
+  | { event: 'purchase_completed'; productId: string; pendingBackend: boolean }
+  | { event: 'purchase_cancelled'; productId: string }
+  | { event: 'purchase_failed'; productId: string }
+  | { event: 'restore_completed'; found: boolean };
 
 /** @deprecated Use AppEvent */
 export type ChatEvent = AppEvent;
