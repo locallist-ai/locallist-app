@@ -354,6 +354,25 @@ it('cierre durante el load (configure en vuelo): dismissed con phase loading y C
   expect(dismissed[0].phase).toBe('loading');
 });
 
+// Caso ADV2 del re-check: unmount durante el load y el load resuelve CON ÉXITO
+// después — sin guard de montaje salía un viewed fantasma tras el dismissed,
+// con precios que nunca renderizaron.
+it('load que resuelve con éxito tras el unmount: CERO paywall_viewed (sin viewed fantasma post-dismiss)', async () => {
+  let resolveConfigure!: (v: boolean) => void;
+  mockConfigure.mockReturnValue(new Promise<boolean>((r) => { resolveConfigure = r; }));
+  const { unmount } = render(<PaywallScreen />);
+
+  unmount();
+  resolveConfigure(true); // el load sigue en background y llega a offerings OK
+  await waitFor(() => expect(mockGetOfferings).toHaveBeenCalled());
+  await new Promise((r) => setTimeout(r, 0)); // drena la continuación del load
+
+  expect(eventsOf('paywall_viewed')).toHaveLength(0);
+  const dismissed = eventsOf('paywall_dismissed');
+  expect(dismissed).toHaveLength(1);
+  expect(dismissed[0].phase).toBe('loading');
+});
+
 it('cierre desde el estado no-disponible: dismissed con phase unavailable y sin viewed', async () => {
   mockGetOfferings.mockResolvedValue({ packages: [], error: 'no_offerings' });
   const { unmount } = render(<PaywallScreen />);

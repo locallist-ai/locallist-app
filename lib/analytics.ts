@@ -7,8 +7,8 @@
  *
  * Identidad:
  *  - Sin usuario logueado, el `distinct_id` es un UUID anónimo generado una vez
- *    y persistido (key `analytics.anonId`) — cada dispositivo es una persona en
- *    PostHog, no un "anonymous" global.
+ *    y persistido en el fichero local `analytics_anon_id` (ver `ANON_ID_FILE`) —
+ *    cada dispositivo es una persona en PostHog, no un "anonymous" global.
  *  - En la transición anon→user se emite `$identify` con `$anon_distinct_id`
  *    para unir la historia anónima con la del usuario.
  *  - En logout NO se rota el anonId: mismo dispositivo ≈ misma persona.
@@ -72,6 +72,12 @@ function loadAnonId(): Promise<string> {
       );
       return fresh;
     })().catch((err) => {
+      // Riesgo ACEPTADO: con fichero preexistente + fallo transitorio de la
+      // PRIMERA lectura, la sesión puede partirse en dos ids anónimos (efímero
+      // ahora, el persistido cuando el storage se recupere). Aceptado porque el
+      // fallo transitorio de FS en el sandbox de iOS es rarísimo, ambos ids son
+      // anónimos, y preferir el efímero al recuperarse rotaría la identidad
+      // persistida del dispositivo (peor).
       logger.debug('analytics: anonId load failed', err);
       _anonIdPromise = null;
       if (!_ephemeralAnonId) _ephemeralAnonId = Crypto.randomUUID();

@@ -93,8 +93,13 @@ export default function PaywallScreen() {
   // Estado vigente al desmontar (el cleanup del unmount no ve el state actual).
   const phaseRef = useRef<Phase>('loading');
   phaseRef.current = phase;
+  // Guard de montaje (limpiado en el cleanup del effect del dismissed): un
+  // load() que resuelve con éxito DESPUÉS del unmount no debe emitir un
+  // paywall_viewed fantasma tras el dismissed — esos precios nunca renderizaron.
+  const mountedRef = useRef(true);
 
   const trackViewedOnce = useCallback((offeringId: string | null) => {
+    if (!mountedRef.current) return;
     if (pricesShownAtRef.current === null) pricesShownAtRef.current = Date.now();
     if (viewTrackedRef.current) return;
     viewTrackedRef.current = true;
@@ -132,7 +137,9 @@ export default function PaywallScreen() {
   // correcto, el usuario nunca vio precios.
   useEffect(() => {
     const mountedAt = Date.now();
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (purchaseOutcomeRef.current) return;
       const dismissPhase =
         phaseRef.current === 'ready'
