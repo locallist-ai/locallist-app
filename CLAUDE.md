@@ -111,7 +111,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `chat-store.ts` | Chat session id persistence (SecureStore) |
 | `trip-context-store.ts` | Selected city store (module-level + SafeStore persistence, `useTripContext`) |
 | `use-profile.ts` | Hook: user profile CRUD (pace/budget/dietary) via API |
-| `analytics.ts` | PostHog REST capture, fire-and-forget `track()` — no-op without `EXPO_PUBLIC_POSTHOG_KEY`. Anon `distinct_id` persistente (UUID, key `analytics.anonId`) + `$identify` en anon→user; todos los eventos llevan `country` (locale) y `storefront` (caché RevenueCat) cuando hay valor; `trackPlanLimitIfGate403` emite `plan_limit_hit` desde los 403 estructurados de gates Plus (wired en `api.ts`) |
+| `analytics.ts` | PostHog REST capture, fire-and-forget `track()` — no-op without `EXPO_PUBLIC_POSTHOG_KEY`. Anon `distinct_id` persistente (UUID en fichero local `analytics_anon_id` — sobrevive reinicios, MUERE con la desinstalación; nunca Keychain, sería un device-id no reseteable) + `$identify` en anon→user; todos los eventos llevan `country` (locale) y `storefront` (caché RevenueCat) cuando hay valor; `trackPlanLimitIfGate403` emite `plan_limit_hit` desde los 403 estructurados de gates Plus (wired en `api.ts`) |
 | `taxonomy.ts` + `taxonomy-fallback.ts` | Interest taxonomy: API fetch with file cache (24h TTL, ETag) + bundled fallback |
 | `openingHours.ts` | Open/closed state + hint from `opening_hours` data |
 | `responsive.ts` | `useResponsive()`: compact/short flags, width-based `scale`/`scaleFont` |

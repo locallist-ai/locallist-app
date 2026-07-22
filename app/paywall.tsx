@@ -35,7 +35,10 @@ function asPaywallSource(raw: string | string[] | undefined): PaywallSource {
 /**
  * Props de precio para los eventos purchase_* — todo derivado del product de
  * StoreKit (precio ya localizado). `hasTrial` = intro price gratuito (el trial
- * de 7 días del plan anual); un intro de pago no es trial.
+ * de 7 días del plan anual); un intro de pago no es trial. OJO: refleja el
+ * PRODUCTO, no la elegibilidad del usuario (Apple puede denegar el trial a
+ * quien ya lo consumió) — el cruce real trial→paid vive en los billing_events
+ * del backend, no en esta prop.
  */
 function purchaseEventProps(pkg: PurchasesPackage) {
   return {
@@ -75,15 +78,24 @@ export default function PaywallScreen() {
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<{ title: string; body: string } | null>(null);
 
-  // paywall_viewed se emite UNA vez por apertura, cuando el load resuelve (ahí
-  // se conoce el offeringId; con paywall no disponible sale con offeringId null).
+  // paywall_viewed se emite UNA vez por apertura y SOLO cuando las offerings
+  // renderizan con precios visibles (denominador de la señal de pricing) — la
+  // pantalla de error ya tiene su evento (paywall_unavailable). Si un retry
+  // triunfa tras un fallo, el viewed se emite entonces, anclado al éxito.
   const viewTrackedRef = useRef(false);
+  // Momento en que los precios se mostraron por primera vez (msOnScreen de
+  // paywall_dismissed con phase 'shown' se ancla aquí, no al mount).
+  const pricesShownAtRef = useRef<number | null>(null);
   // Una compra/restore con entitlement suprime paywall_dismissed en el cierre.
   const purchaseOutcomeRef = useRef(false);
   const sourceRef = useRef(source);
   sourceRef.current = source;
+  // Estado vigente al desmontar (el cleanup del unmount no ve el state actual).
+  const phaseRef = useRef<Phase>('loading');
+  phaseRef.current = phase;
 
   const trackViewedOnce = useCallback((offeringId: string | null) => {
+    if (pricesShownAtRef.current === null) pricesShownAtRef.current = Date.now();
     if (viewTrackedRef.current) return;
     viewTrackedRef.current = true;
     track({ event: 'paywall_viewed', source: sourceRef.current, offeringId });
@@ -93,14 +105,12 @@ export default function PaywallScreen() {
     setPhase('loading');
     const configured = await configurePurchases(user?.id);
     if (!configured) {
-      trackViewedOnce(null);
       track({ event: 'paywall_unavailable', reason: 'not_configured' });
       setPhase('unavailable');
       return;
     }
     const { packages: pkgs, error } = await getPlusOfferings();
     if (error) {
-      trackViewedOnce(null);
       track({ event: 'paywall_unavailable', reason: error });
       setPhase('unavailable');
       return;
@@ -117,15 +127,28 @@ export default function PaywallScreen() {
   }, [load]);
 
   // Funnel view→dismiss: al desmontar (X, back, swipe-down del modal) sin
-  // outcome de compra se emite paywall_dismissed con el tiempo en pantalla.
+  // outcome de compra se emite paywall_dismissed con la phase vigente. Un
+  // dismissed con phase 'loading'/'unavailable' no lleva viewed emparejado:
+  // correcto, el usuario nunca vio precios.
   useEffect(() => {
-    const shownAt = Date.now();
+    const mountedAt = Date.now();
     return () => {
       if (purchaseOutcomeRef.current) return;
+      const dismissPhase =
+        phaseRef.current === 'ready'
+          ? ('shown' as const)
+          : phaseRef.current === 'unavailable'
+            ? ('unavailable' as const)
+            : ('loading' as const);
+      const since =
+        dismissPhase === 'shown' && pricesShownAtRef.current !== null
+          ? pricesShownAtRef.current
+          : mountedAt;
       track({
         event: 'paywall_dismissed',
         source: sourceRef.current,
-        msOnScreen: Date.now() - shownAt,
+        phase: dismissPhase,
+        msOnScreen: Date.now() - since,
       });
     };
   }, []);

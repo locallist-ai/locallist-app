@@ -587,6 +587,24 @@ describe('getCachedStorefront (caché para analytics)', () => {
     expect(getCachedStorefront()).toBe('USA');
   });
 
+  it('fetch en vuelo: configures concurrentes comparten UNA sola llamada nativa (dedup)', async () => {
+    let resolveStorefront!: (v: { countryCode: string } | null) => void;
+    mockPurchases.getStorefront.mockReturnValue(
+      new Promise((r) => {
+        resolveStorefront = r;
+      }) as never,
+    );
+
+    // Dos configures solapados: ambos pasan por refreshStorefrontCache con el
+    // primer fetch aún en vuelo.
+    await Promise.all([configureWithKey(), configurePurchases('user-1')]);
+    expect(mockPurchases.getStorefront).toHaveBeenCalledTimes(1);
+
+    resolveStorefront({ countryCode: 'ESP' });
+    await flush();
+    expect(getCachedStorefront()).toBe('ESP');
+  });
+
   it('con caché ya poblado no vuelve a llamar al SDK', async () => {
     mockPurchases.getStorefront.mockResolvedValue({ countryCode: 'ESP' });
     await configureWithKey();

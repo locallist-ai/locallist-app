@@ -133,6 +133,8 @@ export function isPurchasesConfigured(): boolean {
 // identidad del usuario. Lo consume lib/analytics como prop global de eventos.
 
 let cachedStorefront: string | null = null;
+/** Fetch en vuelo: configures concurrentes comparten UNA llamada nativa. */
+let storefrontFetch: Promise<void> | null = null;
 
 /**
  * País del storefront cacheado tras un `configurePurchases` exitoso.
@@ -144,13 +146,17 @@ export function getCachedStorefront(): string | null {
 
 /** Fire-and-forget: rellena el caché de storefront si aún no lo está. */
 function refreshStorefrontCache(): void {
-  if (cachedStorefront !== null) return;
-  void (async () => {
+  if (cachedStorefront !== null || storefrontFetch !== null) return;
+  storefrontFetch = (async () => {
     // Guarda por si el SDK instalado no expone la API (v10.4+ sí la tiene).
     if (typeof Purchases.getStorefront !== 'function') return;
     const storefront = await Purchases.getStorefront();
     cachedStorefront = storefront?.countryCode ?? null;
-  })().catch((err) => logger.debug('RevenueCat: getStorefront failed', err));
+  })()
+    .catch((err) => logger.debug('RevenueCat: getStorefront failed', err))
+    .finally(() => {
+      storefrontFetch = null;
+    });
 }
 
 /**
@@ -274,6 +280,7 @@ export function resetPurchasesForTesting() {
   nativeIdentityDirty = false;
   pendingIdentityOps = 0;
   cachedStorefront = null;
+  storefrontFetch = null;
 }
 
 // ─── Offerings ───────────────────────────────────────────

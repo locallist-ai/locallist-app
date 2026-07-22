@@ -293,7 +293,7 @@ const mockTrack = track as jest.Mock;
 const eventsOf = (name: string) =>
   mockTrack.mock.calls.map(([p]) => p).filter((p) => p.event === name);
 
-it('paywall_viewed se emite UNA vez al resolver el load, con offeringId y source', async () => {
+it('paywall_viewed se emite UNA vez cuando los precios renderizan, con offeringId y source', async () => {
   render(<PaywallScreen />);
   await screen.findByTestId('paywall-cta');
 
@@ -302,17 +302,31 @@ it('paywall_viewed se emite UNA vez al resolver el load, con offeringId y source
   expect(viewed[0]).toEqual({ event: 'paywall_viewed', source: 'account_upsell', offeringId: 'default' });
 });
 
-it('paywall no disponible: paywall_viewed sale con offeringId null (el funnel no pierde la vista)', async () => {
+it('paywall no disponible: NO emite paywall_viewed (el denominador es "precios mostrados")', async () => {
   mockConfigure.mockResolvedValue(false);
   render(<PaywallScreen />);
   await screen.findByText('paywall.unavailableTitle');
 
-  const viewed = eventsOf('paywall_viewed');
-  expect(viewed).toHaveLength(1);
-  expect(viewed[0].offeringId).toBeNull();
+  expect(eventsOf('paywall_viewed')).toHaveLength(0);
+  expect(eventsOf('paywall_unavailable')).toHaveLength(1);
 });
 
-it('cierre sin comprar: paywall_dismissed con source y msOnScreen numérico', async () => {
+it('retry que triunfa tras un fallo: paywall_viewed se emite entonces (anclado al éxito), una sola vez', async () => {
+  mockConfigure.mockResolvedValueOnce(false);
+  render(<PaywallScreen />);
+
+  await screen.findByText('paywall.unavailableTitle');
+  expect(eventsOf('paywall_viewed')).toHaveLength(0);
+
+  fireEvent.press(screen.getByText('paywall.retry'));
+  await screen.findByTestId('paywall-cta');
+
+  const viewed = eventsOf('paywall_viewed');
+  expect(viewed).toHaveLength(1);
+  expect(viewed[0].offeringId).toBe('default');
+});
+
+it('cierre con precios visibles: paywall_dismissed con phase shown y msOnScreen numérico', async () => {
   const { unmount } = render(<PaywallScreen />);
   await screen.findByTestId('paywall-cta');
 
@@ -321,8 +335,36 @@ it('cierre sin comprar: paywall_dismissed con source y msOnScreen numérico', as
   const dismissed = eventsOf('paywall_dismissed');
   expect(dismissed).toHaveLength(1);
   expect(dismissed[0].source).toBe('account_upsell');
+  expect(dismissed[0].phase).toBe('shown');
   expect(typeof dismissed[0].msOnScreen).toBe('number');
   expect(dismissed[0].msOnScreen).toBeGreaterThanOrEqual(0);
+});
+
+// Caso del review adversarial: cerrar DURANTE el load no debe fabricar un
+// "viewed" que nunca ocurrió — sale un dismissed con phase loading sin pareja.
+it('cierre durante el load (configure en vuelo): dismissed con phase loading y CERO paywall_viewed', async () => {
+  mockConfigure.mockReturnValue(new Promise(() => {})); // nunca resuelve
+  const { unmount } = render(<PaywallScreen />);
+
+  unmount();
+
+  expect(eventsOf('paywall_viewed')).toHaveLength(0);
+  const dismissed = eventsOf('paywall_dismissed');
+  expect(dismissed).toHaveLength(1);
+  expect(dismissed[0].phase).toBe('loading');
+});
+
+it('cierre desde el estado no-disponible: dismissed con phase unavailable y sin viewed', async () => {
+  mockGetOfferings.mockResolvedValue({ packages: [], error: 'no_offerings' });
+  const { unmount } = render(<PaywallScreen />);
+  await screen.findByText('paywall.unavailableTitle');
+
+  unmount();
+
+  expect(eventsOf('paywall_viewed')).toHaveLength(0);
+  const dismissed = eventsOf('paywall_dismissed');
+  expect(dismissed).toHaveLength(1);
+  expect(dismissed[0].phase).toBe('unavailable');
 });
 
 it('compra completada: NO se emite paywall_dismissed al cerrar', async () => {

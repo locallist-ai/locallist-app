@@ -2,8 +2,11 @@
  * Tests de `lib/analytics.ts` — PostHog REST, fire-and-forget.
  *
  * Cubre:
- *  - anon distinct_id: UUID generado UNA vez, persistido (key `analytics.anonId`)
- *    y reutilizado entre cargas del módulo (cold starts).
+ *  - anon distinct_id: UUID generado UNA vez, persistido en fichero local de la
+ *    app (muere con la desinstalación — semántica elegida a propósito, ver
+ *    lib/analytics.ts) y reutilizado entre cargas del módulo (cold starts).
+ *  - storage caído: el evento sale igualmente con un id efímero de proceso y el
+ *    rechazo NO se memoiza (el siguiente track reintenta el storage).
  *  - `$identify` en la transición anon→user con `$anon_distinct_id`; sin
  *    re-identify en user→user; sin rotación del anonId en logout.
  *  - Enriquecimiento global: `country` (locale) y `storefront` (caché de
@@ -18,17 +21,32 @@
  */
 
 const mockStore: Record<string, string> = {};
-const mockState = { uuid: 0 };
+const mockState = { uuid: 0, failReads: 0 };
 const mockGetLocales = jest.fn(() => [{ regionCode: 'ES', languageCode: 'es' }]);
 const mockGetCachedStorefront = jest.fn((): string | null => null);
 
-jest.mock('../safe-store', () => ({
-  getItemAsync: jest.fn(async (k: string) => mockStore[k] ?? null),
-  setItemAsync: jest.fn(async (k: string, v: string) => {
-    mockStore[k] = v;
+// Fichero del anonId dentro del sandbox de la app (muere con la desinstalación).
+const ANON_FILE = 'file:///doc/analytics_anon_id';
+
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: 'file:///doc/',
+  getInfoAsync: jest.fn(async (path: string) => {
+    if (mockState.failReads > 0) {
+      mockState.failReads -= 1;
+      throw new Error('disk unavailable');
+    }
+    return { exists: mockStore[path] !== undefined };
   }),
-  deleteItemAsync: jest.fn(async (k: string) => {
-    delete mockStore[k];
+  readAsStringAsync: jest.fn(async (path: string) => {
+    const value = mockStore[path];
+    if (value === undefined) throw new Error('ENOENT');
+    return value;
+  }),
+  writeAsStringAsync: jest.fn(async (path: string, value: string) => {
+    mockStore[path] = value;
+  }),
+  deleteAsync: jest.fn(async (path: string) => {
+    delete mockStore[path];
   }),
 }));
 jest.mock('expo-crypto', () => ({
@@ -71,6 +89,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   for (const k of Object.keys(mockStore)) delete mockStore[k];
   mockState.uuid = 0;
+  mockState.failReads = 0;
   mockGetLocales.mockReturnValue([{ regionCode: 'ES', languageCode: 'es' }]);
   mockGetCachedStorefront.mockReturnValue(null);
   fetchMock = jest.fn(async () => ({ ok: true }));
@@ -93,18 +112,18 @@ describe('anon distinct_id persistente', () => {
     expect(bodies).toHaveLength(2);
     expect(bodies[0].distinct_id).toBe('uuid-1');
     expect(bodies[1].distinct_id).toBe('uuid-1');
-    // Una sola generación y persistida bajo la key del contrato.
+    // Una sola generación y persistida en el fichero del contrato.
     // (contador compartido del mock: isolateModules regenera la instancia)
     expect(mockState.uuid).toBe(1);
     await flush();
-    expect(mockStore['analytics.anonId']).toBe('uuid-1');
+    expect(mockStore[ANON_FILE]).toBe('uuid-1');
   });
 
   it('persiste entre cargas del módulo: un cold start posterior reutiliza el id guardado', async () => {
     const first = loadAnalytics();
     first.track({ event: 'profile_reset' });
     await flush();
-    expect(mockStore['analytics.anonId']).toBe('uuid-1');
+    expect(mockStore[ANON_FILE]).toBe('uuid-1');
 
     // "Reinicio de la app": módulo fresco, mismo storage.
     const second = loadAnalytics();
@@ -167,9 +186,56 @@ describe('transición anon→user ($identify) y logout', () => {
     await flush();
 
     expect(sentBodies()[0].distinct_id).toBe('uuid-1');
-    expect(mockStore['analytics.anonId']).toBe('uuid-1');
-    const SafeStore = jest.requireMock('../safe-store');
-    expect(SafeStore.deleteItemAsync).not.toHaveBeenCalled();
+    expect(mockStore[ANON_FILE]).toBe('uuid-1'); // el fichero no se toca
+  });
+});
+
+describe('storage caído (MINOR-4: rechazo no memoizado + id efímero)', () => {
+  it('si el storage falla, el evento sale igualmente con un id efímero de proceso', async () => {
+    mockState.failReads = 1;
+    const analytics = loadAnalytics();
+
+    analytics.track({ event: 'profile_reset' });
+    await flush();
+
+    const [body] = sentBodies();
+    expect(body.distinct_id).toBe('uuid-1'); // efímero, pero el evento NO se pierde
+    expect(mockStore[ANON_FILE]).toBeUndefined(); // nada persistido aún
+  });
+
+  it('el rechazo NO se memoiza: el siguiente track reintenta el storage y promociona el id efímero', async () => {
+    mockState.failReads = 1;
+    const analytics = loadAnalytics();
+
+    analytics.track({ event: 'profile_reset' }); // storage caído → efímero uuid-1
+    await flush();
+
+    analytics.track({ event: 'profile_reset' }); // storage recuperado → reintenta
+    await flush();
+
+    const bodies = sentBodies();
+    expect(bodies[0].distinct_id).toBe('uuid-1');
+    // Mismo id en todo el proceso (el efímero se promociona a persistente,
+    // no se genera uno nuevo) y ahora sí queda en disco.
+    expect(bodies[1].distinct_id).toBe('uuid-1');
+    await flush();
+    expect(mockStore[ANON_FILE]).toBe('uuid-1');
+    expect(mockState.uuid).toBe(1);
+  });
+
+  it('storage caído de forma persistente: todos los eventos del proceso comparten el id efímero', async () => {
+    mockState.failReads = 99;
+    const analytics = loadAnalytics();
+
+    analytics.track({ event: 'profile_reset' });
+    await flush();
+    analytics.track({ event: 'wizard_started', city: 'Madrid' });
+    await flush();
+
+    const bodies = sentBodies();
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].distinct_id).toBe('uuid-1');
+    expect(bodies[1].distinct_id).toBe('uuid-1');
   });
 });
 
@@ -224,7 +290,7 @@ describe('sin POSTHOG key: no-op', () => {
     await flush();
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(mockStore['analytics.anonId']).toBeUndefined();
+    expect(mockStore[ANON_FILE]).toBeUndefined();
   });
 });
 
