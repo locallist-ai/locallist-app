@@ -259,6 +259,42 @@ it('mientras la elegibilidad no resuelve: precio directo sin framing (nunca un t
   expect(screen.queryByText('paywall.trialFreeBadge')).toBeNull();
 });
 
+// Escenario del re-ataque (ronda 2, MAJOR): el paywall montado ve cambiar la
+// identidad (u1 ELIGIBLE → u2 INELIGIBLE) y recarga las offerings. El mapa de
+// elegibilidad del usuario ANTERIOR nunca puede sobrevivir la ventana en vuelo:
+// desde el primer paint de las nuevas packages, el default seguro (mapa vacío ⇒
+// precio directo) rige hasta que la nueva consulta resuelve. En ningún paint
+// intermedio u2 ve timeline/badge de trial.
+it('cambio de identidad ELIGIBLE→INELIGIBLE con el paywall montado: ningún paint intermedio pinta el framing del usuario anterior', async () => {
+  // u1 es ELIGIBLE (default del beforeEach) → timeline + badge visibles.
+  const { rerender } = render(<PaywallScreen />);
+  expect(await screen.findByTestId('paywall-trial-timeline')).toBeOnTheScreen();
+  expect(screen.getByText('paywall.trialFreeBadge')).toBeOnTheScreen();
+
+  // La segunda consulta (la de u2) queda EN VUELO: así se observa la ventana
+  // entre "packages de u2 ya en pantalla" y "elegibilidad de u2 resuelta". Con
+  // el bug, el mapa ELIGIBLE de u1 sobreviviría esa ventana y u2 vería "gratis".
+  let resolveU2!: (m: Record<string, string>) => void;
+  mockCheckEligibility.mockReturnValueOnce(new Promise((r) => { resolveU2 = r; }));
+
+  // Cambia la sesión a u2 (INELIGIBLE): el paywall re-corre load() con la nueva
+  // identidad y refresca las offerings (mismo productId, mismo precio).
+  mockUseAuth.mockReturnValue({ user: { id: 'u2', tier: 'free' }, isPro: false, refreshUser });
+  rerender(<PaywallScreen />);
+
+  // Ventana en vuelo: el precio de u2 ya renderiza pero la elegibilidad aún no
+  // resolvió → mapa vacío → NUNCA framing de trial (ni timeline ni badge).
+  await waitFor(() => expect(mockCheckEligibility).toHaveBeenCalledTimes(2));
+  expect(screen.queryByTestId('paywall-trial-timeline')).toBeNull();
+  expect(screen.queryByText('paywall.trialFreeBadge')).toBeNull();
+
+  // Al resolver u2 como INELIGIBLE sigue sin framing (precio directo, paywall usable).
+  resolveU2({ plus_annual: 'INELIGIBLE' });
+  await waitFor(() => expect(screen.queryByTestId('paywall-trial-timeline')).toBeNull());
+  expect(screen.queryByText('paywall.trialFreeBadge')).toBeNull();
+  expect(screen.getByText('39,99 €')).toBeOnTheScreen();
+});
+
 it('source onboarding: paywall_viewed lo lleva (nueva entrada del funnel)', async () => {
   const params = useLocalSearchParams as jest.Mock;
   // Persistente (no Once): el paywall re-renderiza durante el load y lee params
@@ -338,6 +374,9 @@ it('compra anual con trial REAL (entitlement TRIAL): sincroniza el recordatorio 
       entitlementPeriodType: 'TRIAL',
       outcomeStatus: 'success',
       purchasedAt: expect.any(Date),
+      // Duración DERIVADA del introPrice del producto (7d = periodNumberOfUnits
+      // del ANNUAL) — misma fuente que el display; el scheduler ya no la asume.
+      trialDays: 7,
     }),
   );
 });

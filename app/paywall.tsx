@@ -160,6 +160,16 @@ export default function PaywallScreen() {
       return;
     }
     trackViewedOnce(pkgs[0]?.presentedOfferingContext?.offeringIdentifier ?? null);
+    // Elegibilidad de trial: se limpia AQUÍ, en el MISMO commit que introduce
+    // el nuevo array de packages (batching de React), y la re-resuelve el
+    // effect [packages]. Sin este reset, un cambio de identidad con el paywall
+    // ya montado (u1 ELIGIBLE → u2 INELIGIBLE) conservaría el mapa del usuario
+    // anterior durante el primer paint de las nuevas packages y u2 vería el
+    // framing de trial stale hasta que la nueva consulta resolviera. Con el
+    // reset batched, el default seguro (mapa vacío ⇒ precio directo) rige desde
+    // el PRIMER paint de las nuevas packages — nunca un paint intermedio con
+    // "N días gratis" para quien no es elegible.
+    setTrialEligibility({});
     setPackages(pkgs);
     // Preselección: anual si existe (mejor precio), si no el primero.
     setSelected(pkgs.find((p) => p.packageType === 'ANNUAL') ?? pkgs[0]);
@@ -177,11 +187,16 @@ export default function PaywallScreen() {
   // vacío mantiene el default seguro (precio directo). Un cambio de identidad
   // vuelve a cargar offerings (nuevo array de packages) y re-dispara esto.
   useEffect(() => {
+    // Default seguro AL INICIO de cada ventana (incluida cada recarga por
+    // cambio de identidad): mapa vacío ⇒ precio directo. Refuerza el reset
+    // batched de load() para que ninguna consulta en vuelo herede la
+    // elegibilidad del array de packages anterior — el framing de trial jamás
+    // sobrevive a un cambio de packages mientras la nueva consulta resuelve.
+    setTrialEligibility({});
     const trialProductIds = packages
       .filter((p) => p.product.introPrice?.price === 0)
       .map((p) => p.product.identifier);
     if (trialProductIds.length === 0) {
-      setTrialEligibility({});
       return;
     }
     let active = true;
@@ -269,6 +284,13 @@ export default function PaywallScreen() {
         entitlementPeriodType,
         outcomeStatus,
         purchasedAt: new Date(),
+        // Duración del trial DERIVADA de la MISMA fuente que el display del
+        // timeline (`introPriceDurationDays` del introPrice del producto): el
+        // recordatorio se programa a duración-2 y el cobro a duración, no a la
+        // constante hardcodeada. Si ASC cambiara la duración del trial, aviso y
+        // display se mueven juntos. `null` (producto sin trial derivable) ⇒ el
+        // scheduler usa el default decidido de negocio (7 días).
+        trialDays: introPriceDurationDays(selected.product.introPrice) ?? undefined,
       });
     };
 
