@@ -4,7 +4,7 @@ import type { SubcategoryOption } from './constants';
 import { SUBCATEGORIES_BY_INTEREST } from './constants';
 
 // Maps an interest id (lowercase) to a CategoryKey (capitalized)
-const INTEREST_TO_CATEGORY: Record<string, string> = {
+export const INTEREST_TO_CATEGORY: Record<string, string> = {
   food: 'Food',
   nightlife: 'Nightlife',
   coffee: 'Coffee',

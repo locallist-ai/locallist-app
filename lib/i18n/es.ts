@@ -366,11 +366,33 @@ export default {
     durationPlusLocked: 'Hasta {{plusMaxDays}} días con Plus',
   },
   onboarding: {
-    // Primera ejecución, pantalla 1 (esqueleto). El flujo completo llega en W2.
-    title: 'Planes que puedes seguir de verdad',
-    subtitle: 'Itinerarios curados listos para seguir. Sin búsquedas interminables, sin 40 pestañas.',
+    // Compartido
     getStarted: 'Empezar',
     haveAccount: 'Ya tengo cuenta',
+    continue: 'Continuar',
+    skip: 'Omitir',
+    // Pantalla 1 — valor
+    valueClaim: 'Planes que puedes seguir de verdad',
+    valueBullet1: 'Un plan, no 40 pestañas',
+    valueBullet2: 'Listo para seguir, paso a paso',
+    valueBullet3: 'Prueba honesta: te avisamos antes de cobrarte',
+    // Pantalla 2 — ciudad
+    cityTitle: '¿A dónde vas a ir?',
+    citySubtitle: 'Elige una ciudad que cubrimos y mira un plan real.',
+    cityNotListed: '¿No ves tu ciudad?',
+    cityNotifyThanks: 'Gracias. Te avisaremos cuando la cubramos.',
+    // Pantalla 3 — gustos
+    tasteTitle: '¿Qué te gusta?',
+    tasteSubtitle: 'Opcional. Elige algunos y adaptamos tu plan.',
+    tasteBudgetTitle: '¿Cuál es tu presupuesto?',
+    // Pantalla 4 — vista previa de valor
+    previewEyebrow: 'Esto es lo que te llevas',
+    previewLoading: 'Preparando tu vista previa...',
+    previewYourCity: 'tu ciudad',
+    previewGenericTitle: 'Tu plan de {{city}}, listo para seguir',
+    previewGenericSubtitle: 'Paradas curadas, con horarios y orden pensados para ti.',
+    previewGenericHint: 'Se crea en cuanto empiezas.',
+    createPlan: 'Crear mi plan',
   },
   placeSearch: {
     placeholder: 'Buscar lugares en {{city}}...',

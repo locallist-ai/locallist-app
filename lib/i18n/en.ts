@@ -374,11 +374,33 @@ export default {
     durationPlusLocked: 'Up to {{plusMaxDays}} days with Plus',
   },
   onboarding: {
-    // First-run screen 1 (skeleton). Full flow lands in W2.
-    title: 'Plans you can actually follow',
-    subtitle: 'Curated, ready-to-go itineraries. No endless research, no 40 tabs.',
+    // Shared
     getStarted: 'Get started',
     haveAccount: 'I already have an account',
+    continue: 'Continue',
+    skip: 'Skip',
+    // Screen 1 — value
+    valueClaim: 'Plans you can actually follow',
+    valueBullet1: 'One plan, not 40 tabs',
+    valueBullet2: 'Ready to follow, step by step',
+    valueBullet3: 'Honest trial: we remind you before you pay',
+    // Screen 2 — city
+    cityTitle: 'Where are you headed next?',
+    citySubtitle: 'Pick a city we cover and see a real plan.',
+    cityNotListed: "Don't see your city?",
+    cityNotifyThanks: "Thanks. We'll let you know when we cover it.",
+    // Screen 3 — tastes
+    tasteTitle: 'What are you into?',
+    tasteSubtitle: "Optional. Pick a few and we'll tailor your plan.",
+    tasteBudgetTitle: "What's your budget?",
+    // Screen 4 — value preview
+    previewEyebrow: 'This is what you get',
+    previewLoading: 'Building your preview...',
+    previewYourCity: 'your city',
+    previewGenericTitle: 'Your {{city}} plan, ready to follow',
+    previewGenericSubtitle: 'Curated stops, timed and ordered for you.',
+    previewGenericHint: 'Built the moment you start.',
+    createPlan: 'Create my plan',
   },
   placeSearch: {
     placeholder: 'Search places in {{city}}...',

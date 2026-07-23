@@ -1,127 +1,108 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { router } from 'expo-router';
-import { useTranslation } from 'react-i18next';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { completeOnboarding } from '../../lib/onboarding-store';
-import { track } from '../../lib/analytics';
+import React, { useEffect, useState } from 'react';
+import { track, type OnboardingStepName } from '../../lib/analytics';
+import { completeOnboarding, setOnboardingPrefs } from '../../lib/onboarding-store';
+import { setSelectedCity } from '../../lib/trip-context-store';
 import { logger } from '../../lib/logger';
+import LoginScreen from '../login';
+import { OnboardingBackground } from '../../components/onboarding/OnboardingBackground';
+import { OnboardingValueScreen } from '../../components/onboarding/OnboardingValueScreen';
+import { OnboardingCityScreen } from '../../components/onboarding/OnboardingCityScreen';
+import { OnboardingTasteScreen } from '../../components/onboarding/OnboardingTasteScreen';
+import { OnboardingPreviewScreen } from '../../components/onboarding/OnboardingPreviewScreen';
 
 /**
- * Onboarding screen 1 — SKELETON (W1). Value proposition + a single CTA that
- * marks onboarding complete (guest enters the app) and a secondary link for
- * returning users to sign in.
+ * First-run onboarding flow (W2). Four screens — value, city, tastes, value
+ * preview — rendered directly by the root entry gate (no navigator mounted yet),
+ * as an internal step machine. "I already have an account" swaps to an inline
+ * login that can be dismissed back to the flow (fixes the W1 dead-end); a
+ * successful login flips `isAuthenticated`, re-rendering the gate into the app.
  *
- * The full 3–5 screen flow + dismissable timeline paywall lands in W2. Rendered
- * directly by the root entry gate (no navigator mounted yet), so `onSignIn` is
- * injected by the gate to swap to the login view; `router.push('/login')` is the
- * fallback for when this screen is reached as a real route (W2, inside a stack).
+ * The final "Create my plan" CTA marks onboarding complete (city already written
+ * to the trip context for preselection) and lands the guest in the app.
+ *
+ * PRODUCT DECISION TO FLAG (does not block): a brand-new user who taps "I already
+ * have an account" and then REGISTERS never sees these value screens — `login()`
+ * marks `onboarding_completed`. The UX study wants onboarding for EVERYONE, so
+ * this path skips the highest-leverage surface. Left for Pablo to decide whether
+ * an up-front registrant should be routed through onboarding first.
+ *
+ * W5 HOOK: the dismissable timeline paywall (step 5) slots into `finishOnboarding`
+ * between the preview CTA and completion. It depends on W4 (paywall) and ships in
+ * its own cycle, so today the flow completes straight through and reports
+ * `skippedPaywall: true`. When W5 lands, present the paywall there and pass its
+ * real outcome to the `onboarding_completed` event.
  */
-export default function OnboardingScreen({ onSignIn }: { onSignIn?: () => void }) {
-  const { t } = useTranslation();
 
+const STEP_NAMES: OnboardingStepName[] = ['value', 'city', 'interests', 'preview'];
+const TOTAL_STEPS = STEP_NAMES.length;
+
+export default function OnboardingScreen() {
+  const [stepIndex, setStepIndex] = useState(0);
+  const [showLogin, setShowLogin] = useState(false);
+  const [selectedCity, setSelectedCityState] = useState<string | null>(null);
+
+  // Fire `onboarding_started` once, on first mount.
   useEffect(() => {
     track({ event: 'onboarding_started' });
   }, []);
 
-  const handleGetStarted = () => {
-    track({ event: 'onboarding_completed' });
-    // Fire-and-forget persistence; the entry gate flips to the app as soon as
-    // the in-memory flag notifies subscribers.
-    completeOnboarding().catch((err) =>
-      logger.warn('onboarding: completeOnboarding failed', err),
+  // Fire `onboarding_step_viewed` whenever the active step changes (including the
+  // initial value screen). Toggling the inline login does not change stepIndex,
+  // so returning from login never re-fires it.
+  useEffect(() => {
+    track({ event: 'onboarding_step_viewed', step: STEP_NAMES[stepIndex] });
+  }, [stepIndex]);
+
+  const goTo = (index: number) => setStepIndex(index);
+
+  const handleSelectCity = (cityName: string, covered: boolean) => {
+    setSelectedCityState(cityName);
+    // Mirror to the trip context (preselection for chat/wizard once in the app)
+    // and to onboarding prefs (favouriteCity on the deferred profile sync).
+    setSelectedCity(cityName).catch((err) => logger.warn('onboarding: setSelectedCity failed', err));
+    setOnboardingPrefs({ city: cityName }).catch((err) =>
+      logger.warn('onboarding: persist city pref failed', err),
     );
+    track({ event: 'onboarding_city_selected', city: cityName, covered });
+    if (covered) goTo(2);
   };
 
-  const handleSignIn = () => {
-    if (onSignIn) {
-      onSignIn();
-      return;
-    }
-    router.push('/login');
+  const handleTasteContinue = (prefs: { interests: string[]; budget: string | null }) => {
+    setOnboardingPrefs({
+      interests: prefs.interests,
+      ...(prefs.budget ? { budget: prefs.budget } : {}),
+    }).catch((err) => logger.warn('onboarding: persist taste prefs failed', err));
+    goTo(3);
   };
+
+  const finishOnboarding = () => {
+    // W5 hook point — see the file header. Today: complete straight through.
+    track({ event: 'onboarding_completed', skippedPaywall: true });
+    // Fire-and-forget: the entry gate flips to the app as soon as the in-memory
+    // completion flag notifies subscribers.
+    completeOnboarding().catch((err) => logger.warn('onboarding: completeOnboarding failed', err));
+  };
+
+  if (showLogin) {
+    return <LoginScreen onClose={() => setShowLogin(false)} />;
+  }
 
   return (
-    <SafeAreaView style={s.root}>
-      <View style={s.content}>
-        <Image
-          source={require('../../assets/images/icon.png')}
-          style={s.logo}
-          resizeMode="contain"
-        />
-        <Text style={s.title}>{t('onboarding.title')}</Text>
-        <Text style={s.subtitle}>{t('onboarding.subtitle')}</Text>
-      </View>
-
-      <View style={s.footer}>
-        <TouchableOpacity
-          style={s.primaryBtn}
-          activeOpacity={0.85}
-          onPress={handleGetStarted}
-          accessibilityRole="button"
-          accessibilityLabel={t('onboarding.getStarted')}
-        >
-          <Text style={s.primaryBtnText}>{t('onboarding.getStarted')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={s.secondaryBtn}
-          activeOpacity={0.7}
-          onPress={handleSignIn}
-          accessibilityRole="button"
-          accessibilityLabel={t('onboarding.haveAccount')}
-        >
-          <Text style={s.secondaryBtnText}>{t('onboarding.haveAccount')}</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+    <OnboardingBackground
+      step={stepIndex}
+      totalSteps={TOTAL_STEPS}
+      onBack={stepIndex === 0 ? undefined : () => goTo(stepIndex - 1)}
+    >
+      {stepIndex === 0 && (
+        <OnboardingValueScreen onStart={() => goTo(1)} onSignIn={() => setShowLogin(true)} />
+      )}
+      {stepIndex === 1 && <OnboardingCityScreen onSelectCity={handleSelectCity} />}
+      {stepIndex === 2 && (
+        <OnboardingTasteScreen onContinue={handleTasteContinue} onSkip={() => goTo(3)} />
+      )}
+      {stepIndex === 3 && (
+        <OnboardingPreviewScreen city={selectedCity} onCreatePlan={finishOnboarding} />
+      )}
+    </OnboardingBackground>
   );
 }
-
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bgMain },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  logo: {
-    width: 140,
-    height: 140,
-    marginBottom: spacing.xl,
-  },
-  title: {
-    fontFamily: fonts.headingBold,
-    fontSize: 30,
-    color: colors.deepOcean,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  subtitle: {
-    fontFamily: fonts.body,
-    fontSize: 16,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  footer: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xl,
-    gap: spacing.md,
-  },
-  primaryBtn: {
-    backgroundColor: colors.electricBlue,
-    paddingVertical: 16,
-    borderRadius: borderRadius.lg,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-  },
-  primaryBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 17, color: '#FFFFFF' },
-  secondaryBtn: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  secondaryBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.electricBlue },
-});

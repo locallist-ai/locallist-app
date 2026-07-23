@@ -19,7 +19,6 @@ import { logger } from '../lib/logger';
 import { useOnboarding } from '../lib/onboarding-store';
 import { resolveEntryState, isGuestSession } from '../lib/entry-state';
 import { track } from '../lib/analytics';
-import LoginScreen from './login';
 import OnboardingScreen from './onboarding';
 
 // Initialize Sentry as early as possible
@@ -188,19 +187,10 @@ function EntryGate() {
   }
 
   if (entry === 'onboarding') {
-    return <OnboardingFlow />;
+    return <OnboardingScreen />;
   }
 
   return <AppStack />;
-}
-
-// First-run onboarding. Rendered directly by the entry gate (no navigator yet),
-// so "I already have an account" swaps to the login view inline; a successful
-// login flips `isAuthenticated`, re-rendering the gate into the app.
-function OnboardingFlow() {
-  const [showLogin, setShowLogin] = useState(false);
-  if (showLogin) return <LoginScreen />;
-  return <OnboardingScreen onSignIn={() => setShowLogin(true)} />;
 }
 
 function AppStack() {

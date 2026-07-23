@@ -6,6 +6,7 @@ import { logOutPurchases } from './purchases';
 import { parseAiPlansQuota, type AiPlansQuota } from './gate-errors';
 import { cancelTrialReminder } from './trial-reminder';
 import { completeOnboarding } from './onboarding-store';
+import { syncOnboardingPrefsToProfile } from './onboarding-sync';
 
 interface User {
   id: string;
@@ -105,6 +106,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await completeOnboarding();
     } catch (error) {
       logger.warn('completeOnboarding during login failed', error);
+    }
+    // Deferred sync of any guest onboarding prefs (city/budget) to the profile,
+    // then clear them. Best-effort: a failure must not fail the login (the prefs
+    // stay for the next attempt). Only the interactive login()/register path runs
+    // this — a cold-start auto-login is a returning user who already synced.
+    try {
+      await syncOnboardingPrefsToProfile();
+    } catch (error) {
+      logger.warn('onboarding prefs sync during login failed', error);
     }
     // Populate the quota right after an interactive login — the startup
     // auto-login effect only fires on cold start, so without this a freshly

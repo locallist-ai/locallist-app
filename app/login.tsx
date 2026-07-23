@@ -7,8 +7,11 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../lib/theme';
 import { useResponsive } from '../lib/responsive';
 import { useAuthForm } from '../lib/auth/useAuthForm';
@@ -18,8 +21,16 @@ import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
 import { EmailSignInButton } from '../components/auth/EmailSignInButton';
 import { CredentialsForm } from '../components/auth/CredentialsForm';
 
-export default function LoginScreen() {
+/**
+ * Login screen. Used both as a modal route (from inside the app, dismissed
+ * natively) and inline inside the first-run onboarding flow. In the inline case
+ * the flow passes `onClose` so the user can back out to the value screens — the
+ * fix for the W1 dead-end where "I already have an account" trapped the user with
+ * no way back short of authenticating or killing the app.
+ */
+export default function LoginScreen({ onClose }: { onClose?: () => void } = {}) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { compact } = useResponsive();
   const {
     step,
@@ -50,6 +61,18 @@ export default function LoginScreen() {
       style={s.root}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {onClose && (
+        <TouchableOpacity
+          style={[s.closeBtn, { top: insets.top + 8 }]}
+          onPress={onClose}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          testID="login-close"
+        >
+          <Ionicons name="chevron-back" size={26} color={colors.deepOcean} />
+        </TouchableOpacity>
+      )}
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <Image
           source={require('../assets/images/icon.png')}
@@ -112,6 +135,15 @@ export default function LoginScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bgMain },
+  closeBtn: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scroll: {
     flexGrow: 1,
     alignItems: 'center',

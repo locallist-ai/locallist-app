@@ -19,8 +19,25 @@ import { logger } from './logger';
 const COMPLETED_KEY = 'onboarding_completed';
 const PREFS_KEY = 'onboarding_prefs';
 
-/** Preferences captured during onboarding (filled in by the W2 flow). */
-export type OnboardingPrefs = Record<string, unknown>;
+/**
+ * Preferences captured during the onboarding flow (W2). Persisted as JSON under
+ * `onboarding_prefs`. While the user is a guest these pre-fill the wizard/chat
+ * (city is also mirrored to `trip-context-store` for preselection); on the first
+ * successful login they are pushed to `/me/profile` and cleared (see
+ * `lib/onboarding-sync.ts`). All fields optional — the flow is skippable.
+ */
+export interface OnboardingPrefs {
+  /** City picked on screen 2 (also mirrored to trip-context for preselection). */
+  city?: string;
+  /** Interest ids picked on screen 3 (e.g. 'food', 'outdoors'). */
+  interests?: string[];
+  /** Budget tier from screen 3 ('budget' | 'moderate' | 'premium'). */
+  budget?: string;
+  /** Pace preference — reserved for an alternate screen-3 control. */
+  pace?: string;
+  /** Dietary restriction ids — reserved. */
+  dietary?: string[];
+}
 
 let _completed = false;
 let _prefs: OnboardingPrefs = {};
@@ -74,6 +91,17 @@ export async function completeOnboarding(prefs?: OnboardingPrefs): Promise<void>
 export async function setOnboardingPrefs(prefs: OnboardingPrefs): Promise<void> {
   _prefs = { ..._prefs, ...prefs };
   await SafeStore.setItemAsync(PREFS_KEY, JSON.stringify(_prefs));
+  _emit();
+}
+
+/**
+ * Wipe the persisted onboarding preferences (leaves the completion flag intact).
+ * Called after the deferred sync to `/me/profile` succeeds on first login, so a
+ * signed-in user never keeps stale guest prefs around.
+ */
+export async function clearOnboardingPrefs(): Promise<void> {
+  _prefs = {};
+  await SafeStore.deleteItemAsync(PREFS_KEY);
   _emit();
 }
 
