@@ -278,7 +278,10 @@ it('cambio de identidad ELIGIBLE→INELIGIBLE con el paywall montado: ningún pa
   mockCheckEligibility.mockReturnValueOnce(new Promise((r) => { resolveU2 = r; }));
 
   // Cambia la sesión a u2 (INELIGIBLE): el paywall re-corre load() con la nueva
-  // identidad y refresca las offerings (mismo productId, mismo precio).
+  // identidad y refresca las offerings (mismo productId/precio, pero array
+  // FRESCO como devuelve RevenueCat en la práctica — nueva referencia que
+  // re-dispara el effect de elegibilidad).
+  mockGetOfferings.mockResolvedValue({ packages: [MONTHLY, ANNUAL], error: null });
   mockUseAuth.mockReturnValue({ user: { id: 'u2', tier: 'free' }, isPro: false, refreshUser });
   rerender(<PaywallScreen />);
 
