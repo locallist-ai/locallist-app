@@ -2,12 +2,15 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ImpactFeedbackStyle } from 'expo-haptics';
-import { api } from '../../lib/api';
+import { api, getAccessToken } from '../../lib/api';
 import { track } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan/plan-store';
-import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX, tierFromBudgetAmount } from './constants';
+import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX, tierFromBudgetAmount, maxDaysForTier } from './constants';
 import { useTripContext } from '../../lib/trip-context-store';
+import { useAuth } from '../../lib/auth';
+import { useGateHandler } from '../../lib/useGateHandler';
+import { mapGateError, parseClampedHint, type AiPlansQuota } from '../../lib/gate-errors';
 import type { BuilderResponse } from '../../lib/types';
 
 // ── Return type ──
@@ -65,6 +68,13 @@ export interface UseWizardResult {
   selectCompany: (id: string) => void;
   /** Ciudad seleccionada (step 0). */
   city: string | null;
+
+  /** Selecciona el nº de días del viaje (step 1). Escribe selections[0]. */
+  handleSelectDays: (days: number) => void;
+  /** Cuota mensual de planes IA ({used,limit,resetsAt}) o null si el backend no la expone. */
+  aiPlansMonth: AiPlansQuota | null;
+  /** True para usuarios Plus — habilita hasta 14 días en el picker de duración. */
+  isPro: boolean;
 }
 
 // ── Hook ──
@@ -72,7 +82,15 @@ export interface UseWizardResult {
 export const useWizard = (): UseWizardResult => {
   const { t } = useTranslation();
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Synchronous double-tap guard, mirror del chat (app/chat/index.tsx). `loading`
+  // vive en el closure y llega stale entre dos taps del mismo frame; el await de
+  // getAccessToken() abajo garantiza el yield y ensancha la ventana. Este ref se
+  // reclama SÍNCRONAMENTE al entrar en handleGenerate, antes de cualquier await,
+  // para que dos taps no disparen ambos un POST /builder/chat (quema 2 planes).
+  const pendingRef = useRef(false);
   const { city: tripCity } = useTripContext();
+  const { isPro, aiPlansMonth, refreshAiPlansQuota } = useAuth();
+  const { presentGate, presentClamped } = useGateHandler();
 
   // City is pre-selected via the city-picker home screen; wizard starts at step 1.
   const [step, setStep] = useState(1);
@@ -192,6 +210,18 @@ export const useWizard = (): UseWizardResult => {
     // explícitamente. Antes había setTimeout(advanceToNext, 350).
   }, [step]);
 
+  // Duration step (step 1) usa DurationStep con pills numéricos (1..14 según
+  // tier), en vez de las 3 cards legacy. Escribimos selections[0] como string
+  // del nº de días para conservar el payload existente (daysFromDuration parsea).
+  const handleSelectDays = useCallback((days: number) => {
+    hapticImpact(ImpactFeedbackStyle.Light);
+    setSelections((prev) => {
+      const next = [...prev];
+      next[0] = String(days);
+      return next;
+    });
+  }, []);
+
   // Selector de parent con drill-down. RefineableStep llama este handler
   // cuando el usuario tap un parent — NO auto-advance aquí, el sheet del
   // RefineableStep maneja el continue. Al cambiar de parent, reseteamos los
@@ -238,7 +268,12 @@ export const useWizard = (): UseWizardResult => {
   }, []);
 
   const handleGenerate = useCallback(async () => {
-    if (loading) return;
+    if (loading || pendingRef.current) return;
+
+    // Claim the synchronous double-tap guard BEFORE any await (the token read
+    // below yields): two taps in the same batch must not both slip through and
+    // fire two POST /builder/chat, each burning a free monthly plan.
+    pendingRef.current = true;
 
     // Client-side validation — espejo de ValidateMinimumInput del backend (PR #48 api-net).
     // Evita roundtrip innecesario al backend cuando sabemos que va a devolver 400.
@@ -251,8 +286,25 @@ export const useWizard = (): UseWizardResult => {
     const wizardSignals = [hasCity, hasDays, hasGroupType, hasBudget, hasInterests]
       .filter(Boolean).length;
     if (wizardSignals < 3) {
+      pendingRef.current = false;
       hapticImpact(ImpactFeedbackStyle.Heavy);
       setError(t('wizard.errorInsufficientInput'));
+      return;
+    }
+
+    // Generation is `[Authorize]` on the backend. Gate on TOKEN PRESENCE, not on
+    // the in-memory `user`: a transient `/account` failure at startup leaves
+    // `user` null while the token still lives in SecureStore and `api()` keeps
+    // sending it (G1). A returning user must never be walled out of generation by
+    // that blip. A real guest has no token → prompt signup; an expired token
+    // still round-trips and is handled by the 401 fallback below.
+    const token = await getAccessToken();
+    if (!token) {
+      pendingRef.current = false;
+      hapticImpact(ImpactFeedbackStyle.Heavy);
+      // Signup is a gate, not an error: show ONLY the Alert, never the error
+      // overlay with a Retry that would just re-trigger the same wall (g2).
+      presentGate({ type: 'signup_required' });
       return;
     }
 
@@ -260,12 +312,14 @@ export const useWizard = (): UseWizardResult => {
     setLoading(true);
     hapticImpact(ImpactFeedbackStyle.Medium);
 
-    // Backend's TripContextDto has `Days: int? [Range(1,7)]`, not `duration`.
-    // Duration option ids are stringified integers ("1" | "2" | "3") — parse to int.
+    // Duration cap mirrors the backend Plus gate: free = 3 days, Plus = 14.
+    // Duration ids are stringified integers ("1".."14") — parse and clamp to
+    // the tier's max. The picker already gates the UI, this is defence in depth.
+    const maxDays = maxDaysForTier(isPro);
     const daysFromDuration = (id: string | null | undefined): number | undefined => {
       if (!id) return undefined;
       const n = parseInt(id, 10);
-      return Number.isFinite(n) && n >= 1 && n <= 7 ? n : undefined;
+      return Number.isFinite(n) && n >= 1 && n <= maxDays ? n : undefined;
     };
 
     // El tripContext recoge TODAS las señales capturadas por el wizard para que el
@@ -310,13 +364,25 @@ export const useWizard = (): UseWizardResult => {
         logger.debug('[builder/chat] RESPONSE body', res.data);
         track({ event: 'wizard_completed', planId: res.data.plan.id, city: res.data.plan.city, days: res.data.plan.durationDays });
         setPreviewPlan(res.data);
+        // A free plan may have its duration clamped to the cap — surface a soft
+        // upsell (non-blocking) over the preview. Tolerant hint parse (m3).
+        const clamped = parseClampedHint(res.data);
         router.push('/plan/preview');
+        if (clamped) presentClamped(clamped.appliedDays ?? res.data.plan.durationDays);
+        // A successful generation consumes one of the free monthly plans —
+        // refresh the quota so the "X of N" line reflects it (g3).
+        void refreshAiPlansQuota();
       } else {
         logger.debug('[builder/chat] ERROR body', res.errorBody);
-        // 429 = rate limit. Builder limita planes por hora (ver
-        // locallist-api-net Program.cs rate limiter). Mensaje específico
-        // amigable en vez del genérico.
-        if (res.status === 429) {
+        // Centralised gate mapping: 401 → signup, 403 structured → upsell,
+        // 429 daily_cap → soft throttle (Plus, no upsell), else rate_limit/generic.
+        const action = mapGateError(res.status, res.errorBody);
+        if (action.type === 'signup_required' || action.type === 'upsell' || action.type === 'soft_throttle') {
+          // Gate states (signup / monetization upsell / soft-throttle) surface
+          // ONLY their Alert. They must not land in the generic error overlay,
+          // whose Retry would just re-fire the same gate (g2).
+          presentGate(action);
+        } else if (action.type === 'rate_limit') {
           setError(t('wizard.errorRateLimit'));
         } else {
           setError(res.error ?? t('wizard.errorDefault'));
@@ -326,9 +392,10 @@ export const useWizard = (): UseWizardResult => {
       logger.error('[builder/chat] THROW', e);
       setError(t('wizard.errorDefault'));
     } finally {
+      pendingRef.current = false;
       setLoading(false);
     }
-  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, companySubs, t]);
+  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, companySubs, t, isPro, presentGate, presentClamped, refreshAiPlansQuota]);
 
   // Mantener el ref siempre apuntando al último handleGenerate. advanceToNext
   // lo invoca cuando el usuario completa el último step de prefs y necesitamos
@@ -363,5 +430,8 @@ export const useWizard = (): UseWizardResult => {
     setCompanySubs,
     selectCompany,
     city,
+    handleSelectDays,
+    aiPlansMonth,
+    isPro,
   };
 };

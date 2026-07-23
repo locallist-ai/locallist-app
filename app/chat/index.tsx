@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { chatTurn, chatGenerate, deleteChatSession, upsertProfile } from '../../lib/api';
+import { chatTurn, chatGenerate, deleteChatSession, upsertProfile, getAccessToken } from '../../lib/api';
 import { getSavedSessionId, saveSessionId, clearSessionId } from '../../lib/chat-store';
 import { BlurView } from 'expo-blur';
 import { MessageBubble } from '../../components/chat/MessageBubble';
@@ -31,6 +31,8 @@ import { SaveProfileSheet } from '../../components/chat/SaveProfileSheet';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { TypingDots } from '../../components/home/TypingDots';
 import { useAuth } from '../../lib/auth';
+import { useGateHandler } from '../../lib/useGateHandler';
+import { mapGateError, parseClampedHint } from '../../lib/gate-errors';
 import { track, countFilledSlots } from '../../lib/analytics';
 import { useTripContext } from '../../lib/trip-context-store';
 import type { ChatMessage, ChatSlots, QuickReply, BuilderResponse } from '../../lib/types';
@@ -44,7 +46,8 @@ export default function ChatScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isPro, aiPlansMonth, refreshAiPlansQuota } = useAuth();
+  const { presentGate, presentClamped } = useGateHandler();
   const { city: preSeededCity } = useTripContext();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -289,7 +292,22 @@ export default function ChatScreen() {
 
   const handleGenerate = useCallback(async () => {
     if (!sessionId || pendingRef.current || generating) return;
+
+    // Claim the synchronous double-tap guard BEFORE any await (the token read
+    // below yields): two taps in the same batch must not both slip through.
     pendingRef.current = true;
+
+    // Generation is `[Authorize]` on the backend. Gate on TOKEN PRESENCE, not on
+    // the in-memory `user`: a transient `/account` failure at startup leaves
+    // `user` null while the token still lives in SecureStore (G1). A real guest
+    // has no token → prompt signup; an expired token is caught by the 401 map.
+    const token = await getAccessToken();
+    if (!token) {
+      pendingRef.current = false;
+      presentGate({ type: 'signup_required' });
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGenerating(true);
 
@@ -311,7 +329,14 @@ export default function ChatScreen() {
               { text: t('chat.cityUnsupportedCta'), onPress: handleSwitchCity },
             ],
           );
-        } else if (result.status === 429) {
+          return;
+        }
+        // Centralised gate mapping: 401 → signup, 403 structured → upsell,
+        // 429 daily_cap → soft throttle (Plus, no upsell), else rate_limit/generic.
+        const action = mapGateError(result.status, result.errorBody);
+        if (action.type === 'signup_required' || action.type === 'upsell' || action.type === 'soft_throttle') {
+          presentGate(action);
+        } else if (action.type === 'rate_limit') {
           Alert.alert(t('chat.rateLimitTitle'), t('chat.rateLimitBody'));
         } else {
           Alert.alert(t('common.somethingWentWrong'), t('common.unexpectedError'));
@@ -322,6 +347,14 @@ export default function ChatScreen() {
       const plan = (result.data as BuilderResponse).plan;
       track({ event: 'chat_generated', sessionId: sessionId!, planId: plan.id, turnCount });
       await clearSessionId();
+
+      // Soft upsell if the plan's duration was clamped to the free cap (`clamped`).
+      const clamped = parseClampedHint(result.data);
+      if (clamped) presentClamped(clamped.appliedDays ?? plan.durationDays);
+
+      // A successful generation consumes one of the free monthly plans — refresh
+      // the quota so the "X of N" line stays current for the rest of the session (g3).
+      void refreshAiPlansQuota();
 
       // Offer to save profile preferences if user is authenticated and has meaningful slots
       if (isAuthenticated && (slots.groupType || slots.pace || slots.budget || slots.dietary?.length)) {
@@ -334,7 +367,7 @@ export default function ChatScreen() {
       pendingRef.current = false;
       setGenerating(false);
     }
-  }, [sessionId, generating, slots, turnCount, isAuthenticated, handleSwitchCity, t]);
+  }, [sessionId, generating, slots, turnCount, isAuthenticated, handleSwitchCity, t, presentGate, presentClamped, refreshAiPlansQuota]);
 
   const handleReset = useCallback(() => {
     setResetConfirmVisible(true);
@@ -485,6 +518,13 @@ export default function ChatScreen() {
           </View>
         )}
 
+        {/* Monthly AI-plan quota — free users only, when the backend exposes it. */}
+        {ready && !loading && !isPro && aiPlansMonth && (
+          <Text style={styles.quotaText}>
+            {t('gate.quotaRemaining', { used: aiPlansMonth.used, limit: aiPlansMonth.limit })}
+          </Text>
+        )}
+
         {/* Ready CTA */}
         {ready && !loading && (
           <TouchableOpacity
@@ -633,6 +673,17 @@ const styles = StyleSheet.create({
   typingBubbleInner: {
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  quotaText: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.75)',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 2,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   buildBtn: {
     marginHorizontal: 16,

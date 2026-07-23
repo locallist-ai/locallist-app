@@ -3,6 +3,7 @@ import { api, setTokens, clearTokens, getAccessToken } from './api';
 import { logger } from './logger';
 import { setAnalyticsUserId } from './analytics';
 import { logOutPurchases } from './purchases';
+import { parseAiPlansQuota, type AiPlansQuota } from './gate-errors';
 import { cancelTrialReminder } from './trial-reminder';
 
 interface User {
@@ -20,6 +21,12 @@ interface AuthContextType {
   /** True when logged-in user is a founder (@locallist.ai). Enables dev tools. */
   isAdmin: boolean;
   isLoading: boolean;
+  /**
+   * Monthly AI-plan quota from `GET /account` ({used, limit, resetsAt}), or
+   * null until the backend exposes it (api-gates-fixes.md m4). Free-tier UI
+   * uses it to show "X of N plans this month".
+   */
+  aiPlansMonth: AiPlansQuota | null;
   login: (userData: User, accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
   /**
@@ -27,6 +34,12 @@ interface AuthContextType {
    * flips the tier server-side). Returns the fresh tier, or null on failure.
    */
   refreshUser: () => Promise<'free' | 'pro' | null>;
+  /**
+   * Re-fetch `GET /account` and refresh `aiPlansMonth`. Best-effort (never
+   * throws). Called after an interactive `login()` and after a successful
+   * generation so the "X of N plans" line reflects the latest usage (g3).
+   */
+  refreshAiPlansQuota: () => Promise<void>;
   /** Override tier locally for testing. Pass null to reset to real tier. */
   setTierOverride: (tier: 'free' | 'pro' | null) => void;
 }
@@ -44,9 +57,11 @@ const AuthContext = createContext<AuthContextType>({
   isPro: false,
   isAdmin: false,
   isLoading: true,
+  aiPlansMonth: null,
   login: async () => { },
   logout: async () => { },
   refreshUser: async () => null,
+  refreshAiPlansQuota: async () => { },
   setTierOverride: () => { },
 });
 
@@ -58,15 +73,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [tierOverride, setTierOverride] = useState<'free' | 'pro' | null>(null);
+  const [aiPlansMonth, setAiPlansMonth] = useState<AiPlansQuota | null>(null);
 
   const isAdmin = !!user?.email?.endsWith(ADMIN_DOMAIN);
   const effectiveTier = tierOverride ?? user?.tier ?? 'free';
+
+  // Best-effort refresh of the monthly AI-plan quota from `GET /account`. Kept
+  // separate from `refreshUser` so callers can update just the quota (after a
+  // generation) without re-touching user/tier. Never throws.
+  const refreshAiPlansQuota = useCallback(async () => {
+    try {
+      const res = await api<{ user: User }>('/account');
+      setAiPlansMonth(parseAiPlansQuota(res.data));
+    } catch (error) {
+      logger.warn('refreshAiPlansQuota failed', error);
+    }
+  }, []);
 
   const login = useCallback(async (userData: User, accessToken: string, refreshToken: string) => {
     await setTokens(accessToken, refreshToken);
     setAnalyticsUserId(userData.id);
     setUser(userData);
-  }, []);
+    // Populate the quota right after an interactive login — the startup
+    // auto-login effect only fires on cold start, so without this a freshly
+    // registered free user never sees their "X of N plans" line (g3).
+    await refreshAiPlansQuota();
+  }, [refreshAiPlansQuota]);
 
   const logout = useCallback(async () => {
     // La sesión muere ANTES de tocar RevenueCat y sin ningún await entre la
@@ -75,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // sesión aún "viva" y re-adoptar la identidad RC recién desvinculada.
     setUser(null);
     setTierOverride(null);
+    setAiPlansMonth(null);
     setAnalyticsUserId(null);
     // logOutPurchases es síncrona y por contrato no lanza (la llamada de red
     // del SDK va encolada en fire-and-forget); el try/catch es defensa extra:
@@ -124,6 +157,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (res.data?.user) {
           setAnalyticsUserId(res.data.user.id);
           setUser(res.data.user);
+          // Tolerant parse — quota field is optional until api m4 ships.
+          setAiPlansMonth(parseAiPlansQuota(res.data));
         }
       } catch (error) {
         logger.warn('Auto-login failed, starting fresh', error);
@@ -142,9 +177,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isPro: effectiveTier === 'pro',
         isAdmin,
         isLoading,
+        aiPlansMonth,
         login,
         logout,
         refreshUser,
+        refreshAiPlansQuota,
         setTierOverride,
       },
     },

@@ -9,7 +9,7 @@
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { AuthProvider, useAuth } from '../auth';
-import { clearTokens } from '../api';
+import { api, clearTokens } from '../api';
 import { logOutPurchases } from '../purchases';
 import { cancelTrialReminder } from '../trial-reminder';
 
@@ -26,6 +26,7 @@ jest.mock('../logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
+const mockApi = api as jest.Mock;
 const mockLogOutPurchases = logOutPurchases as jest.Mock;
 const mockClearTokens = clearTokens as jest.Mock;
 const mockCancelTrialReminder = cancelTrialReminder as jest.Mock;
@@ -48,6 +49,32 @@ async function renderAuthedSession() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Por defecto /account no expone cuota; los tests de g3 la sobreescriben.
+  mockApi.mockResolvedValue({ data: null });
+});
+
+// g3: el login interactivo puebla aiPlansMonth (antes solo lo hacía el
+// auto-login de arranque, así que un free recién registrado nunca veía su cuota).
+it('login puebla aiPlansMonth desde GET /account', async () => {
+  mockApi.mockResolvedValue({
+    data: { user: USER, aiPlansMonth: { used: 1, limit: 3, resetsAt: '2026-08-01T00:00:00Z' } },
+  });
+  const { result } = await renderAuthedSession();
+
+  expect(mockApi).toHaveBeenCalledWith('/account');
+  expect(result.current.aiPlansMonth).toEqual({ used: 1, limit: 3, resetsAt: '2026-08-01T00:00:00Z' });
+});
+
+// refreshAiPlansQuota es best-effort: un fallo de /account no rompe la sesión.
+it('refreshAiPlansQuota traga errores de /account (best-effort)', async () => {
+  const { result } = await renderAuthedSession();
+  mockApi.mockRejectedValueOnce(new Error('network blip'));
+
+  await act(async () => {
+    await result.current.refreshAiPlansQuota();
+  });
+
+  expect(result.current.isAuthenticated).toBe(true);
 });
 
 it('logout desvincula la identidad de RevenueCat además de limpiar tokens y usuario', async () => {

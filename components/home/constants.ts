@@ -41,6 +41,14 @@ export const DURATION_OPTIONS: StepOption[] = [
   { id: '3', icon: require('../../assets/images/icon_3days.png'), labelKey: 'wizard.duration3Days', emoji: '\u{1F33C}', iconName: 'numeric-3-circle-outline' },
 ];
 
+// Trip-duration caps, mirrored from the backend Plus gate (api-net):
+// free accounts top out at 3 days; Plus unlocks up to 14. `daysFromDuration`
+// clamps to these, and DurationStep offers day pills up to the tier's cap
+// (free users see 4-14 as a locked upsell affordance).
+export const FREE_MAX_DAYS = 3;
+export const PLUS_MAX_DAYS = 14;
+export const maxDaysForTier = (isPro: boolean): number => (isPro ? PLUS_MAX_DAYS : FREE_MAX_DAYS);
+
 export const COMPANY_OPTIONS: StepOption[] = [
   { id: 'solo', icon: require('../../assets/images/icon_solo.png'), labelKey: 'wizard.companySolo', emoji: '\u{1F9D1}', iconName: 'account' },
   { id: 'couple', icon: require('../../assets/images/icon_couple.png'), labelKey: 'wizard.companyCouple', emoji: '❤️', iconName: 'account-heart' },
