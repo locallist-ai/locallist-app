@@ -16,6 +16,7 @@ import {
   formatDayDate,
   formatFullDate,
   clampIso,
+  clampToTripWindow,
 } from '../dates';
 
 describe('toIsoDate / todayIso (local, sin drift)', () => {
@@ -137,5 +138,44 @@ describe('clampIso', () => {
   });
   it('deja pasar una fecha dentro del rango', () => {
     expect(clampIso('2026-08-01', '2026-06-10', '2027-06-10')).toBe('2026-08-01');
+  });
+});
+
+describe('clampToTripWindow (normaliza a [hoy, hoy+365] como el backend)', () => {
+  // `now` inyectado: 23 jul 2026 (local). Ventana válida: [2026-07-23, 2027-07-23].
+  const now = new Date(2026, 6, 23);
+
+  it('una fecha rancia en el PASADO se normaliza a HOY (nunca sale fuera de ventana → no 400)', () => {
+    expect(clampToTripWindow('2020-01-01', now)).toBe('2026-07-23');
+    // el caso real del bug: elegida días atrás, hoy ya es pasada
+    expect(clampToTripWindow('2026-07-20', now)).toBe('2026-07-23');
+  });
+
+  it('conserva intacta una fecha futura dentro de la ventana', () => {
+    expect(clampToTripWindow('2026-09-01', now)).toBe('2026-09-01');
+    // día de HOY: se conserva (límite inferior inclusivo)
+    expect(clampToTripWindow('2026-07-23', now)).toBe('2026-07-23');
+  });
+
+  it('el máximo = hoy+365 DÍAS exacto (== backend today.AddDays(365)); frontera seleccionable, +1 no (m2)', () => {
+    expect(clampToTripWindow('2027-07-23', now)).toBe('2027-07-23'); // frontera, se conserva
+    expect(clampToTripWindow('2027-07-24', now)).toBe('2027-07-23'); // +1 día → clamp al máximo
+    expect(clampToTripWindow('2030-01-01', now)).toBe('2027-07-23'); // muy lejos → clamp al máximo
+  });
+
+  it('input ausente/malformado cae a hoy (nunca null, nunca crash)', () => {
+    expect(clampToTripWindow(null, now)).toBe('2026-07-23');
+    expect(clampToTripWindow(undefined, now)).toBe('2026-07-23');
+    expect(clampToTripWindow('2026-02-31', now)).toBe('2026-07-23'); // imposible → hoy
+    expect(clampToTripWindow('garbage', now)).toBe('2026-07-23');
+  });
+
+  it('AÑO BISIESTO: hoy=29-feb-2028 → max = hoy+365 = 2029-02-28 válido (sin desbordar a 2029-02-29)', () => {
+    // Es la aritmética que sostiene `StartDateField.defaultMax()`: `y+1` daba
+    // "2029-02-29" (inexistente) y crasheaba el picker; con +365 días es 2029-02-28.
+    const leap = new Date(2028, 1, 29); // 29 feb 2028 (bisiesto)
+    expect(clampToTripWindow('2030-01-01', leap)).toBe('2029-02-28'); // clamp al max válido
+    expect(clampToTripWindow('2029-02-28', leap)).toBe('2029-02-28'); // frontera se conserva
+    expect(clampToTripWindow('2028-01-01', leap)).toBe('2028-02-29'); // pasada → hoy (29-feb)
   });
 });

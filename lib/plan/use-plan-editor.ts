@@ -1,5 +1,6 @@
 import { useReducer, useCallback, useEffect, useState, useRef } from 'react';
 import { api } from '../api';
+import { clampToTripWindow } from '../dates';
 import type { Place, PlanStop, PlanDetailResponse, StopInput } from '../types';
 
 export type DayGroup = {
@@ -271,8 +272,14 @@ export function usePlanEditor(planId: string, opts: UsePlanEditorOpts = {}) {
           city: newPlanConfig.city,
           durationDays: newPlanConfig.durationDays,
           // Fecha de inicio del viaje (`yyyy-MM-dd`), siempre presente. Aditivo:
-          // el backend la persiste como StartDate del plan (API-3).
-          startDate: newPlanConfig.startDate,
+          // el backend la persiste como StartDate del plan (API-3). Clamp
+          // defensivo: `newPlanConfig.startDate` viaja como param de navegación
+          // (snapshot del builder), así que la re-normalizamos a [hoy, hoy+365]
+          // antes de enviar para que una fecha rancia no dé 400 invalid_start_date.
+          startDate:
+            newPlanConfig.startDate != null
+              ? clampToTripWindow(newPlanConfig.startDate)
+              : undefined,
         },
       });
 

@@ -50,4 +50,35 @@ describe('StartDateField', () => {
 
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  // m1: la ruta por DEFECTO (sin minIso/maxIso → usa `defaultMax()`). Con la
+  // aritmética antigua `y+1` misma MM-dd, hoy=29-feb-2028 → maxIso="2029-02-29"
+  // (inexistente) → `monthIndex` hacía `parseIsoDate(iso)!` → `null.getFullYear()`
+  // → TypeError al ABRIR el picker (crash para TODOS ese día). Con `addDaysIso`
+  // el max es 2029-02-28 y el picker abre sin crash.
+  describe('m1: abre en año bisiesto (29-feb) por la ruta defaultMax() sin crash', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(2028, 1, 29)); // 29 feb 2028 (bisiesto)
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('no crashea al abrir y permite seleccionar el día de hoy (29-feb)', () => {
+      const onChange = jest.fn();
+      // SIN minIso/maxIso → ejercita defaultMax()/todayIso() reales (el crash).
+      render(<StartDateField value="2028-02-29" onChange={onChange} />);
+
+      // Abrir el picker: antes del fix, este render interno lanzaba TypeError.
+      fireEvent.press(screen.getByTestId('start-date-field'));
+
+      // El calendario abrió en el mes del valor (feb 2028) y renderizó el día.
+      const todayCell = screen.getByTestId('date-cell-2028-02-29');
+      expect(todayCell).toBeTruthy();
+
+      fireEvent.press(todayCell);
+      expect(onChange).toHaveBeenCalledWith('2028-02-29');
+    });
+  });
 });

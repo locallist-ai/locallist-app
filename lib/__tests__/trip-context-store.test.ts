@@ -18,7 +18,7 @@
  */
 
 import { renderHook, act, waitFor } from '@testing-library/react-native';
-import { todayIso } from '../dates';
+import { todayIso, addDaysIso } from '../dates';
 
 const CITY_KEY = 'locallist_selected_city';
 const START_DATE_KEY = 'locallist_trip_start_date';
@@ -112,6 +112,24 @@ describe('trip-context-store (secuencial: misma instancia de módulo)', () => {
     expect(result.current.city).toBeNull();
     expect(store.getSelectedCitySync()).toBeNull();
     expect(safeStore.deleteItemAsync).toHaveBeenCalledWith(CITY_KEY);
+  });
+
+  it('M4: fecha rancia persistida (en el pasado) se normaliza a HOY al leer; una futura válida se conserva', async () => {
+    // Repro del bug: el usuario eligió una fecha que, días después, ya es pasada.
+    // El getter efectivo la clampa a hoy → nunca se lee (ni se enviaría) fuera de
+    // la ventana [hoy, hoy+365] del backend (→ no 400 invalid_start_date).
+    await act(async () => { await store.setStartDate('2020-01-01'); });
+    expect(store.getStartDateSync()).toBe(todayIso());
+
+    const { result } = renderHook(() => store.useTripContext());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.startDate).toBe(todayIso());
+
+    // Una fecha futura dentro de la ventana se conserva intacta (no se toca).
+    const future = addDaysIso(todayIso(), 30)!;
+    await act(async () => { await store.setStartDate(future); });
+    expect(store.getStartDateSync()).toBe(future);
+    await waitFor(() => expect(result.current.startDate).toBe(future));
   });
 
   it('un hook montado tras la hidratación no pasa por loading', async () => {

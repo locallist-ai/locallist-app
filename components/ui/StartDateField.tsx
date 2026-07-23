@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { formatFullDate, todayIso } from '../../lib/dates';
+import { formatFullDate, todayIso, addDaysIso } from '../../lib/dates';
 import { DatePickerSheet } from './DatePickerSheet';
 
 interface StartDateFieldProps {
@@ -19,9 +19,15 @@ interface StartDateFieldProps {
   label?: string;
 }
 
+// Max selectable date = today + 365 DAYS (real day arithmetic), matching the
+// backend `IsStartDateWithinWindow` (`today.AddDays(365)`) exactly. Calendar
+// arithmetic (`year+1` with the same MM-dd) produced an impossible date on a leap
+// day (today=2028-02-29 → "2029-02-29", not a real date) that crashed the picker,
+// and drifted one day off the backend around leap years. Falls back to today only
+// if `todayIso()` were ever malformed (it never is).
 function defaultMax(): string {
-  const d = new Date();
-  return `${d.getFullYear() + 1}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const today = todayIso();
+  return addDaysIso(today, 365) ?? today;
 }
 
 /**

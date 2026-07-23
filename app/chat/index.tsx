@@ -317,6 +317,9 @@ export default function ChatScreen() {
       // (default hoy, editable en el wizard) como `yyyy-MM-dd` para que el plan
       // sea viable ese día. Campo aditivo: el backend genera desde los slots de
       // la sesión y puede consumir StartDate cuando lo lea del request.
+      // `getStartDateSync()` ya normaliza a la ventana [hoy, hoy+365] al leer
+      // (una fecha rancia persistida resuelve a HOY), así que lo que se serializa
+      // nunca llega al backend fuera de rango (→ no 400 invalid_start_date).
       const result = await chatGenerate({ sessionId, startDate: getStartDateSync() });
 
       if (result.error || !result.data) {

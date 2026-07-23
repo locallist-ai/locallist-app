@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as SafeStore from './safe-store';
-import { todayIso } from './dates';
+import { clampToTripWindow } from './dates';
 
 const CITY_KEY = 'locallist_selected_city';
 const START_DATE_KEY = 'locallist_trip_start_date';
@@ -15,9 +15,15 @@ let _initialized = false;
 let _initPromise: Promise<void> | null = null;
 const _subs = new Set<() => void>();
 
-/** Effective start date: the stored one, or today when unset. Never null. */
+/**
+ * Effective start date: the stored one, or today when unset. Never null, and
+ * ALWAYS normalized into the valid `[today, today+365]` window: a date chosen on
+ * a previous day that is now in the past resolves to TODAY here, so a rancid
+ * persisted value is never read (or later sent) out-of-window. The persisted raw
+ * value is left untouched; only the effective read is clamped.
+ */
 export function getStartDateSync(): string {
-  return _startDate ?? todayIso();
+  return clampToTripWindow(_startDate);
 }
 
 function _ensureInitialized(): Promise<void> {

@@ -107,3 +107,20 @@ export function clampIso(iso: string, minIso: string, maxIso: string): string {
   if (iso > maxIso) return maxIso;
   return iso;
 }
+
+/**
+ * Normalize a start date into the valid trip window `[today, today+365]`,
+ * mirroring the backend `IsStartDateWithinWindow`. A stale persisted date in the
+ * past (e.g. chosen days ago) normalizes to TODAY so it never reaches the backend
+ * out-of-window (→ no `400 invalid_start_date`); a date past the +365 horizon
+ * clamps to `today+365`; a valid in-window date is preserved. Missing/malformed
+ * input falls back to today. `now` is injectable for tests. This is the single
+ * place that couples the app's window to the backend's: call it at READ and
+ * before every SEND so a rancid date can never block generation.
+ */
+export function clampToTripWindow(iso: string | null | undefined, now: Date = new Date()): string {
+  const today = todayIso(now);
+  const max = addDaysIso(today, 365) ?? today;
+  if (!iso || !parseIsoDate(iso)) return today;
+  return clampIso(iso, today, max);
+}

@@ -357,6 +357,9 @@ export const useWizard = (): UseWizardResult => {
         // La fecha de inicio SIEMPRE se envía (default hoy, editable en el
         // DurationStep) como `yyyy-MM-dd`. El backend genera un plan viable para
         // ese día (no manda a sitios cerrados) vía TripContextDto.StartDate.
+        // `tripStartDate` viene de `useTripContext`, que ya normaliza a la ventana
+        // [hoy, hoy+365] al leer (getStartDateSync), así que una fecha rancia
+        // resuelve a HOY y nunca llega al backend fuera de rango (→ no 400).
         startDate: tripStartDate,
         groupType: selections[1] ?? 'solo',
         days: daysFromDuration(selections[0]),

@@ -25,8 +25,12 @@ interface DatePickerSheetProps {
 
 const WEEKDAY_REF = new Date(2024, 5, 2); // a Sunday (2 Jun 2024) → build Sun..Sat labels
 
+// Month ordinal (year*12 + month) used only to enable/disable the prev/next
+// arrows. Never assert non-null on the parsed bound: a malformed `minIso`/`maxIso`
+// used to crash the whole picker on open (`null.getFullYear()`). Fall back to
+// today's month so the picker still opens and simply doesn't over-constrain nav.
 function monthIndex(iso: string): number {
-  const d = parseIsoDate(iso)!;
+  const d = parseIsoDate(iso) ?? parseIsoDate(todayIso())!;
   return d.getFullYear() * 12 + d.getMonth();
 }
 
