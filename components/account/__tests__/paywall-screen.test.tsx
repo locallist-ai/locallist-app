@@ -13,11 +13,13 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import PaywallScreen from '../../../app/paywall';
+import { useLocalSearchParams } from 'expo-router';
 import {
   configurePurchases,
   getPlusOfferings,
   purchasePlusPackage,
   restorePlusPurchases,
+  checkTrialEligibility,
 } from '../../../lib/purchases';
 import { useAuth } from '../../../lib/auth';
 import { track } from '../../../lib/analytics';
@@ -42,6 +44,7 @@ jest.mock('../../../lib/purchases', () => ({
   getPlusOfferings: jest.fn(),
   purchasePlusPackage: jest.fn(),
   restorePlusPurchases: jest.fn(),
+  checkTrialEligibility: jest.fn(),
 }));
 // Evita el wiring nativo (expo-notifications + init real de i18n) en jsdom.
 jest.mock('../../../lib/trial-reminder', () => ({
@@ -65,6 +68,7 @@ const mockConfigure = configurePurchases as jest.Mock;
 const mockGetOfferings = getPlusOfferings as jest.Mock;
 const mockPurchase = purchasePlusPackage as jest.Mock;
 const mockRestore = restorePlusPurchases as jest.Mock;
+const mockCheckEligibility = checkTrialEligibility as jest.Mock;
 const mockUseAuth = useAuth as jest.Mock;
 const mockSyncTrialReminder = syncTrialReminderAfterPurchase as jest.Mock;
 
@@ -103,6 +107,9 @@ beforeEach(() => {
   mockUseAuth.mockReturnValue({ user: { id: 'u1', tier: 'free' }, isPro: false, refreshUser });
   mockConfigure.mockResolvedValue(true);
   mockGetOfferings.mockResolvedValue({ packages: [MONTHLY, ANNUAL], error: null });
+  // Por defecto el usuario ES elegible para el trial del anual (caso base del
+  // paywall). Los tests que ejercen la NO elegibilidad lo sobrescriben.
+  mockCheckEligibility.mockResolvedValue({ plus_annual: 'ELIGIBLE' });
 });
 
 it('sin API key configurada: estado no-disponible con retry, sin crash', async () => {
@@ -156,6 +163,158 @@ it('pinta los packages con precio localizado y preselecciona el anual', async ()
   await waitFor(() =>
     expect(mockPurchase).toHaveBeenCalledWith(expect.objectContaining({ identifier: '$rc_annual' }), 'u1', refreshUser),
   );
+});
+
+// ─── Timeline-first: trial vertical Hoy→Día5→Día8, precio dominante ───
+
+it('anual preseleccionado (trial real): pinta el timeline del trial', async () => {
+  render(<PaywallScreen />);
+
+  expect(await screen.findByTestId('paywall-trial-timeline')).toBeOnTheScreen();
+  // La promesa del día 5 (recordatorio) y del día 8 (cobro) están presentes.
+  expect(screen.getByText('paywall.timelineReminderTitle')).toBeOnTheScreen();
+  expect(screen.getByText('paywall.timelineChargeTitle')).toBeOnTheScreen();
+});
+
+it('con el mensual seleccionado (sin trial) NO hay timeline: precio directo', async () => {
+  render(<PaywallScreen />);
+
+  // Arranca en anual → timeline visible.
+  expect(await screen.findByTestId('paywall-trial-timeline')).toBeOnTheScreen();
+
+  fireEvent.press(screen.getByTestId('paywall-pkg-$rc_monthly'));
+
+  // El mensual no tiene introPrice gratuito → sin timeline, no se promete trial.
+  expect(screen.queryByTestId('paywall-trial-timeline')).toBeNull();
+});
+
+// Producto anual SIN introPrice (offering sin trial configurado): aunque sea el
+// preseleccionado, no se pinta timeline — refleja el PRODUCTO, no la promesa.
+it('anual sin introPrice: no renderiza timeline (fallback a precio directo)', async () => {
+  const annualNoTrial = { ...ANNUAL, product: { ...ANNUAL.product, introPrice: null } };
+  mockGetOfferings.mockResolvedValue({ packages: [MONTHLY, annualNoTrial], error: null });
+  render(<PaywallScreen />);
+
+  await screen.findByTestId('paywall-cta');
+  expect(screen.queryByTestId('paywall-trial-timeline')).toBeNull();
+  // Sin producto con trial no se consulta la elegibilidad.
+  expect(mockCheckEligibility).not.toHaveBeenCalled();
+});
+
+// ─── Elegibilidad REAL del trial (CRITICAL del review) ───
+// El framing de trial (timeline + "N días gratis") NUNCA debe verse si el
+// usuario no es elegible: Apple expone el introPrice a todos, pero cobra el
+// día 0 a quien ya consumió su trial. Solo status 'ELIGIBLE' pinta el framing.
+
+it('la elegibilidad se consulta SOLO por los productos con trial (introPrice gratuito)', async () => {
+  render(<PaywallScreen />);
+  await screen.findByTestId('paywall-trial-timeline');
+
+  // Solo el anual tiene introPrice 0; el mensual (introPrice null) queda fuera.
+  expect(mockCheckEligibility).toHaveBeenCalledTimes(1);
+  expect(mockCheckEligibility).toHaveBeenCalledWith(['plus_annual']);
+});
+
+it('usuario elegible (ELIGIBLE): pinta el timeline y el badge de trial', async () => {
+  render(<PaywallScreen />);
+
+  expect(await screen.findByTestId('paywall-trial-timeline')).toBeOnTheScreen();
+  expect(screen.getByText('paywall.trialFreeBadge')).toBeOnTheScreen();
+});
+
+it('usuario NO elegible (INELIGIBLE) con producto que SÍ ofrece trial: NO timeline, NO "gratis", precio directo', async () => {
+  // Trial ya consumido: Apple cobraría el día 0. El producto sigue trayendo
+  // introPrice gratuito, pero el usuario no puede canjearlo.
+  mockCheckEligibility.mockResolvedValue({ plus_annual: 'INELIGIBLE' });
+  render(<PaywallScreen />);
+
+  // El precio del anual se muestra (paywall usable), pero SIN framing de trial.
+  expect(await screen.findByText('39,99 €')).toBeOnTheScreen();
+  await waitFor(() => expect(mockCheckEligibility).toHaveBeenCalled());
+
+  expect(screen.queryByTestId('paywall-trial-timeline')).toBeNull();
+  expect(screen.queryByText('paywall.trialFreeBadge')).toBeNull();
+});
+
+it('elegibilidad UNKNOWN: precio directo, sin timeline ni "gratis" (default seguro del SDK)', async () => {
+  mockCheckEligibility.mockResolvedValue({ plus_annual: 'UNKNOWN' });
+  render(<PaywallScreen />);
+
+  expect(await screen.findByText('39,99 €')).toBeOnTheScreen();
+  await waitFor(() => expect(mockCheckEligibility).toHaveBeenCalled());
+
+  expect(screen.queryByTestId('paywall-trial-timeline')).toBeNull();
+  expect(screen.queryByText('paywall.trialFreeBadge')).toBeNull();
+});
+
+// Ventana de carga: hasta que la consulta de elegibilidad resuelve, el paywall
+// NO promete trial (mapa vacío ⇒ no elegible). Nunca hay un instante en que un
+// no-elegible vea el framing.
+it('mientras la elegibilidad no resuelve: precio directo sin framing (nunca un trial prematuro)', async () => {
+  mockCheckEligibility.mockReturnValue(new Promise(() => {})); // nunca resuelve
+  render(<PaywallScreen />);
+
+  expect(await screen.findByText('39,99 €')).toBeOnTheScreen();
+  expect(screen.queryByTestId('paywall-trial-timeline')).toBeNull();
+  expect(screen.queryByText('paywall.trialFreeBadge')).toBeNull();
+});
+
+// Escenario del re-ataque (ronda 2, MAJOR): el paywall montado ve cambiar la
+// identidad (u1 ELIGIBLE → u2 INELIGIBLE) y recarga las offerings. El mapa de
+// elegibilidad del usuario ANTERIOR nunca puede sobrevivir la ventana en vuelo:
+// desde el primer paint de las nuevas packages, el default seguro (mapa vacío ⇒
+// precio directo) rige hasta que la nueva consulta resuelve. En ningún paint
+// intermedio u2 ve timeline/badge de trial.
+it('cambio de identidad ELIGIBLE→INELIGIBLE con el paywall montado: ningún paint intermedio pinta el framing del usuario anterior', async () => {
+  // u1 es ELIGIBLE (default del beforeEach) → timeline + badge visibles.
+  const { rerender } = render(<PaywallScreen />);
+  expect(await screen.findByTestId('paywall-trial-timeline')).toBeOnTheScreen();
+  expect(screen.getByText('paywall.trialFreeBadge')).toBeOnTheScreen();
+
+  // La segunda consulta (la de u2) queda EN VUELO: así se observa la ventana
+  // entre "packages de u2 ya en pantalla" y "elegibilidad de u2 resuelta". Con
+  // el bug, el mapa ELIGIBLE de u1 sobreviviría esa ventana y u2 vería "gratis".
+  let resolveU2!: (m: Record<string, string>) => void;
+  mockCheckEligibility.mockReturnValueOnce(new Promise((r) => { resolveU2 = r; }));
+
+  // Cambia la sesión a u2 (INELIGIBLE): el paywall re-corre load() con la nueva
+  // identidad y refresca las offerings (mismo productId/precio, pero array
+  // FRESCO como devuelve RevenueCat en la práctica — nueva referencia que
+  // re-dispara el effect de elegibilidad).
+  mockGetOfferings.mockResolvedValue({ packages: [MONTHLY, ANNUAL], error: null });
+  mockUseAuth.mockReturnValue({ user: { id: 'u2', tier: 'free' }, isPro: false, refreshUser });
+  rerender(<PaywallScreen />);
+
+  // Ventana en vuelo: el precio de u2 ya renderiza pero la elegibilidad aún no
+  // resolvió → mapa vacío → NUNCA framing de trial (ni timeline ni badge).
+  await waitFor(() => expect(mockCheckEligibility).toHaveBeenCalledTimes(2));
+  expect(screen.queryByTestId('paywall-trial-timeline')).toBeNull();
+  expect(screen.queryByText('paywall.trialFreeBadge')).toBeNull();
+
+  // Al resolver u2 como INELIGIBLE sigue sin framing (precio directo, paywall usable).
+  resolveU2({ plus_annual: 'INELIGIBLE' });
+  await waitFor(() => expect(screen.queryByTestId('paywall-trial-timeline')).toBeNull());
+  expect(screen.queryByText('paywall.trialFreeBadge')).toBeNull();
+  expect(screen.getByText('39,99 €')).toBeOnTheScreen();
+});
+
+it('source onboarding: paywall_viewed lo lleva (nueva entrada del funnel)', async () => {
+  const params = useLocalSearchParams as jest.Mock;
+  // Persistente (no Once): el paywall re-renderiza durante el load y lee params
+  // en cada render; se restaura al default al terminar para no filtrar a otros.
+  params.mockReturnValue({ source: 'onboarding' });
+  try {
+    render(<PaywallScreen />);
+    await screen.findByTestId('paywall-cta');
+
+    const viewed = (track as jest.Mock).mock.calls
+      .map(([p]) => p)
+      .filter((p) => p.event === 'paywall_viewed');
+    expect(viewed).toHaveLength(1);
+    expect(viewed[0].source).toBe('onboarding');
+  } finally {
+    params.mockReturnValue({});
+  }
 });
 
 it('compra ok: pasa refreshUser al módulo (flip de isPro sin reinicio) y muestra éxito', async () => {
@@ -218,6 +377,9 @@ it('compra anual con trial REAL (entitlement TRIAL): sincroniza el recordatorio 
       entitlementPeriodType: 'TRIAL',
       outcomeStatus: 'success',
       purchasedAt: expect.any(Date),
+      // Duración DERIVADA del introPrice del producto (7d = periodNumberOfUnits
+      // del ANNUAL) — misma fuente que el display; el scheduler ya no la asume.
+      trialDays: 7,
     }),
   );
 });
@@ -249,6 +411,35 @@ it('compra anual con trial ya consumido (entitlement NORMAL): sin aviso en panta
   expect(mockSyncTrialReminder).toHaveBeenCalledWith(
     expect.objectContaining({ packageType: 'ANNUAL', entitlementPeriodType: 'NORMAL' }),
   );
+});
+
+// MINOR (ronda 3) — config degenerada: el producto ANUAL trae introPrice
+// gratuito (ofrece trial) pero con un periodo NO interpretable (unidad
+// desconocida ⇒ duración null) Y la compra devuelve entitlement TRIAL. El
+// display ya no pinta timeline (duración no derivable), pero antes el scheduler
+// programaba con el default fantasma de 7 días y el aviso de éxito renderizaba
+// "primer cobro el día " con el día EN BLANCO. Fail-safe: sin duración derivable
+// no se programa recordatorio y no se muestra ningún aviso con día vacío.
+it('config degenerada (trial con periodo no interpretable + entitlement TRIAL): sin aviso con día en blanco y sin programar recordatorio', async () => {
+  const degenerateAnnual = {
+    ...ANNUAL,
+    product: {
+      ...ANNUAL.product,
+      // introPrice gratuito (ofrece trial) pero periodo ininterpretable ⇒ null.
+      introPrice: { price: 0, periodNumberOfUnits: 7, periodUnit: 'FORTNIGHT' },
+    },
+  };
+  mockGetOfferings.mockResolvedValue({ packages: [MONTHLY, degenerateAnnual], error: null });
+  mockPurchase.mockResolvedValue({ status: 'success', entitlementPeriodType: 'TRIAL' });
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+
+  expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
+  // Nunca un aviso con día en blanco.
+  expect(screen.queryByTestId('paywall-trial-notice')).toBeNull();
+  // Fail-safe: no se programa recordatorio con la duración fantasma.
+  expect(mockSyncTrialReminder).not.toHaveBeenCalled();
 });
 
 // MINOR-1 del review: una compra efectiva SIN trial (cambio de plan durante

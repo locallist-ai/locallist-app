@@ -14,6 +14,7 @@
  * pro→free observada, o tier free con la compra ya fuera de la ventana de
  * gracia del webhook).
  */
+import { trialTimelineFromDays } from '../trial-timeline';
 
 /** Identificador único de la notificación — la re-programación reemplaza, nunca duplica. */
 export const TRIAL_REMINDER_ID = 'trial-reminder-day5';
@@ -21,7 +22,15 @@ export const TRIAL_REMINDER_ID = 'trial-reminder-day5';
 /** Día del trial en que avisamos (de 7). Va como prop del evento `trial_reminder_shown`. */
 export const TRIAL_REMINDER_DAY = 5;
 
-/** Duración del trial en días — el primer cobro llega al terminar (día 8, nunca antes). */
+/**
+ * Duración del trial en días. DECISIÓN DE NEGOCIO: 7 días (recordatorio día 5,
+ * cobro día 8). Se usa SOLO como default de fallback: cuando el paywall conoce
+ * la duración real del producto (derivada del introPrice de StoreKit) la pasa
+ * explícitamente a las funciones de programación, y aviso + cobro se derivan de
+ * ESA misma duración (la misma fuente que el display del timeline). Así, si App
+ * Store Connect cambiara la duración del trial, notificación y display se mueven
+ * juntos en vez de desincronizarse.
+ */
 export const TRIAL_DAYS = 7;
 
 /** Hora local (0–23) a la que dispara el recordatorio. */
@@ -107,20 +116,27 @@ export function decideReminderActionForPurchase(input: TrialPurchaseInput): Purc
 }
 
 /**
- * Disparo: compra + 5 días, normalizado a las 10:00 locales del dispositivo
- * (hora razonable — ni madrugada ni compitiendo con la cena). La API de
- * expo-notifications permite fecha exacta, así que no hace falta el fallback
- * de offset clavado a +5d.
+ * Disparo: día del recordatorio del trial (duración-2, mínimo 1), normalizado a
+ * las 10:00 locales del dispositivo (hora razonable — ni madrugada ni
+ * compitiendo con la cena). El offset se deriva de `trialTimelineFromDays` — la
+ * MISMA fuente que el display del timeline del paywall — para que aviso y copy
+ * nunca discrepen. Con la duración real de 7 días: +5d (día 5). `trialDays`
+ * default = `TRIAL_DAYS` (7) cuando el caller no conoce la duración del producto.
  */
-export function computeReminderTriggerDate(purchasedAt: Date): Date {
-  const trigger = new Date(purchasedAt.getTime() + TRIAL_REMINDER_DAY * DAY_MS);
+export function computeReminderTriggerDate(purchasedAt: Date, trialDays: number = TRIAL_DAYS): Date {
+  const { reminderDay } = trialTimelineFromDays(trialDays);
+  const trigger = new Date(purchasedAt.getTime() + reminderDay * DAY_MS);
   trigger.setHours(REMINDER_HOUR_LOCAL, 0, 0, 0);
   return trigger;
 }
 
-/** Fecha del primer cobro: fin del trial (día 8 — nunca antes). Va en el cuerpo del aviso. */
-export function computeFirstChargeDate(purchasedAt: Date): Date {
-  return new Date(purchasedAt.getTime() + TRIAL_DAYS * DAY_MS);
+/**
+ * Fecha del primer cobro: fin del trial (compra + `trialDays` días — con la
+ * duración real de 7 días cae en el "día 8", nunca antes). Va en el cuerpo del
+ * aviso. Deriva de la MISMA `trialDays` que el recordatorio y el display.
+ */
+export function computeFirstChargeDate(purchasedAt: Date, trialDays: number = TRIAL_DAYS): Date {
+  return new Date(purchasedAt.getTime() + trialDays * DAY_MS);
 }
 
 export type ScheduleOutcome = 'scheduled' | 'permission_denied';
@@ -142,6 +158,7 @@ export interface ScheduleDeps {
 export async function ensureReminderScheduled(
   deps: ScheduleDeps,
   purchasedAt: Date,
+  trialDays: number = TRIAL_DAYS,
 ): Promise<ScheduleOutcome> {
   const granted = await deps.ensurePermission();
   if (!granted) return 'permission_denied';
@@ -151,8 +168,8 @@ export async function ensureReminderScheduled(
 
   await deps.scheduler.schedule({
     identifier: TRIAL_REMINDER_ID,
-    content: deps.buildContent(computeFirstChargeDate(purchasedAt)),
-    triggerDate: computeReminderTriggerDate(purchasedAt),
+    content: deps.buildContent(computeFirstChargeDate(purchasedAt, trialDays)),
+    triggerDate: computeReminderTriggerDate(purchasedAt, trialDays),
     purchasedAt,
   });
   return 'scheduled';
