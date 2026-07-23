@@ -62,6 +62,17 @@ function eligibleTrialDays(
 type Phase = 'loading' | 'ready' | 'unavailable' | 'success' | 'pending';
 
 /**
+ * Timeout (ms) de la fase `loading` SOLO en modo `autoSkipOnUnavailable`
+ * (onboarding). `configurePurchases`/`getPlusOfferings` no tienen timeout a nivel
+ * app (solo el interno del SDK de RevenueCat); una promesa nativa que jamás
+ * settle dejaría al usuario atrapado en el gate BLOQUEANTE del onboarding. Tras
+ * este margen se trata como no disponible y se auto-salta. En el paywall
+ * standalone NO aplica (spinner hasta que RC responda: quedarse ahí es inofensivo
+ * porque el usuario sigue en la app).
+ */
+const LOADING_AUTOSKIP_TIMEOUT_MS = 9000;
+
+/**
  * Props de precio para los eventos purchase_* — todo derivado del product de
  * StoreKit (precio ya localizado). `hasTrial` = intro price gratuito (el trial
  * de 7 días del plan anual); un intro de pago no es trial. OJO: refleja el
@@ -230,9 +241,25 @@ export function PaywallView({ source, onClose, onSkip, onDone, autoSkipOnUnavail
   // de dejar al usuario en un estado de paywall roto. Nadie queda atrapado sin
   // RevenueCat. En standalone `autoSkipOnUnavailable` es falso ⇒ se muestra el
   // retry como siempre.
+  //
+  // Además, timeout del `loading` (SOLO en este modo): si `load()` no resuelve a
+  // `ready`/`unavailable` tras `LOADING_AUTOSKIP_TIMEOUT_MS` (una promesa nativa
+  // de RC que jamás settle), se trata como no disponible y se auto-salta — nadie
+  // queda atrapado en un spinner infinito dentro del gate bloqueante. El timer se
+  // limpia en el cleanup (desmontaje) y al cambiar la fase antes de que expire
+  // (evita disparar tras un `ready` legítimo o una degradación ya resuelta). El
+  // paywall standalone NO tiene timeout: conserva el spinner hasta que RC responda.
   useEffect(() => {
-    if (autoSkipOnUnavailable && phase === 'unavailable') {
+    if (!autoSkipOnUnavailable) return;
+    if (phase === 'unavailable') {
       onSkipRef.current?.();
+      return;
+    }
+    if (phase === 'loading') {
+      const timer = setTimeout(() => {
+        onSkipRef.current?.();
+      }, LOADING_AUTOSKIP_TIMEOUT_MS);
+      return () => clearTimeout(timer);
     }
   }, [autoSkipOnUnavailable, phase]);
 
@@ -287,6 +314,13 @@ export function PaywallView({ source, onClose, onSkip, onDone, autoSkipOnUnavail
         dismissPhase === 'shown' && pricesShownAtRef.current !== null
           ? pricesShownAtRef.current
           : mountedAt;
+      // NOTA (MINOR-2): `paywall_dismissed` incluye también el tráfico del
+      // onboarding (un "Ahora no"/back en el paso 5 emite este evento con
+      // `source:'onboarding'`, ADEMÁS del `onboarding_completed{skippedPaywall}`).
+      // No es doble-conteo de `onboarding_completed` (una compra suprime el
+      // dismissed vía `purchaseOutcomeRef`), pero infla el denominador del paywall
+      // standalone. Decisión de producto: se deja así (consistente y filtrable);
+      // filtrar por `source` si se quiere el denominador del paywall standalone.
       track({
         event: 'paywall_dismissed',
         source: sourceRef.current,

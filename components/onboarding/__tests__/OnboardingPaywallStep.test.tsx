@@ -11,7 +11,7 @@
  * Plus the exit wiring: "not now" → onSkip, purchase → onPurchased, close → onBack.
  */
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { OnboardingPaywallStep } from '../OnboardingPaywallStep';
 import {
   configurePurchases,
@@ -122,6 +122,32 @@ it('sin ofertas (productos ASC no creados): auto-salta igual (onSkip), sin atrap
   expect(onPurchased).not.toHaveBeenCalled();
 });
 
+// MINOR-1: una promesa nativa de RC que jamás settle (configure colgado) dejaría
+// el `load()` en `loading` para siempre. En el gate BLOQUEANTE del onboarding eso
+// atrapa al usuario en un spinner infinito (única salida: X→preview→reintentar).
+// Tras el timeout de la fase loading se trata como no disponible y se auto-salta.
+it('load que nunca resuelve (configure colgado): tras el timeout auto-salta (onSkip), usuario no atrapado', async () => {
+  jest.useFakeTimers();
+  try {
+    mockConfigure.mockReturnValue(new Promise(() => {})); // jamás settle
+    renderStep();
+
+    // Sigue en loading: aún sin auto-salto (el timeout no ha vencido).
+    expect(onSkip).not.toHaveBeenCalled();
+
+    // Vence el timeout de la fase loading → auto-salto limpio.
+    act(() => {
+      jest.advanceTimersByTime(9000);
+    });
+
+    expect(onSkip).toHaveBeenCalledTimes(1);
+    // El auto-salto por timeout NO es conversión: no completa como compra.
+    expect(onPurchased).not.toHaveBeenCalled();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 // ─── Compliance: no trial framing a no-elegibles ───
 
 it('usuario NO elegible (INELIGIBLE): pinta el precio pero NO el timeline ni el badge de trial', async () => {
@@ -188,4 +214,33 @@ it('la X (close) retrocede: llama onBack, no completa el flujo', async () => {
   expect(onBack).toHaveBeenCalledTimes(1);
   expect(onSkip).not.toHaveBeenCalled();
   expect(onPurchased).not.toHaveBeenCalled();
+});
+
+// MINOR-3: en las fases de outcome la X NO retrocede — completa el flujo (un
+// pagador nunca queda varado atrás en vez de completar). `closeAction` cablea la
+// X a `done`/`onPurchased` en success/pending, no a `onBack`.
+it('la X en fase success invoca onPurchased (completar), no onBack', async () => {
+  mockPurchase.mockResolvedValue({ status: 'success', entitlementPeriodType: 'TRIAL' });
+  renderStep();
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+  await screen.findByTestId('paywall-done'); // ya en fase success
+
+  fireEvent.press(screen.getByTestId('paywall-close'));
+  expect(onPurchased).toHaveBeenCalledTimes(1);
+  expect(onBack).not.toHaveBeenCalled();
+  expect(onSkip).not.toHaveBeenCalled();
+});
+
+it('la X en fase pending invoca onPurchased (completar), no onBack', async () => {
+  mockPurchase.mockResolvedValue({ status: 'pending_backend' });
+  renderStep();
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+  await screen.findByTestId('paywall-pending-retry'); // ya en fase pending
+
+  fireEvent.press(screen.getByTestId('paywall-close'));
+  expect(onPurchased).toHaveBeenCalledTimes(1);
+  expect(onBack).not.toHaveBeenCalled();
+  expect(onSkip).not.toHaveBeenCalled();
 });
