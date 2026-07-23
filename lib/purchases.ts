@@ -37,7 +37,9 @@
 import { Platform } from 'react-native';
 import Purchases, {
   LOG_LEVEL,
+  INTRO_ELIGIBILITY_STATUS,
   type CustomerInfo,
+  type IntroEligibility,
   type PurchasesPackage,
 } from 'react-native-purchases';
 import { logger } from './logger';
@@ -311,6 +313,65 @@ export async function getPlusOfferings(): Promise<OfferingsResult> {
   } catch (err) {
     logger.warn('RevenueCat: getOfferings failed', err);
     return { packages: [], error: 'network' };
+  }
+}
+
+// ─── Elegibilidad de trial (READ-ONLY) ──────────────────
+//
+// Apple/RevenueCat NO filtran el `introPrice` del producto por el historial de
+// canje del usuario: un producto que OFRECE trial expone `introPrice` a todos,
+// incluso a quien ya lo consumió (a ese Apple le cobra el día 0). Para no
+// prometer un trial que no aplica, el paywall consulta la elegibilidad REAL con
+// esta llamada. Es una query pura del SDK: NO toca la cola de identidad, ni la
+// época, ni StoreKit — no muta nada, así que vive fuera de la maquinaria de
+// compra/identidad blindada.
+
+/**
+ * Estado de elegibilidad de trial normalizado a un union estable (el SDK usa un
+ * enum numérico). `ELIGIBLE` es el ÚNICO estado que permite pintar el framing
+ * de trial; `UNKNOWN`/`INELIGIBLE`/`NO_INTRO_OFFER` → precio directo.
+ */
+export type TrialEligibilityStatus = 'ELIGIBLE' | 'INELIGIBLE' | 'UNKNOWN' | 'NO_INTRO_OFFER';
+
+function mapEligibilityStatus(status: INTRO_ELIGIBILITY_STATUS | undefined): TrialEligibilityStatus {
+  switch (status) {
+    case INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE:
+      return 'ELIGIBLE';
+    case INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_INELIGIBLE:
+      return 'INELIGIBLE';
+    case INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_NO_INTRO_OFFER_EXISTS:
+      return 'NO_INTRO_OFFER';
+    // INTRO_ELIGIBILITY_STATUS_UNKNOWN y cualquier valor inesperado → UNKNOWN.
+    default:
+      return 'UNKNOWN';
+  }
+}
+
+/**
+ * Elegibilidad de trial por productId. Guía literal del SDK: si no está
+ * configurado, la lista está vacía o la consulta falla, se devuelve `UNKNOWN`
+ * para todos — nunca se asume elegibilidad. El caller (paywall) trata cualquier
+ * cosa que no sea `ELIGIBLE` como "sin trial" y muestra el precio directo, así
+ * que el fallo degrada al lado seguro (jamás un trial engañoso). READ-ONLY.
+ */
+export async function checkTrialEligibility(
+  productIds: string[],
+): Promise<Record<string, TrialEligibilityStatus>> {
+  const unknownAll = (): Record<string, TrialEligibilityStatus> =>
+    Object.fromEntries(productIds.map((id) => [id, 'UNKNOWN' as const]));
+
+  if (!configured || productIds.length === 0) return unknownAll();
+
+  try {
+    const raw = await Purchases.checkTrialOrIntroductoryPriceEligibility(productIds);
+    const out: Record<string, TrialEligibilityStatus> = {};
+    for (const id of productIds) {
+      out[id] = mapEligibilityStatus((raw as Record<string, IntroEligibility>)[id]?.status);
+    }
+    return out;
+  } catch (err) {
+    logger.warn('RevenueCat: checkTrialOrIntroductoryPriceEligibility failed', err);
+    return unknownAll();
   }
 }
 

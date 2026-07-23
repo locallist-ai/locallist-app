@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,22 +12,38 @@ import {
   getPlusOfferings,
   purchasePlusPackage,
   restorePlusPurchases,
+  checkTrialEligibility,
 } from '../lib/purchases';
-import type { PlusEntitlementPeriodType } from '../lib/purchases';
+import type { PlusEntitlementPeriodType, TrialEligibilityStatus } from '../lib/purchases';
+import { introPriceDurationDays } from '../lib/trial-timeline';
 import { track, type PaywallSource } from '../lib/analytics';
 import { syncTrialReminderAfterPurchase } from '../lib/trial-reminder';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { TrialTimeline } from '../components/paywall/TrialTimeline';
 
 /**
- * Trial real a nivel de PRODUCTO: intro price gratuito (mismo criterio que
- * `purchaseEventProps.hasTrial`). Un intro de pago no es trial. Gobierna si la
- * fase `ready` pinta el timeline y el "gratis": sin trial en el producto no se
- * promete uno. La elegibilidad del usuario (trial ya consumido) se resuelve al
- * comprar vía `entitlementPeriodType`, no aquí.
+ * Días de trial que el paywall puede PROMETER para un package — o `null` si no
+ * debe pintarse framing de trial. Exige TRES cosas, no solo el producto:
+ *
+ *  1. El producto OFRECE trial: intro price gratuito (`introPrice.price === 0`).
+ *  2. El usuario es ELEGIBLE de verdad (`checkTrialEligibility` → 'ELIGIBLE').
+ *     Apple no filtra el `introPrice` por historial de canje, así que un
+ *     producto con trial se lo muestra también a quien ya lo consumió — pero a
+ *     ese Apple le cobra el día 0. Solo 'ELIGIBLE' evita el trial engañoso
+ *     (Apple 3.1.2 + legal); 'UNKNOWN'/'INELIGIBLE'/'NO_INTRO_OFFER' → sin
+ *     framing (default seguro mientras la consulta no confirme elegibilidad).
+ *  3. La duración es DERIVABLE del introPrice (días concretos para la copy).
+ *
+ * Devuelve los días del trial (N) — la duración se deriva, nunca se hardcodea.
+ * Con `null` la fase `ready` muestra precio directo, sin timeline ni "gratis".
  */
-function packageHasTrial(pkg: PurchasesPackage | null): boolean {
-  return pkg?.product.introPrice?.price === 0;
+function eligibleTrialDays(
+  pkg: PurchasesPackage | null,
+  eligibility: Record<string, TrialEligibilityStatus>,
+): number | null {
+  if (!pkg || pkg.product.introPrice?.price !== 0) return null;
+  if (eligibility[pkg.product.identifier] !== 'ELIGIBLE') return null;
+  return introPriceDurationDays(pkg.product.introPrice);
 }
 
 type Phase = 'loading' | 'ready' | 'unavailable' | 'success' | 'pending';
@@ -89,6 +105,11 @@ export default function PaywallScreen() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [selected, setSelected] = useState<PurchasesPackage | null>(null);
+  // Elegibilidad REAL de trial por productId (`checkTrialEligibility`). Arranca
+  // vacío ⇒ todo se trata como no-elegible (precio directo) hasta que la
+  // consulta READ-ONLY confirme 'ELIGIBLE'. Es IMPOSIBLE pintar el framing de
+  // trial a un no-elegible: el timeline y el "gratis" se gatean por este mapa.
+  const [trialEligibility, setTrialEligibility] = useState<Record<string, TrialEligibilityStatus>>({});
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<{ title: string; body: string } | null>(null);
   // True si la compra completada fue el plan anual con trial: las pantallas de
@@ -148,6 +169,29 @@ export default function PaywallScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Elegibilidad REAL del trial. Consulta READ-ONLY al SDK (no toca la cola de
+  // identidad ni StoreKit) al tener las packages: solo con status 'ELIGIBLE' el
+  // paywall pinta el framing de trial. Se pregunta SOLO por productos con
+  // introPrice gratuito (los que ofrecen trial). Mientras resuelve, el mapa
+  // vacío mantiene el default seguro (precio directo). Un cambio de identidad
+  // vuelve a cargar offerings (nuevo array de packages) y re-dispara esto.
+  useEffect(() => {
+    const trialProductIds = packages
+      .filter((p) => p.product.introPrice?.price === 0)
+      .map((p) => p.product.identifier);
+    if (trialProductIds.length === 0) {
+      setTrialEligibility({});
+      return;
+    }
+    let active = true;
+    void checkTrialEligibility(trialProductIds).then((map) => {
+      if (active) setTrialEligibility(map);
+    });
+    return () => {
+      active = false;
+    };
+  }, [packages]);
 
   // Funnel view→dismiss: al desmontar (X, back, swipe-down del modal) sin
   // outcome de compra se emite paywall_dismissed con la phase vigente. Un
@@ -289,8 +333,16 @@ export default function PaywallScreen() {
     }
   };
 
-  // Timeline solo con trial real en el producto elegido; narrowing sin `!`.
-  const trialPackage = packageHasTrial(selected) ? selected : null;
+  // Timeline solo con trial que el usuario PUEDE canjear (producto con trial +
+  // status 'ELIGIBLE'); `null` ⇒ precio directo. Los días salen derivados.
+  const selectedTrialDays = eligibleTrialDays(selected, trialEligibility);
+
+  // Día del primer cobro para el aviso post-compra (éxito/pending): derivado del
+  // trial del package elegido (N+1), nunca hardcodeado a "día 8".
+  const noticeChargeDay = useMemo(() => {
+    const days = selected ? introPriceDurationDays(selected.product.introPrice) : null;
+    return days === null ? null : days + 1;
+  }, [selected]);
 
   return (
     <View style={s.root}>
@@ -327,7 +379,7 @@ export default function PaywallScreen() {
           <Text style={s.stateBody}>{t('paywall.successBody')}</Text>
           {trialReminderApplies && (
             <Text style={s.trialNotice} testID="paywall-trial-notice">
-              {t('paywall.trialReminderNotice')}
+              {t('paywall.trialReminderNotice', { day: noticeChargeDay ?? '' })}
             </Text>
           )}
           <TouchableOpacity style={s.primaryBtn} activeOpacity={0.8} onPress={() => router.back()}>
@@ -345,7 +397,7 @@ export default function PaywallScreen() {
           <Text style={s.stateBody}>{t('paywall.pendingBody')}</Text>
           {trialReminderApplies && (
             <Text style={s.trialNotice} testID="paywall-trial-notice">
-              {t('paywall.trialReminderNotice')}
+              {t('paywall.trialReminderNotice', { day: noticeChargeDay ?? '' })}
             </Text>
           )}
           <TouchableOpacity
@@ -387,6 +439,9 @@ export default function PaywallScreen() {
           <View style={s.packages}>
             {packages.map((pkg) => {
               const isSelected = selected?.identifier === pkg.identifier;
+              // "N días gratis" solo si ESTE usuario puede canjear el trial de
+              // ESTE producto; N derivado, no literal.
+              const pkgTrialDays = eligibleTrialDays(pkg, trialEligibility);
               return (
                 <TouchableOpacity
                   key={pkg.identifier}
@@ -409,8 +464,8 @@ export default function PaywallScreen() {
                         </View>
                       )}
                     </View>
-                    {packageHasTrial(pkg) && (
-                      <Text style={s.pkgTrial}>{t('paywall.trialFreeBadge')}</Text>
+                    {pkgTrialDays !== null && (
+                      <Text style={s.pkgTrial}>{t('paywall.trialFreeBadge', { days: pkgTrialDays })}</Text>
                     )}
                   </View>
                   <Text style={[s.pkgPrice, isSelected && s.pkgPriceSelected]}>
@@ -421,11 +476,12 @@ export default function PaywallScreen() {
             })}
           </View>
 
-          {/* Timeline SOLO con trial real en el producto seleccionado; con un
-              plan sin trial la zona muta a precio directo (no se pinta nada
-              extra: el precio del plan ya manda). */}
-          {trialPackage && (
-            <TrialTimeline priceString={trialPackage.product.priceString} />
+          {/* Timeline SOLO con trial que el usuario elegible puede canjear; con
+              un plan sin trial o un usuario no elegible la zona muta a precio
+              directo (no se pinta nada extra: el precio del plan ya manda). La
+              duración va derivada del introPrice, no hardcodeada. */}
+          {selected && selectedTrialDays !== null && (
+            <TrialTimeline trialDays={selectedTrialDays} priceString={selected.product.priceString} />
           )}
 
           {/* Qué incluye — comprimido a 3 bullets bajo el timeline, no hero */}

@@ -2,10 +2,17 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing } from '../../lib/theme';
+import { trialTimelineFromDays } from '../../lib/trial-timeline';
 
 interface TrialTimelineProps {
   /**
-   * Precio localizado (priceString de StoreKit) que se factura el día 8. Se
+   * Duración del trial en días (N), DERIVADA del `introPrice` del producto — no
+   * hardcodeada. Gobierna el día del recordatorio (N-2) y el del primer cobro
+   * (N+1): si ASC configura otra duración, la copy la refleja en vez de mentir.
+   */
+  trialDays: number;
+  /**
+   * Precio localizado (priceString de StoreKit) que se factura el día N+1. Se
    * interpola en el paso del primer cobro — el elemento más prominente del
    * timeline, por encima del "gratis".
    */
@@ -13,17 +20,22 @@ interface TrialTimelineProps {
 }
 
 /**
- * Timeline vertical Hoy → Día 5 → Día 8 del trial anual. SIN urgencia ni
- * countdowns: describe el compromiso REAL — el día 5 avisamos (lo cumple
- * `lib/trial-reminder/`) y el día 8 llega el primer cobro. Patrón sancionado
+ * Timeline vertical Hoy → Día N-2 → Día N+1 del trial. SIN urgencia ni
+ * countdowns: describe el compromiso REAL — el día N-2 avisamos (lo cumple
+ * `lib/trial-reminder/`) y el día N+1 llega el primer cobro. Patrón sancionado
  * por Apple 3.1.2 (nada de "toggle" trial/pago ni cuentas atrás).
  *
+ * Los días se DERIVAN de `trialDays` (a su vez derivado del introPrice), nunca
+ * literales: para el trial de 7 días real → recordatorio día 5, cobro día 8.
+ *
  * Se monta SOLO cuando el package seleccionado tiene trial real (introPrice
- * gratuito); con un plan sin trial el paywall muestra precio directo y este
- * componente no se renderiza — no se promete un trial que no aplica.
+ * gratuito) Y el usuario es ELEGIBLE (el paywall lo comprueba con
+ * `checkTrialEligibility`); si no, muestra precio directo y este componente no
+ * se renderiza — no se promete un trial que no aplica.
  */
-export function TrialTimeline({ priceString }: TrialTimelineProps) {
+export function TrialTimeline({ trialDays, priceString }: TrialTimelineProps) {
   const { t } = useTranslation();
+  const { reminderDay, chargeDay } = trialTimelineFromDays(trialDays);
 
   const steps = [
     {
@@ -33,12 +45,12 @@ export function TrialTimeline({ priceString }: TrialTimelineProps) {
     },
     {
       key: 'reminder',
-      title: t('paywall.timelineReminderTitle'),
+      title: t('paywall.timelineReminderTitle', { day: reminderDay }),
       body: t('paywall.timelineReminderBody'),
     },
     {
       key: 'charge',
-      title: t('paywall.timelineChargeTitle'),
+      title: t('paywall.timelineChargeTitle', { day: chargeDay }),
       body: t('paywall.timelineChargeBody', { price: priceString }),
       charge: true,
     },
