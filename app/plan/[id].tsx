@@ -246,7 +246,14 @@ export default function PlanDetailScreen() {
   }, [editorSave, effectivePlanId, isNew, presentGate]);
 
   const handleFollow = () => {
-    if (!isAuthenticated) { router.push('/login'); return; }
+    // Follow Mode (`POST /follow/start`) is `[Authorize]`; a guest gets the
+    // deferred-signup gate (bottom-sheet/Alert with a Sign up CTA) instead of a
+    // silent 401, matching the save/generate surfaces.
+    // FOLLOW-UP (deferred, W1 brief minor): after signup the user returns here
+    // but must re-press Follow — the intent is not resumed. Persisting a pending
+    // follow intent in an ephemeral store and replaying it on the auth→true
+    // transition spans login/navigation and is out of scope for this fix.
+    if (!isAuthenticated) { presentGate({ type: 'signup_required' }); return; }
     router.push(`/follow/${id === 'preview' ? visiblePlan?.id : id}`);
   };
 

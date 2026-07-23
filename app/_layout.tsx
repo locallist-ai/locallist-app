@@ -16,7 +16,10 @@ import { usePurchaseReconciliation } from '../lib/usePurchaseReconciliation';
 import { useTrialReminder } from '../lib/trial-reminder/useTrialReminder';
 import { preloadPlans } from '../lib/preload';
 import { logger } from '../lib/logger';
-import LoginScreen from './login';
+import { useOnboarding } from '../lib/onboarding-store';
+import { resolveEntryState, isGuestSession } from '../lib/entry-state';
+import { track } from '../lib/analytics';
+import OnboardingScreen from './onboarding';
 
 // Initialize Sentry as early as possible
 initSentry();
@@ -143,7 +146,7 @@ function RootLayout() {
               <AppSplash onFinish={() => setShowSplash(false)} />
             </View>
           ) : (
-            <AuthGate />
+            <EntryGate />
           )}
         </SafeAreaProvider>
       </AuthProvider>
@@ -154,13 +157,28 @@ function RootLayout() {
 // Wrap root component with Sentry for automatic performance & error tracking
 export default Sentry.wrap(RootLayout);
 
-// Shows login if not authenticated, app stack if authenticated
-function AuthGate() {
+// Entry gate: a guest OR an authenticated user reaches the app; onboarding shows
+// only on the first run (never authenticated, never completed). Replaces the old
+// login-wall AuthGate — login is now a modal reached from inside the app.
+function EntryGate() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { completed: onboardingDone, loading: onboardingLoading } = useOnboarding();
   const { t } = useTranslation();
 
-  // Still checking stored tokens
-  if (isLoading) {
+  const entry = resolveEntryState({ isLoading, onboardingLoading, isAuthenticated, onboardingDone });
+  const guest = isGuestSession({ entry, isAuthenticated });
+
+  // Fire `guest_mode_entered` once, when a guest first lands in the app.
+  const guestFiredRef = useRef(false);
+  useEffect(() => {
+    if (guest && !guestFiredRef.current) {
+      guestFiredRef.current = true;
+      track({ event: 'guest_mode_entered' });
+    }
+  }, [guest]);
+
+  // Still hydrating auth tokens and/or the onboarding flag
+  if (entry === 'loading') {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bgMain, alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ color: colors.textSecondary, fontSize: 14 }}>{t('common.loading')}</Text>
@@ -168,8 +186,8 @@ function AuthGate() {
     );
   }
 
-  if (!isAuthenticated) {
-    return <LoginScreen />;
+  if (entry === 'onboarding') {
+    return <OnboardingScreen />;
   }
 
   return <AppStack />;

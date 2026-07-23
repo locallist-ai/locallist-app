@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,11 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../lib/theme';
 import { useResponsive } from '../lib/responsive';
 import { useAuthForm } from '../lib/auth/useAuthForm';
@@ -18,8 +21,30 @@ import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
 import { EmailSignInButton } from '../components/auth/EmailSignInButton';
 import { CredentialsForm } from '../components/auth/CredentialsForm';
 
-export default function LoginScreen() {
+/**
+ * Login screen. Used both as a modal route (from inside the app, dismissed
+ * natively) and inline inside the first-run onboarding flow. In the inline case
+ * the flow passes `onClose` so the user can back out to the value screens — the
+ * fix for the W1 dead-end where "I already have an account" trapped the user with
+ * no way back short of authenticating or killing the app.
+ *
+ * `onRegisterInnerBack` lets an inline host (the onboarding orchestrator) drive
+ * the login's OWN internal back semantics from Android's physical back button
+ * without duplicating navigation logic: the login registers a handler that, while
+ * on the `credentials` sub-step, returns to `choose` and reports the event as
+ * consumed; on the `choose` step it reports "not consumed" so the host dismisses
+ * the whole login. This mirrors the on-screen chevron (`CredentialsForm.onBack`
+ * vs `onClose`), which the host's back handler could not otherwise see.
+ */
+export default function LoginScreen({
+  onClose,
+  onRegisterInnerBack,
+}: {
+  onClose?: () => void;
+  onRegisterInnerBack?: (handler: (() => boolean) | null) => void;
+} = {}) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { compact } = useResponsive();
   const {
     step,
@@ -45,11 +70,39 @@ export default function LoginScreen() {
     submitCredentials,
   } = useAuthForm();
 
+  // Expose the login's internal back to an inline host (onboarding) so the Android
+  // physical back respects the `credentials` → `choose` sub-step instead of tearing
+  // the whole login down. Re-registered whenever the sub-step changes so the host
+  // always holds the current-step decision; unregistered on unmount.
+  useEffect(() => {
+    if (!onRegisterInnerBack) return;
+    onRegisterInnerBack(() => {
+      if (step === 'credentials') {
+        backToChoose();
+        return true;
+      }
+      return false;
+    });
+    return () => onRegisterInnerBack(null);
+  }, [onRegisterInnerBack, step, backToChoose]);
+
   return (
     <KeyboardAvoidingView
       style={s.root}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {onClose && (
+        <TouchableOpacity
+          style={[s.closeBtn, { top: insets.top + 8 }]}
+          onPress={onClose}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          testID="login-close"
+        >
+          <Ionicons name="chevron-back" size={26} color={colors.deepOcean} />
+        </TouchableOpacity>
+      )}
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <Image
           source={require('../assets/images/icon.png')}
@@ -112,6 +165,15 @@ export default function LoginScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bgMain },
+  closeBtn: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scroll: {
     flexGrow: 1,
     alignItems: 'center',

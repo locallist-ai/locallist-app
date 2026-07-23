@@ -12,10 +12,14 @@ import { renderHook, act } from '@testing-library/react-native';
 import { useAuthForm } from '../auth/useAuthForm';
 import { api, getAccessToken } from '../api';
 import { useAuth } from '../auth';
+import { router } from 'expo-router';
 import type { AuthResponse } from '../types';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+}));
+jest.mock('expo-router', () => ({
+  router: { canGoBack: jest.fn(() => true), back: jest.fn(), replace: jest.fn() },
 }));
 jest.mock('expo-web-browser', () => ({ maybeCompleteAuthSession: jest.fn() }));
 jest.mock('expo-apple-authentication', () => ({
@@ -36,6 +40,7 @@ jest.mock('../analytics', () => ({ track: jest.fn() }));
 const mockApi = api as jest.MockedFunction<typeof api>;
 const mockGetAccessToken = getAccessToken as jest.MockedFunction<typeof getAccessToken>;
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+const mockRouter = router as unknown as { canGoBack: jest.Mock; back: jest.Mock; replace: jest.Mock };
 const login = jest.fn();
 
 const okResponse: AuthResponse = {
@@ -48,6 +53,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockGetAccessToken.mockResolvedValue('existing-token');
   mockUseAuth.mockReturnValue({ login } as unknown as ReturnType<typeof useAuth>);
+  mockRouter.canGoBack.mockReturnValue(true);
 });
 
 describe('useAuthForm — email login', () => {
@@ -94,6 +100,39 @@ describe('useAuthForm — email login', () => {
     });
     expect(login).toHaveBeenCalledWith(okResponse.user, 'at', 'rt');
     expect(result.current.error).toBeNull();
+    // Login modal closes after a successful login (guest mode: it's a modal on
+    // top of the app stack, so pop it).
+    expect(mockRouter.back).toHaveBeenCalledTimes(1);
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the home tab when there is nothing to pop (inline onboarding login)', async () => {
+    mockRouter.canGoBack.mockReturnValue(false);
+    mockApi.mockResolvedValue({ data: okResponse, error: null, errorBody: null, status: 200 });
+    const { result } = renderHook(() => useAuthForm());
+    act(() => {
+      result.current.setEmail('a@b.com');
+      result.current.setPassword('secret123');
+    });
+    await act(async () => {
+      await result.current.submitCredentials();
+    });
+    expect(mockRouter.back).not.toHaveBeenCalled();
+    expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)/home');
+  });
+
+  it('does NOT navigate away when login fails', async () => {
+    mockApi.mockResolvedValue({ data: null, error: 'bad creds', errorBody: null, status: 401 });
+    const { result } = renderHook(() => useAuthForm());
+    act(() => {
+      result.current.setEmail('a@b.com');
+      result.current.setPassword('secret123');
+    });
+    await act(async () => {
+      await result.current.submitCredentials();
+    });
+    expect(mockRouter.back).not.toHaveBeenCalled();
+    expect(mockRouter.replace).not.toHaveBeenCalled();
   });
 
   it('surfaces the API error on failure', async () => {
@@ -132,6 +171,8 @@ describe('useAuthForm — register', () => {
       body: { email: 'a@b.com', password: 'Abcdef1!', name: 'Pablo' },
     });
     expect(login).toHaveBeenCalledWith(okResponse.user, 'at', 'rt');
+    // Registration also closes the login screen.
+    expect(mockRouter.back).toHaveBeenCalledTimes(1);
   });
 
   it('derives full password strength only in register mode', async () => {

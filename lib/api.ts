@@ -8,6 +8,7 @@ import type {
   ChatGenerateRequest, BuilderResponse,
   UserProfile, UpsertProfileRequest,
   LiveCity,
+  Plan, PlanDetailResponse,
 } from './types';
 
 function getApiUrl(): string {
@@ -229,6 +230,23 @@ export async function deleteChatSession(sessionId: string) {
  */
 export async function getLiveCities(signal?: AbortSignal) {
   return api<{ cities: LiveCity[] }>('/cities/live', { signal });
+}
+
+// ─── Plans API ───────────────────────────────────────────────────────────────
+
+/**
+ * Showcase (curated) plans, optionally narrowed to a city. Anonymous-friendly
+ * (`showcase=true` is public), used by the onboarding value-preview screen and
+ * the Plans tab. Returns the list only — fetch `/plans/:id` for stops.
+ */
+export async function getShowcasePlans(city?: string, signal?: AbortSignal) {
+  const q = city ? `&city=${encodeURIComponent(city)}` : '';
+  return api<{ plans: Plan[] }>(`/plans?showcase=true${q}`, { signal });
+}
+
+/** Full plan detail (days + stops + places). Anonymous-friendly for showcase plans. */
+export async function getPlanDetail(id: string, signal?: AbortSignal) {
+  return api<PlanDetailResponse>(`/plans/${id}`, { signal });
 }
 
 // ─── Profile API ─────────────────────────────────────────────────────────────

@@ -5,6 +5,8 @@ import { setAnalyticsUserId } from './analytics';
 import { logOutPurchases } from './purchases';
 import { parseAiPlansQuota, type AiPlansQuota } from './gate-errors';
 import { cancelTrialReminder } from './trial-reminder';
+import { completeOnboarding } from './onboarding-store';
+import { syncOnboardingPrefsToProfile } from './onboarding-sync';
 
 interface User {
   id: string;
@@ -94,6 +96,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await setTokens(accessToken, refreshToken);
     setAnalyticsUserId(userData.id);
     setUser(userData);
+    // Having authenticated on this device retires the marketing onboarding for
+    // good — the entry-gate's guest state must NOT be re-derived from it. Root
+    // fix for both MAJORs: after a later logout, or a transient auto-login
+    // failure, `onboarding_completed` stays true so the gate lands on the app
+    // (as a degraded guest), never back on the marketing onboarding. Best-effort:
+    // the flag is set synchronously in-memory; a persistence blip must not fail login.
+    try {
+      await completeOnboarding();
+    } catch (error) {
+      logger.warn('completeOnboarding during login failed', error);
+    }
+    // Deferred sync of any guest onboarding prefs (city/budget) to the profile,
+    // then clear them. Best-effort: a failure must not fail the login (the prefs
+    // stay for the next attempt). Only the interactive login()/register path runs
+    // this — a cold-start auto-login is a returning user who already synced.
+    try {
+      await syncOnboardingPrefsToProfile();
+    } catch (error) {
+      logger.warn('onboarding prefs sync during login failed', error);
+    }
     // Populate the quota right after an interactive login — the startup
     // auto-login effect only fires on cold start, so without this a freshly
     // registered free user never sees their "X of N plans" line (g3).
@@ -159,6 +181,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(res.data.user);
           // Tolerant parse — quota field is optional until api m4 ships.
           setAiPlansMonth(parseAiPlansQuota(res.data));
+          // A successful auto-login also retires the marketing onboarding: if a
+          // *future* cold start fails to reach /account transiently, the flag is
+          // already true, so the gate degrades to the guest app, not onboarding.
+          try {
+            await completeOnboarding();
+          } catch (error) {
+            logger.warn('completeOnboarding during auto-login failed', error);
+          }
         }
       } catch (error) {
         logger.warn('Auto-login failed, starting fresh', error);

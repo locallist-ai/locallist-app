@@ -351,10 +351,11 @@ export default {
     notificationBody: "Your first LocalList Plus charge is on {{date}}. Not for you? Cancel in your App Store settings up to 24 hours before and you won't pay a thing.",
   },
   gate: {
-    // Guest hit an authenticated generation endpoint (or tapped generate while
-    // signed out) — prompt to register/log in.
-    signupRequiredTitle: 'Create an account to build your plan',
-    signupRequiredBody: 'Sign up or log in to generate and save your itinerary.',
+    // Shared guest gate: a guest hit an authenticated surface (generate, save a
+    // plan, or Follow Mode). Copy stays surface-agnostic since one gate now
+    // fronts all three.
+    signupRequiredTitle: 'Create a free account',
+    signupRequiredBody: 'Sign up to generate plans, save your favorites, and use Follow Mode.',
     signupCta: 'Sign up',
     maybeLater: 'Maybe later',
     upgradeCta: 'Go Plus',
@@ -379,6 +380,35 @@ export default {
     clampedBodyGeneric: 'We shortened your trip to fit the free limit. Go Plus for longer trips.',
     // DurationStep: free-tier locked affordance for 4–14 day trips.
     durationPlusLocked: 'Up to {{plusMaxDays}} days with Plus',
+  },
+  onboarding: {
+    // Shared
+    getStarted: 'Get started',
+    haveAccount: 'I already have an account',
+    continue: 'Continue',
+    skip: 'Skip',
+    // Screen 1 — value
+    valueClaim: 'Plans you can actually follow',
+    valueBullet1: 'One plan, not 40 tabs',
+    valueBullet2: 'Ready to follow, step by step',
+    valueBullet3: 'Honest trial: we remind you before you pay',
+    // Screen 2 — city
+    cityTitle: 'Where are you headed next?',
+    citySubtitle: 'Pick a city we cover and see a real plan.',
+    cityNotListed: "Don't see your city?",
+    cityNotifyThanks: "Thanks. We'll let you know when we cover it.",
+    // Screen 3 — tastes
+    tasteTitle: 'What are you into?',
+    tasteSubtitle: "Optional. Pick a few and we'll tailor your plan.",
+    tasteBudgetTitle: "What's your budget?",
+    // Screen 4 — value preview
+    previewEyebrow: 'This is what you get',
+    previewLoading: 'Building your preview...',
+    previewYourCity: 'your city',
+    previewGenericTitle: 'Your {{city}} plan, ready to follow',
+    previewGenericSubtitle: 'Curated stops, timed and ordered for you.',
+    previewGenericHint: 'Built the moment you start.',
+    createPlan: 'Create my plan',
   },
   placeSearch: {
     placeholder: 'Search places in {{city}}...',

@@ -149,10 +149,24 @@ interface PurchaseProps {
   hasTrial: boolean;
 }
 
+/** The four onboarding screens, in order (W2 flow). */
+export type OnboardingStepName = 'value' | 'city' | 'interests' | 'preview';
+
 export type AppEvent =
   // Auth
   | { event: 'sign_up'; provider: 'apple' | 'google' | 'email' }
   | { event: 'sign_in'; provider: 'apple' | 'google' | 'email' }
+  // Onboarding / guest mode (first-run funnel)
+  | { event: 'guest_mode_entered' }
+  | { event: 'onboarding_started' }
+  // Each value/city/interests/preview screen becoming visible (W2 flow).
+  | { event: 'onboarding_step_viewed'; step: OnboardingStepName }
+  // City chosen on screen 2. `covered` is false for the "my city isn't here"
+  // notify-me path (the live grid only lists covered cities).
+  | { event: 'onboarding_city_selected'; city: string; covered: boolean }
+  // Flow finished. `skippedPaywall` is true while the W5 timeline paywall step
+  // is not wired in (today: always true); W5 sets it from the paywall outcome.
+  | { event: 'onboarding_completed'; skippedPaywall: boolean }
   // Content
   | { event: 'plan_viewed'; planId: string; source?: 'feed' | 'builder' | 'deep_link' }
   | { event: 'place_viewed'; placeId: string; planId?: string }

@@ -44,13 +44,14 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 
 | File | Description |
 |---|---|
-| `_layout.tsx` | Root layout: Sentry init, fonts, SafeAreaProvider, animated splash, preload, AuthGate |
+| `_layout.tsx` | Root layout: Sentry init, fonts, SafeAreaProvider, animated splash, preload, **EntryGate** (guest mode: invitado O autenticado entran a la app; onboarding solo primera ejecución vía `lib/entry-state` + `lib/onboarding-store`) |
 | `index.tsx` | Redirect to `/(tabs)/home` |
+| `onboarding/index.tsx` | Orquestador del onboarding (W2): máquina de 4 pasos (valor / ciudad / gustos / preview de valor, en `components/onboarding/`) + swap a login inline con salida (fix del dead-end de W1) + analytics de pasos + completion con ciudad preseleccionada. Hook documentado para el paso 5 (paywall timeline, W5). Renderizado directo por el EntryGate (sin navigator) |
 | `(tabs)/_layout.tsx` | Tab bar (Home, Plans, Account) |
 | `(tabs)/home.tsx` | City picker: hero photo + Skia bg, CityCard grid → sets trip context, routes to `/chat` |
 | `(tabs)/plans.tsx` | Plans list: PhotoHero covers, category filter chips, skeleton loading; CTA → `/builder/custom` |
 | `(tabs)/account.tsx` | Profile (useProfile: pace/budget/dietary), tier badge, language selector, sign out |
-| `login.tsx` | Apple Sign In, Google OAuth, email/password, password strength rules |
+| `login.tsx` | Apple Sign In, Google OAuth, email/password, password strength rules. Prop opcional `onClose` (salida del dead-end): el onboarding lo renderiza inline con un back a las pantallas de valor; como ruta modal va sin `onClose` (dismiss nativo) |
 | `paywall.tsx` | LocalList Plus paywall (modal iOS): offerings de RevenueCat con precio localizado, compra, restore, links legales; degrada a "no disponible" sin API key/productos |
 | `chat/index.tsx` | **Main plan-creation flow**: conversational AI chat — slot extraction (SlotBadges), quick replies, `chatGenerate` → plan, SaveProfileSheet, escape hatch to wizard |
 | `builder/wizard.tsx` | AI plan wizard (renders `components/home/HomeScreen` step flow) — escape hatch from chat |
@@ -74,6 +75,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `account/` | Account screen sections: PlusUpsellCard, ProfileCard, TravelPreferencesSection (consumes useProfile), SettingsSection (settings + legal in-app + actions), DevToolsSection, LanguagePickerModal |
 | `paywall/TrialTimeline.tsx` | Timeline vertical Hoy→Día N-2→Día N+1 de la fase `ready` del paywall (sin urgencia/countdowns): promesa real del recordatorio del trial + primer cobro con el precio interpolado. Días DERIVADOS de `introPrice.periodNumberOfUnits`/`periodUnit` (`lib/trial-timeline.ts`), nunca hardcodeados. Se monta solo si el package tiene trial real (introPrice gratuito) Y el usuario es ELEGIBLE (`checkTrialEligibility` en el paywall) |
 | `auth/` | Login screen pieces: AuthModeToggle, AppleSignInButton, GoogleSignInButton, EmailSignInButton, CredentialsForm, PasswordStrengthIndicator (state/OAuth in `lib/auth/useAuthForm.ts`) |
+| `onboarding/` | Pantallas del flujo W2 (orquestadas por `app/onboarding/index.tsx`): OnboardingBackground (hero bg + overlay + ProgressDots), OnboardingValueScreen, OnboardingCityScreen (reusa CityCard + `/cities/live`), OnboardingTasteScreen (interests vía `useTaxonomy` + budget con ChoiceChip), OnboardingPreviewScreen (plan curado real vía `/plans?showcase=true` + `/plans/:id`, fallback genérico por gradiente) |
 | `map/PlanMap.tsx` | MapLibre map: pins, route line, animated camera |
 | `map/route-geojson.ts` | Pure helper: builds the route LineString GeoJSON (segments by active day or straight-line fallback) |
 | `map/useOfflineTiles.ts` | Offline tile caching hook |
@@ -113,6 +115,9 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `plan/bulk-ops.ts` | Batch stop reordering + persistence helpers |
 | `chat-store.ts` | Chat session id persistence (SecureStore) |
 | `trip-context-store.ts` | Selected city store (module-level + SafeStore persistence, `useTripContext`) |
+| `onboarding-store.ts` | First-run onboarding state (`onboarding_completed` + `onboarding_prefs`), SafeStore-persisted (muere con la desinstalación, NO Keychain); `useOnboarding`, `completeOnboarding`, getters sync. Mismo patrón que `trip-context-store` |
+| `entry-state.ts` | Pure decision del EntryGate (`resolveEntryState` → loading/onboarding/app + `isGuestSession`) — invitado O autenticado entran a la app, onboarding solo primera ejecución |
+| `onboarding-sync.ts` | Sync diferido de `onboarding_prefs` → `PUT /me/profile` (mapea budget/pace/dietary/city) en el primer `login()`/registro, luego limpia. `mapPrefsToProfile` pura (null si nada mapea, salta la red); best-effort (un fallo conserva las prefs para el siguiente intento) |
 | `use-profile.ts` | Hook: user profile CRUD (pace/budget/dietary) via API |
 | `trial-reminder/` | Recordatorio local del día 5 del trial (promesa "aviso el día 5, cobro el día 8"). Se programa SOLO con trial REAL (`entitlementPeriodType 'TRIAL'` del outcome de compra — elegibilidad del usuario, no el introPrice del producto); una compra efectiva sin trial cancela el pendiente obsoleto (cambio de plan). `native-module.ts`: require perezoso+guardado de expo-notifications — sin el módulo nativo (binario pre-rebuild) TODO el API degrada a no-op, jamás crash de arranque. `logic.ts` pura e inyectable (trigger compra+5d a las 10:00 locales — margen al cobro [37h,62h] con DST, siempre >24h; idempotencia por identificador; gracia de 24h para `pending_backend`; sesgo a conservar ante ambigüedad); `index.ts` wiring — SOLO locales, config plugin NO registrado a propósito (añadiría el entitlement push `aps-environment`) — con permiso pedido EN la compra con trial (nunca en arranque; denegado = log, la compra sigue), contenido i18n congelado al programar y `purchasedAt` persistido en el payload; `useTrialReminder` (AppStack): handler foreground, tap → `trial_reminder_shown {day:5}` + deep link a cuenta (el tap es la única señal observable con la app matada), reconciliación por `isPro` (pro→free o free fuera de gracia ⇒ cancel). Logout cancela vía `lib/auth` |
 | `analytics.ts` | PostHog REST capture, fire-and-forget `track()` — no-op without `EXPO_PUBLIC_POSTHOG_KEY`. Anon `distinct_id` persistente (UUID en fichero local `analytics_anon_id` — sobrevive reinicios, MUERE con la desinstalación; nunca Keychain, sería un device-id no reseteable) + `$identify` en anon→user; todos los eventos llevan `country` (locale) y `storefront` (caché RevenueCat) cuando hay valor; `trackPlanLimitIfGate403` emite `plan_limit_hit` desde los 403 estructurados de gates Plus (wired en `api.ts`) |
