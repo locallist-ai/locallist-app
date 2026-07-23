@@ -137,7 +137,8 @@ export type PaywallSource =
   | 'offline_follow'
   | 'favorites_limit'
   | 'video_import'
-  | 'settings';
+  | 'settings'
+  | 'onboarding';
 
 interface PurchaseProps {
   productId: string;

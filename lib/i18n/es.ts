@@ -318,6 +318,14 @@ export default {
     pkgAnnual: 'Anual',
     pkgLifetime: 'De por vida',
     bestValue: 'Mejor precio',
+    // El "gratis" queda subordinado al precio facturado (Apple 3.1.2).
+    trialFreeBadge: '{{days}} días gratis',
+    timelineTodayTitle: 'Hoy',
+    timelineTodayBody: 'Desbloqueas todo LocalList Plus.',
+    timelineReminderTitle: 'Día {{day}}',
+    timelineReminderBody: 'Te avisamos de que tu prueba gratis está por acabar.',
+    timelineChargeTitle: 'Día {{day}}',
+    timelineChargeBody: 'Primer cobro de {{price}}.',
     cta: 'Suscribirme',
     restore: 'Restaurar compras',
     disclaimer: 'Suscripción con renovación automática cargada a tu ID de Apple. Cancela cuando quieras en Ajustes.',
@@ -336,7 +344,7 @@ export default {
     restoreNoneBody: 'No encontramos una compra anterior para este ID de Apple.',
     close: 'Cerrar',
     done: 'Listo',
-    trialReminderNotice: 'Te avisaremos 2 días antes de que acabe tu prueba gratis. Primer cobro el día 8 — nunca antes.',
+    trialReminderNotice: 'Te avisaremos 2 días antes de que acabe tu prueba gratis. Primer cobro el día {{day}} — nunca antes.',
   },
   trialReminder: {
     notificationTitle: 'Tu prueba gratis acaba en 2 días',

@@ -318,6 +318,14 @@ export default {
     pkgAnnual: 'Annual',
     pkgLifetime: 'Lifetime',
     bestValue: 'Best value',
+    // Free-trial framing — kept subordinate to the billed price (Apple 3.1.2).
+    trialFreeBadge: '{{days}} days free',
+    timelineTodayTitle: 'Today',
+    timelineTodayBody: 'Unlock every LocalList Plus feature.',
+    timelineReminderTitle: 'Day {{day}}',
+    timelineReminderBody: "We'll remind you your free trial is ending.",
+    timelineChargeTitle: 'Day {{day}}',
+    timelineChargeBody: 'First charge of {{price}}.',
     cta: 'Subscribe',
     restore: 'Restore purchases',
     disclaimer: 'Auto-renewable subscription billed to your Apple ID. Cancel anytime in Settings.',
@@ -336,7 +344,7 @@ export default {
     restoreNoneBody: "We couldn't find a previous purchase for this Apple ID.",
     close: 'Close',
     done: 'Done',
-    trialReminderNotice: "We'll remind you 2 days before your free trial ends. First charge on day 8 — never before.",
+    trialReminderNotice: "We'll remind you 2 days before your free trial ends. First charge on day {{day}} — never before.",
   },
   trialReminder: {
     notificationTitle: 'Your free trial ends in 2 days',

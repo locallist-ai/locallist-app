@@ -21,6 +21,7 @@ import {
   type ReminderScheduler,
   type ScheduleReminderRequest,
 } from '../logic';
+import { trialTimelineFromDays } from '../../trial-timeline';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -266,6 +267,48 @@ describe('margen aviso → primer cobro', () => {
       expect(margin).toBeGreaterThan(24);
     },
   );
+});
+
+// ─── Coupling scheduler ↔ display (MINOR ronda 2) ────────
+//
+// El display del timeline (paywall) DERIVA los días del introPrice del producto
+// (`trialTimelineFromDays`). El scheduler del recordatorio debe derivar de la
+// MISMA duración, no de una constante 7 hardcodeada: si App Store Connect
+// cambiara la duración del trial, aviso y display se mueven juntos en vez de
+// que el display diga una cosa y la notificación local dispare a otra. Este
+// test ACOPLA explícitamente ambos a la misma `trialDays`.
+describe('coupling scheduler ↔ display: aviso y cobro derivan de la misma duración', () => {
+  // Compra a las 10:00 EXACTAS: la normalización horaria del trigger no desplaza
+  // el offset, así el offset en días es un múltiplo entero verificable (y sin
+  // cruces DST en la ventana jul→ago para los valores probados).
+  const purchasedAt = new Date(2026, 6, 22, REMINDER_HOUR_LOCAL, 0, 0, 0);
+
+  const offsetDays = (a: Date, b: Date) => (a.getTime() - b.getTime()) / DAY_MS;
+
+  it.each([3, 7, 14, 30])(
+    'trialDays=%i: trigger del recordatorio y primer cobro concuerdan con trialTimelineFromDays',
+    (trialDays) => {
+      const display = trialTimelineFromDays(trialDays);
+
+      const reminderOffset = offsetDays(computeReminderTriggerDate(purchasedAt, trialDays), purchasedAt);
+      const chargeOffset = offsetDays(computeFirstChargeDate(purchasedAt, trialDays), purchasedAt);
+
+      // El recordatorio del scheduler cae en el MISMO día de trial que el display.
+      expect(reminderOffset).toBe(display.reminderDay);
+      // El primer cobro del scheduler = duración del trial (= chargeDay - 1 del display).
+      expect(chargeOffset).toBe(trialDays);
+      expect(display.chargeDay).toBe(trialDays + 1);
+      // Invariante de la promesa: el aviso siempre precede al cobro.
+      expect(reminderOffset).toBeLessThan(chargeOffset);
+    },
+  );
+
+  it('default sin trialDays = decisión de negocio de 7 días (recordatorio día 5, cobro +7 → "día 8")', () => {
+    expect(TRIAL_DAYS).toBe(7);
+    expect(offsetDays(computeReminderTriggerDate(purchasedAt), purchasedAt)).toBe(5);
+    expect(offsetDays(computeFirstChargeDate(purchasedAt), purchasedAt)).toBe(7);
+    expect(trialTimelineFromDays(TRIAL_DAYS)).toMatchObject({ reminderDay: 5, chargeDay: 8 });
+  });
 });
 
 // ─── Constantes del contrato ─────────────────────────────

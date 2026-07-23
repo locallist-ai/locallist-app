@@ -141,7 +141,7 @@ export type TrialReminderResult =
  * trial dejaría un aviso mentiroso sobre una suscripción ya cobrada).
  */
 export async function syncTrialReminderAfterPurchase(
-  input: TrialPurchaseInput & { purchasedAt?: Date },
+  input: TrialPurchaseInput & { purchasedAt?: Date; trialDays?: number },
 ): Promise<TrialReminderResult> {
   const action = decideReminderActionForPurchase(input);
   if (action === 'none') return 'skipped';
@@ -162,6 +162,9 @@ export async function syncTrialReminderAfterPurchase(
         buildContent: buildReminderContent,
       },
       input.purchasedAt ?? new Date(),
+      // Duración derivada del producto (misma fuente que el display); `undefined`
+      // ⇒ ensureReminderScheduled aplica el default de negocio (7 días).
+      input.trialDays,
     );
     if (outcome === 'permission_denied') {
       // Requisito del brief: registrar el permiso denegado (log, no evento nuevo).
