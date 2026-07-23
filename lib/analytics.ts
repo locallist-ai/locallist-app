@@ -149,8 +149,12 @@ interface PurchaseProps {
   hasTrial: boolean;
 }
 
-/** The four onboarding screens, in order (W2 flow). */
-export type OnboardingStepName = 'value' | 'city' | 'interests' | 'preview';
+/**
+ * The onboarding screens, in order: the four W2 value screens plus the W5
+ * timeline paywall as the final step (value → city → interests → preview →
+ * paywall).
+ */
+export type OnboardingStepName = 'value' | 'city' | 'interests' | 'preview' | 'paywall';
 
 export type AppEvent =
   // Auth
@@ -159,13 +163,15 @@ export type AppEvent =
   // Onboarding / guest mode (first-run funnel)
   | { event: 'guest_mode_entered' }
   | { event: 'onboarding_started' }
-  // Each value/city/interests/preview screen becoming visible (W2 flow).
+  // Each value/city/interests/preview/paywall screen becoming visible (once per
+  // step, deduped by the orchestrator's seenSteps so back-nav never re-emits).
   | { event: 'onboarding_step_viewed'; step: OnboardingStepName }
   // City chosen on screen 2. `covered` is false for the "my city isn't here"
   // notify-me path (the live grid only lists covered cities).
   | { event: 'onboarding_city_selected'; city: string; covered: boolean }
-  // Flow finished. `skippedPaywall` is true while the W5 timeline paywall step
-  // is not wired in (today: always true); W5 sets it from the paywall outcome.
+  // Flow finished (from the W5 paywall step). `skippedPaywall` is true when the
+  // user tapped "not now" or the paywall degraded (auto-skip), false after an
+  // effective purchase/restore.
   | { event: 'onboarding_completed'; skippedPaywall: boolean }
   // Content
   | { event: 'plan_viewed'; planId: string; source?: 'feed' | 'builder' | 'deep_link' }

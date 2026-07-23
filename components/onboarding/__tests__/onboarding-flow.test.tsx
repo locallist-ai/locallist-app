@@ -124,6 +124,36 @@ jest.mock('../OnboardingPreviewScreen', () => {
     ),
   };
 });
+// The W5 paywall step is mocked to expose its three onboarding exits as buttons;
+// its real behavior (reusing PaywallView, degradation auto-skip, no trial framing
+// to non-eligibles) is covered by OnboardingPaywallStep.test.tsx. This test is
+// about the orchestrator's navigation + completion side effects.
+jest.mock('../OnboardingPaywallStep', () => {
+  const { View, TouchableOpacity, Text } = jest.requireActual('react-native');
+  return {
+    OnboardingPaywallStep: ({
+      onBack,
+      onSkip,
+      onPurchased,
+    }: {
+      onBack: () => void;
+      onSkip: () => void;
+      onPurchased: () => void;
+    }) => (
+      <View testID="paywall-step">
+        <TouchableOpacity testID="paywall-step-skip" onPress={onSkip}>
+          <Text>not now</Text>
+        </TouchableOpacity>
+        <TouchableOpacity testID="paywall-step-purchased" onPress={onPurchased}>
+          <Text>purchased</Text>
+        </TouchableOpacity>
+        <TouchableOpacity testID="paywall-step-back" onPress={onBack}>
+          <Text>paywall back</Text>
+        </TouchableOpacity>
+      </View>
+    ),
+  };
+});
 // The login is mocked, but it MODELS its internal `choose` → `credentials`
 // sub-step and publishes the same `onRegisterInnerBack` handler the real screen
 // does. Without modelling the sub-step, a flat `LOGIN` node cannot reveal the
@@ -212,7 +242,7 @@ describe('onboarding orchestrator — navigation + side effects', () => {
     expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_step_viewed', step: 'value' });
   });
 
-  it('walks value → city → interests → preview → complete with the right side effects', async () => {
+  it('walks value → city → interests → preview → paywall → complete with the right side effects', async () => {
     render(<OnboardingScreen />);
 
     // value → city
@@ -234,10 +264,66 @@ describe('onboarding orchestrator — navigation + side effects', () => {
     // Preview receives the preselected city.
     expect(screen.getByText('create for Miami')).toBeTruthy();
 
-    // preview → complete
+    // preview → paywall step (W5). "Create my plan" no longer completes: it
+    // advances to the paywall, which fires its step_viewed and completion later.
     fireEvent.press(screen.getByTestId('preview-create'));
+    expect(screen.getByTestId('paywall-step')).toBeTruthy();
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_step_viewed', step: 'paywall' });
+    expect(completeOnboarding).not.toHaveBeenCalled();
+
+    // paywall → complete (skip / "not now" → skippedPaywall:true)
+    fireEvent.press(screen.getByTestId('paywall-step-skip'));
     expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_completed', skippedPaywall: true });
     await waitFor(() => expect(completeOnboarding).toHaveBeenCalledTimes(1));
+  });
+
+  // W5: an effective purchase/restore from the paywall step completes the flow
+  // with skippedPaywall:false (the conversion signal in the funnel).
+  it('paywall step: a purchase completes onboarding with skippedPaywall:false', async () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-start'));
+    fireEvent.press(screen.getByTestId('city-select'));
+    fireEvent.press(screen.getByTestId('taste-continue'));
+    fireEvent.press(screen.getByTestId('preview-create'));
+    expect(screen.getByTestId('paywall-step')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('paywall-step-purchased'));
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_completed', skippedPaywall: false });
+    await waitFor(() => expect(completeOnboarding).toHaveBeenCalledTimes(1));
+  });
+
+  // W5 (no dead-end): back from the paywall step returns to the preview and does
+  // NOT complete the flow — the user can still change their mind and go back.
+  it('paywall step: back returns to the preview without completing', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-start'));
+    fireEvent.press(screen.getByTestId('city-select'));
+    fireEvent.press(screen.getByTestId('taste-continue'));
+    fireEvent.press(screen.getByTestId('preview-create'));
+    expect(screen.getByTestId('paywall-step')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('paywall-step-back'));
+    // Back on the preview (step 3), paywall dismissed, nothing completed.
+    expect(screen.getByText('create for Miami')).toBeTruthy();
+    expect(screen.queryByTestId('paywall-step')).toBeNull();
+    expect(completeOnboarding).not.toHaveBeenCalled();
+  });
+
+  // W5 analytics: the paywall step_viewed must fire only once — back to the
+  // preview and forward again to the paywall must not re-emit it (seenSteps).
+  it('paywall step: step_viewed(paywall) is not re-fired on back-and-forward', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-start'));
+    fireEvent.press(screen.getByTestId('city-select'));
+    fireEvent.press(screen.getByTestId('taste-continue'));
+    fireEvent.press(screen.getByTestId('preview-create')); // → paywall (viewed once)
+    fireEvent.press(screen.getByTestId('paywall-step-back')); // → preview (already seen)
+    fireEvent.press(screen.getByTestId('preview-create')); // → paywall again (already seen)
+
+    const paywallViews = mockTrack.mock.calls
+      .map((c) => c[0])
+      .filter((e) => e.event === 'onboarding_step_viewed' && e.step === 'paywall');
+    expect(paywallViews).toHaveLength(1);
   });
 
   // MINOR-1 (data correctness): a deselected budget must be persisted as `null`,
@@ -391,5 +477,22 @@ describe('onboarding orchestrator — Android hardware back', () => {
     expect(screen.getByText('step:0')).toBeTruthy();
     expect(pressHardwareBack()).toBe(false); // yields to OS default
     expect(screen.getByText('step:0')).toBeTruthy();
+  });
+
+  // W5 (no dead-end on the platform with a hardware back): the physical back on
+  // the paywall step retreats to the preview, exactly like its close X — never
+  // strands the user and never completes the flow.
+  it('back on the paywall step retreats to the preview (not a dead-end)', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-start'));
+    fireEvent.press(screen.getByTestId('city-select'));
+    fireEvent.press(screen.getByTestId('taste-continue'));
+    fireEvent.press(screen.getByTestId('preview-create'));
+    expect(screen.getByTestId('paywall-step')).toBeTruthy();
+
+    expect(pressHardwareBack()).toBe(true); // consumed
+    expect(screen.getByText('create for Miami')).toBeTruthy();
+    expect(screen.queryByTestId('paywall-step')).toBeNull();
+    expect(completeOnboarding).not.toHaveBeenCalled();
   });
 });
