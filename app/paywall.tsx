@@ -105,11 +105,18 @@ export default function PaywallScreen() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [selected, setSelected] = useState<PurchasesPackage | null>(null);
-  // Elegibilidad REAL de trial por productId (`checkTrialEligibility`). Arranca
-  // vacío ⇒ todo se trata como no-elegible (precio directo) hasta que la
-  // consulta READ-ONLY confirme 'ELIGIBLE'. Es IMPOSIBLE pintar el framing de
-  // trial a un no-elegible: el timeline y el "gratis" se gatean por este mapa.
-  const [trialEligibility, setTrialEligibility] = useState<Record<string, TrialEligibilityStatus>>({});
+  // Elegibilidad REAL de trial por productId (`checkTrialEligibility`), TAGGEADA
+  // con el `user.id` para el que se resolvió. Arranca vacío ⇒ todo se trata como
+  // no-elegible (precio directo) hasta que la consulta READ-ONLY confirme
+  // 'ELIGIBLE'. El tag es la clave del gating sub-frame: en el render se trata el
+  // mapa como VACÍO si `userId` no coincide con el `user.id` actual (ver
+  // `effectiveEligibility`), así el commit del cambio de identidad ya rinde
+  // precio directo SIN esperar a que `load()`/effects (passive, corren DESPUÉS
+  // de ese commit) reseteen — cierra el leak de 1 frame del framing de trial.
+  const [trialEligibility, setTrialEligibility] = useState<{
+    userId: string | undefined;
+    map: Record<string, TrialEligibilityStatus>;
+  }>({ userId: undefined, map: {} });
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<{ title: string; body: string } | null>(null);
   // True si la compra completada fue el plan anual con trial: las pantallas de
@@ -132,6 +139,12 @@ export default function PaywallScreen() {
   // Estado vigente al desmontar (el cleanup del unmount no ve el state actual).
   const phaseRef = useRef<Phase>('loading');
   phaseRef.current = phase;
+  // `user.id` vigente, leído en los effects/callbacks async para taggear el mapa
+  // de elegibilidad con su dueño real sin arrastrar `user` a las deps del effect
+  // `[packages]` (evita re-queries espurias en cambios de user sin nuevas
+  // packages). Se actualiza en cada render, así los effects lo leen ya committed.
+  const userIdRef = useRef<string | undefined>(user?.id);
+  userIdRef.current = user?.id;
   // Guard de montaje (limpiado en el cleanup del effect del dismissed): un
   // load() que resuelve con éxito DESPUÉS del unmount no debe emitir un
   // paywall_viewed fantasma tras el dismissed — esos precios nunca renderizaron.
@@ -169,7 +182,7 @@ export default function PaywallScreen() {
     // reset batched, el default seguro (mapa vacío ⇒ precio directo) rige desde
     // el PRIMER paint de las nuevas packages — nunca un paint intermedio con
     // "N días gratis" para quien no es elegible.
-    setTrialEligibility({});
+    setTrialEligibility({ userId: user?.id, map: {} });
     setPackages(pkgs);
     // Preselección: anual si existe (mejor precio), si no el primero.
     setSelected(pkgs.find((p) => p.packageType === 'ANNUAL') ?? pkgs[0]);
@@ -192,7 +205,8 @@ export default function PaywallScreen() {
     // batched de load() para que ninguna consulta en vuelo herede la
     // elegibilidad del array de packages anterior — el framing de trial jamás
     // sobrevive a un cambio de packages mientras la nueva consulta resuelve.
-    setTrialEligibility({});
+    const owner = userIdRef.current;
+    setTrialEligibility({ userId: owner, map: {} });
     const trialProductIds = packages
       .filter((p) => p.product.introPrice?.price === 0)
       .map((p) => p.product.identifier);
@@ -201,7 +215,9 @@ export default function PaywallScreen() {
     }
     let active = true;
     void checkTrialEligibility(trialProductIds).then((map) => {
-      if (active) setTrialEligibility(map);
+      // Se taggea con el `user.id` de ESTA ventana; si la identidad ya cambió,
+      // `active` es false (cleanup del cambio de packages) y no se aplica.
+      if (active) setTrialEligibility({ userId: owner, map });
     });
     return () => {
       active = false;
@@ -276,21 +292,29 @@ export default function PaywallScreen() {
       entitlementPeriodType: PlusEntitlementPeriodType | null,
       outcomeStatus: 'success' | 'pending_backend',
     ) => {
-      setTrialReminderApplies(
-        selected.packageType === 'ANNUAL' && entitlementPeriodType === 'TRIAL',
-      );
+      // Duración del trial DERIVADA de la MISMA fuente que el display del
+      // timeline (`introPriceDurationDays` del introPrice del producto): aviso y
+      // cobro se mueven con ella, nunca con una constante hardcodeada.
+      const derivedTrialDays = introPriceDurationDays(selected.product.introPrice);
+      const isRealTrial =
+        selected.packageType === 'ANNUAL' && entitlementPeriodType === 'TRIAL';
+      // Config degenerada (imposible con ASC normal, por eso no era CRITICAL):
+      // entitlement TRIAL pero la duración del introPrice NO es interpretable
+      // (`periodUnit`/`periodNumberOfUnits` desconocidos ⇒ null). Fail-safe: no
+      // programar un recordatorio con día inventado (el default de negocio de 7d
+      // mentiría sobre una duración que no conocemos) NI pintar el aviso con día
+      // en blanco. No notificar es mejor que notificar mal.
+      const degenerateTrial = isRealTrial && derivedTrialDays === null;
+      setTrialReminderApplies(isRealTrial && derivedTrialDays !== null);
+      if (degenerateTrial) return;
       void syncTrialReminderAfterPurchase({
         packageType: selected.packageType,
         entitlementPeriodType,
         outcomeStatus,
         purchasedAt: new Date(),
-        // Duración del trial DERIVADA de la MISMA fuente que el display del
-        // timeline (`introPriceDurationDays` del introPrice del producto): el
-        // recordatorio se programa a duración-2 y el cobro a duración, no a la
-        // constante hardcodeada. Si ASC cambiara la duración del trial, aviso y
-        // display se mueven juntos. `null` (producto sin trial derivable) ⇒ el
-        // scheduler usa el default decidido de negocio (7 días).
-        trialDays: introPriceDurationDays(selected.product.introPrice) ?? undefined,
+        // `null` aquí solo llega para compras SIN trial real (cancel_stale), donde
+        // `trialDays` no se usa: el scheduler nunca programa con el default fantasma.
+        trialDays: derivedTrialDays ?? undefined,
       });
     };
 
@@ -355,9 +379,17 @@ export default function PaywallScreen() {
     }
   };
 
+  // Elegibilidad EFECTIVA para este render: el mapa se trata como VACÍO si el
+  // `user.id` con que se pobló no coincide con el actual. Se resetea en el MISMO
+  // render que el cambio de identidad (no en un passive effect posterior), así
+  // el commit del cambio de contexto ya rinde precio directo (default seguro) y
+  // un no-elegible NUNCA ve el framing de trial del usuario anterior, ni un frame.
+  const effectiveEligibility =
+    trialEligibility.userId === user?.id ? trialEligibility.map : {};
+
   // Timeline solo con trial que el usuario PUEDE canjear (producto con trial +
   // status 'ELIGIBLE'); `null` ⇒ precio directo. Los días salen derivados.
-  const selectedTrialDays = eligibleTrialDays(selected, trialEligibility);
+  const selectedTrialDays = eligibleTrialDays(selected, effectiveEligibility);
 
   // Día del primer cobro para el aviso post-compra (éxito/pending): derivado del
   // trial del package elegido (N+1), nunca hardcodeado a "día 8".
@@ -399,9 +431,9 @@ export default function PaywallScreen() {
           </View>
           <Text style={s.stateTitle}>{t('paywall.successTitle')}</Text>
           <Text style={s.stateBody}>{t('paywall.successBody')}</Text>
-          {trialReminderApplies && (
+          {trialReminderApplies && noticeChargeDay != null && (
             <Text style={s.trialNotice} testID="paywall-trial-notice">
-              {t('paywall.trialReminderNotice', { day: noticeChargeDay ?? '' })}
+              {t('paywall.trialReminderNotice', { day: noticeChargeDay })}
             </Text>
           )}
           <TouchableOpacity style={s.primaryBtn} activeOpacity={0.8} onPress={() => router.back()}>
@@ -417,9 +449,9 @@ export default function PaywallScreen() {
           </View>
           <Text style={s.stateTitle}>{t('paywall.pendingTitle')}</Text>
           <Text style={s.stateBody}>{t('paywall.pendingBody')}</Text>
-          {trialReminderApplies && (
+          {trialReminderApplies && noticeChargeDay != null && (
             <Text style={s.trialNotice} testID="paywall-trial-notice">
-              {t('paywall.trialReminderNotice', { day: noticeChargeDay ?? '' })}
+              {t('paywall.trialReminderNotice', { day: noticeChargeDay })}
             </Text>
           )}
           <TouchableOpacity
@@ -463,7 +495,7 @@ export default function PaywallScreen() {
               const isSelected = selected?.identifier === pkg.identifier;
               // "N días gratis" solo si ESTE usuario puede canjear el trial de
               // ESTE producto; N derivado, no literal.
-              const pkgTrialDays = eligibleTrialDays(pkg, trialEligibility);
+              const pkgTrialDays = eligibleTrialDays(pkg, effectiveEligibility);
               return (
                 <TouchableOpacity
                   key={pkg.identifier}

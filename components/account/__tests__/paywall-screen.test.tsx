@@ -413,6 +413,35 @@ it('compra anual con trial ya consumido (entitlement NORMAL): sin aviso en panta
   );
 });
 
+// MINOR (ronda 3) — config degenerada: el producto ANUAL trae introPrice
+// gratuito (ofrece trial) pero con un periodo NO interpretable (unidad
+// desconocida ⇒ duración null) Y la compra devuelve entitlement TRIAL. El
+// display ya no pinta timeline (duración no derivable), pero antes el scheduler
+// programaba con el default fantasma de 7 días y el aviso de éxito renderizaba
+// "primer cobro el día " con el día EN BLANCO. Fail-safe: sin duración derivable
+// no se programa recordatorio y no se muestra ningún aviso con día vacío.
+it('config degenerada (trial con periodo no interpretable + entitlement TRIAL): sin aviso con día en blanco y sin programar recordatorio', async () => {
+  const degenerateAnnual = {
+    ...ANNUAL,
+    product: {
+      ...ANNUAL.product,
+      // introPrice gratuito (ofrece trial) pero periodo ininterpretable ⇒ null.
+      introPrice: { price: 0, periodNumberOfUnits: 7, periodUnit: 'FORTNIGHT' },
+    },
+  };
+  mockGetOfferings.mockResolvedValue({ packages: [MONTHLY, degenerateAnnual], error: null });
+  mockPurchase.mockResolvedValue({ status: 'success', entitlementPeriodType: 'TRIAL' });
+  render(<PaywallScreen />);
+
+  fireEvent.press(await screen.findByTestId('paywall-cta'));
+
+  expect(await screen.findByText('paywall.successTitle')).toBeOnTheScreen();
+  // Nunca un aviso con día en blanco.
+  expect(screen.queryByTestId('paywall-trial-notice')).toBeNull();
+  // Fail-safe: no se programa recordatorio con la duración fantasma.
+  expect(mockSyncTrialReminder).not.toHaveBeenCalled();
+});
+
 // MINOR-1 del review: una compra efectiva SIN trial (cambio de plan durante
 // el trial) también pasa por el sync — el módulo cancela el aviso obsoleto.
 it('compra mensual efectiva: sin aviso en pantalla y el sync recibe la compra para cancelar pendientes', async () => {
