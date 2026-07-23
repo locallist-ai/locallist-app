@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 import type { PurchasesPackage } from 'react-native-purchases';
@@ -18,12 +17,25 @@ import type { PlusEntitlementPeriodType } from '../lib/purchases';
 import { track, type PaywallSource } from '../lib/analytics';
 import { syncTrialReminderAfterPurchase } from '../lib/trial-reminder';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
+import { TrialTimeline } from '../components/paywall/TrialTimeline';
+
+/**
+ * Trial real a nivel de PRODUCTO: intro price gratuito (mismo criterio que
+ * `purchaseEventProps.hasTrial`). Un intro de pago no es trial. Gobierna si la
+ * fase `ready` pinta el timeline y el "gratis": sin trial en el producto no se
+ * promete uno. La elegibilidad del usuario (trial ya consumido) se resuelve al
+ * comprar vía `entitlementPeriodType`, no aquí.
+ */
+function packageHasTrial(pkg: PurchasesPackage | null): boolean {
+  return pkg?.product.introPrice?.price === 0;
+}
 
 type Phase = 'loading' | 'ready' | 'unavailable' | 'success' | 'pending';
 
 const PAYWALL_SOURCES: readonly PaywallSource[] = [
   'account_upsell', 'plan_limit', 'day_limit', 'multi_city',
   'offline_follow', 'favorites_limit', 'video_import', 'settings',
+  'onboarding',
 ];
 
 /** `?source=` del deep link/push validado contra la taxonomía; default upsell. */
@@ -277,6 +289,9 @@ export default function PaywallScreen() {
     }
   };
 
+  // Timeline solo con trial real en el producto elegido; narrowing sin `!`.
+  const trialPackage = packageHasTrial(selected) ? selected : null;
+
   return (
     <View style={s.root}>
       {/* Close */}
@@ -358,35 +373,17 @@ export default function PaywallScreen() {
 
       {phase === 'ready' && (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-          {/* Hero */}
-          <LinearGradient
-            colors={[colors.electricBlue, '#2563eb', '#1d4ed8']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={s.hero}
-          >
-            <View style={s.heroIcon}>
-              <Ionicons name="sparkles" size={30} color="#FFFFFF" />
+          {/* Header — sin urgencia, solo la promesa */}
+          <View style={s.header}>
+            <View style={s.headerIcon}>
+              <Ionicons name="sparkles" size={26} color={colors.electricBlue} />
             </View>
-            <Text style={s.heroTitle}>{t('paywall.title')}</Text>
-            <Text style={s.heroSubtitle}>{t('paywall.subtitle')}</Text>
-          </LinearGradient>
-
-          {/* Features */}
-          <View style={s.features}>
-            {([
-              ['map-outline', t('paywall.featurePlans')],
-              ['flash-outline', t('paywall.featurePriority')],
-              ['diamond-outline', t('paywall.featureCurated')],
-            ] as const).map(([icon, label]) => (
-              <View key={icon} style={s.featureRow}>
-                <Ionicons name={icon} size={20} color={colors.electricBlue} />
-                <Text style={s.featureText}>{label}</Text>
-              </View>
-            ))}
+            <Text style={s.headerTitle}>{t('paywall.title')}</Text>
+            <Text style={s.headerSubtitle}>{t('paywall.subtitle')}</Text>
           </View>
 
-          {/* Packages */}
+          {/* Selección de plan: precio facturado como elemento dominante; el
+              "gratis" queda subordinado (verbatim de Apple 3.1.2). */}
           <View style={s.packages}>
             {packages.map((pkg) => {
               const isSelected = selected?.identifier === pkg.identifier;
@@ -398,23 +395,51 @@ export default function PaywallScreen() {
                   onPress={() => setSelected(pkg)}
                   testID={`paywall-pkg-${pkg.identifier}`}
                 >
-                  <View style={s.pkgInfo}>
-                    <Text style={s.pkgLabel}>{packageLabel(pkg)}</Text>
-                    {pkg.packageType === 'ANNUAL' && (
-                      <View style={s.bestValueBadge}>
-                        <Text style={s.bestValueText}>{t('paywall.bestValue')}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={s.pkgPrice}>{pkg.product.priceString}</Text>
                   <Ionicons
                     name={isSelected ? 'radio-button-on' : 'radio-button-off'}
                     size={22}
                     color={isSelected ? colors.electricBlue : colors.borderColor}
                   />
+                  <View style={s.pkgInfo}>
+                    <View style={s.pkgLabelRow}>
+                      <Text style={s.pkgLabel}>{packageLabel(pkg)}</Text>
+                      {pkg.packageType === 'ANNUAL' && (
+                        <View style={s.bestValueBadge}>
+                          <Text style={s.bestValueText}>{t('paywall.bestValue')}</Text>
+                        </View>
+                      )}
+                    </View>
+                    {packageHasTrial(pkg) && (
+                      <Text style={s.pkgTrial}>{t('paywall.trialFreeBadge')}</Text>
+                    )}
+                  </View>
+                  <Text style={[s.pkgPrice, isSelected && s.pkgPriceSelected]}>
+                    {pkg.product.priceString}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
+          </View>
+
+          {/* Timeline SOLO con trial real en el producto seleccionado; con un
+              plan sin trial la zona muta a precio directo (no se pinta nada
+              extra: el precio del plan ya manda). */}
+          {trialPackage && (
+            <TrialTimeline priceString={trialPackage.product.priceString} />
+          )}
+
+          {/* Qué incluye — comprimido a 3 bullets bajo el timeline, no hero */}
+          <View style={s.features}>
+            {([
+              ['map-outline', t('paywall.featurePlans')],
+              ['flash-outline', t('paywall.featurePriority')],
+              ['diamond-outline', t('paywall.featureCurated')],
+            ] as const).map(([icon, label]) => (
+              <View key={icon} style={s.featureRow}>
+                <Ionicons name={icon} size={16} color={colors.electricBlue} />
+                <Text style={s.featureText}>{label}</Text>
+              </View>
+            ))}
           </View>
 
           {/* CTA */}
@@ -487,54 +512,47 @@ const s = StyleSheet.create({
   },
   scroll: { padding: spacing.lg, paddingTop: 64, paddingBottom: 40 },
 
-  // Hero
-  hero: {
-    borderRadius: 20,
-    borderCurve: 'continuous',
-    padding: spacing.lg,
+  // Header (sin gradiente/urgencia)
+  header: {
     alignItems: 'center',
     marginBottom: spacing.lg,
   },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.sunsetOrange,
+  headerIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.electricBlueLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  heroTitle: {
+  headerTitle: {
     fontFamily: fonts.headingBold,
     fontSize: 26,
-    color: '#FFFFFF',
+    color: colors.deepOcean,
     marginBottom: spacing.xs,
   },
-  heroSubtitle: {
+  headerSubtitle: {
     fontFamily: fonts.body,
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.85)',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
 
-  // Features
+  // Features (comprimidas, bajo el timeline)
   features: {
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.sm,
     marginBottom: spacing.lg,
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-    paddingHorizontal: spacing.md,
+    gap: 10,
+    paddingVertical: 6,
   },
   featureText: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 15,
-    color: colors.textMain,
+    fontSize: 14,
+    color: colors.textSecondary,
   },
 
   // Packages
@@ -550,11 +568,17 @@ const s = StyleSheet.create({
     padding: spacing.md,
   },
   pkgCardSelected: { borderColor: colors.electricBlue },
-  pkgInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pkgInfo: { flex: 1, gap: 2 },
+  pkgLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pkgLabel: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 16,
     color: colors.deepOcean,
+  },
+  pkgTrial: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   bestValueBadge: {
     backgroundColor: colors.sunsetOrangeLight,
@@ -567,10 +591,15 @@ const s = StyleSheet.create({
     fontSize: 11,
     color: colors.sunsetOrange,
   },
+  // El precio es el elemento más prominente; el seleccionado, aún mayor.
   pkgPrice: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 16,
-    color: colors.textMain,
+    fontFamily: fonts.bodyBold,
+    fontSize: 20,
+    color: colors.deepOcean,
+  },
+  pkgPriceSelected: {
+    fontSize: 26,
+    color: colors.electricBlue,
   },
 
   // Buttons

@@ -13,6 +13,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import PaywallScreen from '../../../app/paywall';
+import { useLocalSearchParams } from 'expo-router';
 import {
   configurePurchases,
   getPlusOfferings,
@@ -156,6 +157,59 @@ it('pinta los packages con precio localizado y preselecciona el anual', async ()
   await waitFor(() =>
     expect(mockPurchase).toHaveBeenCalledWith(expect.objectContaining({ identifier: '$rc_annual' }), 'u1', refreshUser),
   );
+});
+
+// ─── Timeline-first: trial vertical Hoy→Día5→Día8, precio dominante ───
+
+it('anual preseleccionado (trial real): pinta el timeline del trial', async () => {
+  render(<PaywallScreen />);
+
+  expect(await screen.findByTestId('paywall-trial-timeline')).toBeOnTheScreen();
+  // La promesa del día 5 (recordatorio) y del día 8 (cobro) están presentes.
+  expect(screen.getByText('paywall.timelineReminderTitle')).toBeOnTheScreen();
+  expect(screen.getByText('paywall.timelineChargeTitle')).toBeOnTheScreen();
+});
+
+it('con el mensual seleccionado (sin trial) NO hay timeline: precio directo', async () => {
+  render(<PaywallScreen />);
+
+  // Arranca en anual → timeline visible.
+  expect(await screen.findByTestId('paywall-trial-timeline')).toBeOnTheScreen();
+
+  fireEvent.press(screen.getByTestId('paywall-pkg-$rc_monthly'));
+
+  // El mensual no tiene introPrice gratuito → sin timeline, no se promete trial.
+  expect(screen.queryByTestId('paywall-trial-timeline')).toBeNull();
+});
+
+// Producto anual SIN introPrice (offering sin trial configurado): aunque sea el
+// preseleccionado, no se pinta timeline — refleja el PRODUCTO, no la promesa.
+it('anual sin introPrice: no renderiza timeline (fallback a precio directo)', async () => {
+  const annualNoTrial = { ...ANNUAL, product: { ...ANNUAL.product, introPrice: null } };
+  mockGetOfferings.mockResolvedValue({ packages: [MONTHLY, annualNoTrial], error: null });
+  render(<PaywallScreen />);
+
+  await screen.findByTestId('paywall-cta');
+  expect(screen.queryByTestId('paywall-trial-timeline')).toBeNull();
+});
+
+it('source onboarding: paywall_viewed lo lleva (nueva entrada del funnel)', async () => {
+  const params = useLocalSearchParams as jest.Mock;
+  // Persistente (no Once): el paywall re-renderiza durante el load y lee params
+  // en cada render; se restaura al default al terminar para no filtrar a otros.
+  params.mockReturnValue({ source: 'onboarding' });
+  try {
+    render(<PaywallScreen />);
+    await screen.findByTestId('paywall-cta');
+
+    const viewed = (track as jest.Mock).mock.calls
+      .map(([p]) => p)
+      .filter((p) => p.event === 'paywall_viewed');
+    expect(viewed).toHaveLength(1);
+    expect(viewed[0].source).toBe('onboarding');
+  } finally {
+    params.mockReturnValue({});
+  }
 });
 
 it('compra ok: pasa refreshUser al módulo (flip de isPro sin reinicio) y muestra éxito', async () => {
