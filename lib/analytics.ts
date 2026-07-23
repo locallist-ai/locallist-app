@@ -152,6 +152,10 @@ export type AppEvent =
   // Auth
   | { event: 'sign_up'; provider: 'apple' | 'google' | 'email' }
   | { event: 'sign_in'; provider: 'apple' | 'google' | 'email' }
+  // Onboarding / guest mode (first-run funnel)
+  | { event: 'guest_mode_entered' }
+  | { event: 'onboarding_started' }
+  | { event: 'onboarding_completed' }
   // Content
   | { event: 'plan_viewed'; planId: string; source?: 'feed' | 'builder' | 'deep_link' }
   | { event: 'place_viewed'; placeId: string; planId?: string }

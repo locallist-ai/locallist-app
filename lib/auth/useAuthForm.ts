@@ -3,6 +3,7 @@ import type { TextInput } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { api, getAccessToken } from '../api';
 import { useAuth } from '../auth';
@@ -30,6 +31,21 @@ export const PASSWORD_CHECKS: Array<{
 async function trackAuthEvent(provider: 'apple' | 'google' | 'email') {
   const hadToken = await getAccessToken();
   track({ event: hadToken ? 'sign_in' : 'sign_up', provider });
+}
+
+/**
+ * Dismiss the login screen after a successful `login()`. In guest mode login is
+ * a modal pushed on top of the app stack, so we pop it; if there is nothing to
+ * pop (onboarding "I have an account" inline path, or a cold deep link) we fall
+ * back to the home tab. Previously the screen self-closed only because the old
+ * AuthGate re-rendered the whole tree — with guest mode it stays mounted.
+ */
+function closeAfterLogin() {
+  if (router.canGoBack()) {
+    router.back();
+  } else {
+    router.replace('/(tabs)/home');
+  }
 }
 
 /**
@@ -107,6 +123,7 @@ export function useAuthForm() {
       if (res.data) {
         await trackAuthEvent('google');
         await login(res.data.user, res.data.accessToken, res.data.refreshToken);
+        closeAfterLogin();
       } else {
         setError(res.error ?? t('auth.errorGoogleFailed'));
       }
@@ -144,6 +161,7 @@ export function useAuthForm() {
       if (res.data) {
         await trackAuthEvent('apple');
         await login(res.data.user, res.data.accessToken, res.data.refreshToken);
+        closeAfterLogin();
       } else {
         setError(res.error ?? t('auth.errorLoginFailed'));
       }
@@ -211,6 +229,7 @@ export function useAuthForm() {
     if (res.data) {
       track({ event: 'sign_up', provider: 'email' });
       await login(res.data.user, res.data.accessToken, res.data.refreshToken);
+      closeAfterLogin();
     } else {
       setError(res.error ?? t('auth.errorRegistrationFailed'));
     }
@@ -247,6 +266,7 @@ export function useAuthForm() {
     if (res.data) {
       await trackAuthEvent('email');
       await login(res.data.user, res.data.accessToken, res.data.refreshToken);
+      closeAfterLogin();
     } else {
       setError(res.error ?? t('auth.errorLoginFailed'));
     }

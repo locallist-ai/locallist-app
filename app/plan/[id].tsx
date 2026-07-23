@@ -246,7 +246,10 @@ export default function PlanDetailScreen() {
   }, [editorSave, effectivePlanId, isNew, presentGate]);
 
   const handleFollow = () => {
-    if (!isAuthenticated) { router.push('/login'); return; }
+    // Follow Mode (`POST /follow/start`) is `[Authorize]`; a guest gets the
+    // deferred-signup gate (bottom-sheet/Alert with a Sign up CTA) instead of a
+    // silent 401, matching the save/generate surfaces.
+    if (!isAuthenticated) { presentGate({ type: 'signup_required' }); return; }
     router.push(`/follow/${id === 'preview' ? visiblePlan?.id : id}`);
   };
 

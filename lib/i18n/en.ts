@@ -343,10 +343,11 @@ export default {
     notificationBody: "Your first LocalList Plus charge is on {{date}}. Not for you? Cancel in your App Store settings up to 24 hours before and you won't pay a thing.",
   },
   gate: {
-    // Guest hit an authenticated generation endpoint (or tapped generate while
-    // signed out) — prompt to register/log in.
-    signupRequiredTitle: 'Create an account to build your plan',
-    signupRequiredBody: 'Sign up or log in to generate and save your itinerary.',
+    // Shared guest gate: a guest hit an authenticated surface (generate, save a
+    // plan, or Follow Mode). Copy stays surface-agnostic since one gate now
+    // fronts all three.
+    signupRequiredTitle: 'Create a free account',
+    signupRequiredBody: 'Sign up to generate plans, save your favorites, and use Follow Mode.',
     signupCta: 'Sign up',
     maybeLater: 'Maybe later',
     upgradeCta: 'Go Plus',
@@ -371,6 +372,13 @@ export default {
     clampedBodyGeneric: 'We shortened your trip to fit the free limit. Go Plus for longer trips.',
     // DurationStep: free-tier locked affordance for 4–14 day trips.
     durationPlusLocked: 'Up to {{plusMaxDays}} days with Plus',
+  },
+  onboarding: {
+    // First-run screen 1 (skeleton). Full flow lands in W2.
+    title: 'Plans you can actually follow',
+    subtitle: 'Curated, ready-to-go itineraries. No endless research, no 40 tabs.',
+    getStarted: 'Get started',
+    haveAccount: 'I already have an account',
   },
   placeSearch: {
     placeholder: 'Search places in {{city}}...',

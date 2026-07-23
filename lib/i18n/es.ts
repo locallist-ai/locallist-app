@@ -343,8 +343,8 @@ export default {
     notificationBody: 'El primer cobro de LocalList Plus será el {{date}}. ¿No te convence? Cancela en los ajustes del App Store hasta 24 horas antes y no pagarás nada.',
   },
   gate: {
-    signupRequiredTitle: 'Crea una cuenta para crear tu plan',
-    signupRequiredBody: 'Regístrate o inicia sesión para generar y guardar tu itinerario.',
+    signupRequiredTitle: 'Crea una cuenta gratis',
+    signupRequiredBody: 'Regístrate para generar planes, guardar tus favoritos y usar Follow Mode.',
     signupCta: 'Regístrate',
     maybeLater: 'Quizás más tarde',
     upgradeCta: 'Hazte Plus',
@@ -364,6 +364,13 @@ export default {
     clampedBody: 'Hemos creado un plan de {{days}} días. Hazte Plus para viajes más largos.',
     clampedBodyGeneric: 'Hemos recortado tu viaje para ajustarlo al límite gratis. Hazte Plus para viajes más largos.',
     durationPlusLocked: 'Hasta {{plusMaxDays}} días con Plus',
+  },
+  onboarding: {
+    // Primera ejecución, pantalla 1 (esqueleto). El flujo completo llega en W2.
+    title: 'Planes que puedes seguir de verdad',
+    subtitle: 'Itinerarios curados listos para seguir. Sin búsquedas interminables, sin 40 pestañas.',
+    getStarted: 'Empezar',
+    haveAccount: 'Ya tengo cuenta',
   },
   placeSearch: {
     placeholder: 'Buscar lugares en {{city}}...',
