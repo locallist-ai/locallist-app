@@ -15,9 +15,13 @@ import { EditorialTitle, StepSubtitle } from '../ui/design-system';
 
 interface OnboardingCityScreenProps {
   onSelectCity: (cityName: string, covered: boolean) => void;
+  // Fired when the user taps "my city isn't listed". The orchestrator emits the
+  // `covered:false` analytics event (this grid only surfaces covered cities, so
+  // this is the sole demand signal for uncovered cities).
+  onNotifyUncovered: () => void;
 }
 
-export function OnboardingCityScreen({ onSelectCity }: OnboardingCityScreenProps) {
+export function OnboardingCityScreen({ onSelectCity, onNotifyUncovered }: OnboardingCityScreenProps) {
   const { t } = useTranslation();
   const [cities, setCities] = useState<City[]>(CITIES);
   // Notify-me (QW4) is not built yet — this only reveals a local acknowledgement
@@ -42,6 +46,9 @@ export function OnboardingCityScreen({ onSelectCity }: OnboardingCityScreenProps
   const handleNotifyMe = () => {
     setNotifyRequested(true);
     logger.info('onboarding: notify-me requested for an uncovered city (QW4 pending)');
+    // Surface demand for uncovered cities to analytics (the only `covered:false`
+    // producer). Keep the local ack + logger; the orchestrator owns the event.
+    onNotifyUncovered();
   };
 
   return (

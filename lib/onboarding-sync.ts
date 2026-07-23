@@ -10,6 +10,17 @@
  *
  * Best-effort by contract: a failed write leaves the prefs in place so the next
  * login retries; it never throws into the auth flow.
+ *
+ * PRODUCT DECISION TO FLAG (unresolved — needs Pablo's call, behavior unchanged):
+ * a guest who onboards on a FRESH install and then logs into a PRE-EXISTING account
+ * has that account's `favoriteCity` / `defaultBudgetTier` OVERWRITTEN by the
+ * onboarding picks. The backend merge (`ProfileController.cs`) is per-field, so
+ * unrelated fields (dietary / pace / group) survive — but the two fields onboarding
+ * sets are clobbered by the fresh guest input. This may be intended (the user just
+ * expressed fresh intent) or unwanted (it stomps established preferences). Options
+ * if we want to change it: only sync a field when the account has it unset, or gate
+ * the whole sync on "new account". Do NOT change the mapping/merge below without a
+ * decision — it currently always overwrites the mapped fields.
  */
 import { upsertProfile } from './api';
 import {

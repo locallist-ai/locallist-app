@@ -6,10 +6,16 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react-native';
 import { OnboardingTasteScreen } from '../OnboardingTasteScreen';
+import { getOnboardingPrefsSync } from '../../../lib/onboarding-store';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
+// Seed the taste screen from prefs already captured this session (see MINOR fix).
+jest.mock('../../../lib/onboarding-store', () => ({
+  getOnboardingPrefsSync: jest.fn(() => ({})),
+}));
+const mockGetPrefs = getOnboardingPrefsSync as jest.Mock;
 jest.mock('../../ui/design-system', () => {
   const { Text, TouchableOpacity } = jest.requireActual('react-native');
   return {
@@ -44,7 +50,10 @@ jest.mock('../../home/useTaxonomy', () => {
   };
 });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockGetPrefs.mockReturnValue({});
+});
 
 describe('OnboardingTasteScreen', () => {
   it('renders one interest chip per taxonomy category', () => {
@@ -80,5 +89,20 @@ describe('OnboardingTasteScreen', () => {
     render(<OnboardingTasteScreen onContinue={jest.fn()} onSkip={onSkip} />);
     fireEvent.press(screen.getByText('onboarding.skip'));
     expect(onSkip).toHaveBeenCalledTimes(1);
+  });
+
+  // MINOR fix: revisiting tastes (remounted from the preview) must not wipe the
+  // interests/budget captured before. The screen seeds from persisted prefs, so
+  // a bare Continue re-hands the same selection up instead of `[]`.
+  it('seeds interests + budget from already-persisted prefs (non-destructive back-nav)', () => {
+    mockGetPrefs.mockReturnValue({ interests: ['food', 'coffee'], budget: 'moderate' });
+    const onContinue = jest.fn();
+    render(<OnboardingTasteScreen onContinue={onContinue} onSkip={jest.fn()} />);
+
+    // Pre-filled chips render as selected.
+    expect(screen.getByText('[x] wizard.interestFood')).toBeTruthy();
+    // Continue without touching anything preserves the prior selection.
+    fireEvent.press(screen.getByText('onboarding.continue'));
+    expect(onContinue).toHaveBeenCalledWith({ interests: ['food', 'coffee'], budget: 'moderate' });
   });
 });

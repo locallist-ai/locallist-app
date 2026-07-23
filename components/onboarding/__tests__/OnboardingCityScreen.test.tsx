@@ -43,7 +43,7 @@ beforeEach(() => jest.clearAllMocks());
 describe('OnboardingCityScreen', () => {
   it('renders the covered cities from /cities/live', async () => {
     mockGetLiveCities.mockResolvedValueOnce(liveOk(['Miami', 'Lisboa']));
-    render(<OnboardingCityScreen onSelectCity={jest.fn()} />);
+    render(<OnboardingCityScreen onSelectCity={jest.fn()} onNotifyUncovered={jest.fn()} />);
     await waitFor(() => expect(screen.getByText('Lisboa')).toBeTruthy());
     expect(screen.getByText('Miami')).toBeTruthy();
   });
@@ -51,7 +51,7 @@ describe('OnboardingCityScreen', () => {
   it('selecting a city hands (name, covered=true) up', async () => {
     mockGetLiveCities.mockResolvedValueOnce(liveOk(['Miami']));
     const onSelectCity = jest.fn();
-    render(<OnboardingCityScreen onSelectCity={onSelectCity} />);
+    render(<OnboardingCityScreen onSelectCity={onSelectCity} onNotifyUncovered={jest.fn()} />);
     await waitFor(() => expect(screen.getByText('Miami')).toBeTruthy());
     fireEvent.press(screen.getByText('Miami'));
     expect(onSelectCity).toHaveBeenCalledWith('Miami', true);
@@ -59,17 +59,19 @@ describe('OnboardingCityScreen', () => {
 
   it('keeps the bundled catalog (Miami) when the network fails', async () => {
     mockGetLiveCities.mockResolvedValueOnce({ data: null, error: 'Network error', errorBody: null, status: 0 });
-    render(<OnboardingCityScreen onSelectCity={jest.fn()} />);
+    render(<OnboardingCityScreen onSelectCity={jest.fn()} onNotifyUncovered={jest.fn()} />);
     expect(screen.getByText('Miami')).toBeTruthy();
     await waitFor(() => expect(mockGetLiveCities).toHaveBeenCalled());
     expect(screen.getByText('Miami')).toBeTruthy();
   });
 
-  it('notify-me reveals a local acknowledgement (QW4 hook)', async () => {
+  it('notify-me reveals a local acknowledgement and reports uncovered demand', async () => {
     mockGetLiveCities.mockResolvedValueOnce(liveOk(['Miami']));
-    render(<OnboardingCityScreen onSelectCity={jest.fn()} />);
+    const onNotifyUncovered = jest.fn();
+    render(<OnboardingCityScreen onSelectCity={jest.fn()} onNotifyUncovered={onNotifyUncovered} />);
     await waitFor(() => expect(screen.getByText('Miami')).toBeTruthy());
     fireEvent.press(screen.getByText('onboarding.cityNotListed'));
     expect(screen.getByText('onboarding.cityNotifyThanks')).toBeTruthy();
+    expect(onNotifyUncovered).toHaveBeenCalledTimes(1);
   });
 });

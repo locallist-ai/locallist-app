@@ -5,6 +5,7 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { ChoiceChip, EditorialTitle, StepSubtitle } from '../ui/design-system';
 import { INTEREST_OPTIONS, BUDGET_OPTIONS, type StepOption } from '../home/constants';
 import { useTaxonomy, INTEREST_TO_CATEGORY } from '../home/useTaxonomy';
+import { getOnboardingPrefsSync } from '../../lib/onboarding-store';
 
 // Onboarding screen 3 — tastes (skippable). Multi-select interests (driven by
 // the live taxonomy categories, rendered with the branded interest chips) plus a
@@ -39,8 +40,17 @@ function useInterestChips(): StepOption[] {
 export function OnboardingTasteScreen({ onContinue, onSkip }: OnboardingTasteScreenProps) {
   const { t } = useTranslation();
   const interestChips = useInterestChips();
-  const [interests, setInterests] = useState<string[]>([]);
-  const [budget, setBudget] = useState<string | null>(null);
+  // Pre-fill from prefs already persisted this session. The screen mounts
+  // conditionally (`stepIndex === 2`), so revisiting it from the preview remounts
+  // it fresh; without seeding, tapping Continue again would overwrite captured
+  // interests with `[]`. Seeding keeps back-navigation non-destructive (matches the
+  // budget's condition-preserving spread in the orchestrator).
+  const [interests, setInterests] = useState<string[]>(
+    () => getOnboardingPrefsSync().interests ?? [],
+  );
+  const [budget, setBudget] = useState<string | null>(
+    () => getOnboardingPrefsSync().budget ?? null,
+  );
 
   const toggleInterest = (id: string) => {
     setInterests((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));

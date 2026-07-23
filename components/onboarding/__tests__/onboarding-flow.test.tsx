@@ -8,7 +8,8 @@
  * their visuals (covered by each screen's own test).
  */
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { Platform, BackHandler } from 'react-native';
 import OnboardingScreen from '../../../app/onboarding';
 import { track } from '../../../lib/analytics';
 import { completeOnboarding, setOnboardingPrefs } from '../../../lib/onboarding-store';
@@ -68,10 +69,21 @@ jest.mock('../OnboardingValueScreen', () => {
 jest.mock('../OnboardingCityScreen', () => {
   const { TouchableOpacity, Text } = jest.requireActual('react-native');
   return {
-    OnboardingCityScreen: ({ onSelectCity }: { onSelectCity: (c: string, covered: boolean) => void }) => (
-      <TouchableOpacity testID="city-select" onPress={() => onSelectCity('Miami', true)}>
-        <Text>select Miami</Text>
-      </TouchableOpacity>
+    OnboardingCityScreen: ({
+      onSelectCity,
+      onNotifyUncovered,
+    }: {
+      onSelectCity: (c: string, covered: boolean) => void;
+      onNotifyUncovered: () => void;
+    }) => (
+      <>
+        <TouchableOpacity testID="city-select" onPress={() => onSelectCity('Miami', true)}>
+          <Text>select Miami</Text>
+        </TouchableOpacity>
+        <TouchableOpacity testID="city-notify" onPress={onNotifyUncovered}>
+          <Text>notify me</Text>
+        </TouchableOpacity>
+      </>
     ),
   };
 });
@@ -125,7 +137,37 @@ jest.mock('../../../app/login', () => {
 
 const mockTrack = track as jest.Mock;
 
-beforeEach(() => jest.clearAllMocks());
+// Captures the `hardwareBackPress` callback the orchestrator registers so tests
+// can simulate the Android physical back button. The handler is Android-only, so
+// we force `Platform.OS` and stub `addEventListener` to grab the latest closure
+// (the effect re-registers on every step/login change).
+let hardwareBack: (() => boolean) | null = null;
+const originalOS = Platform.OS;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  hardwareBack = null;
+  (Platform as { OS: string }).OS = 'android';
+  jest
+    .spyOn(BackHandler, 'addEventListener')
+    .mockImplementation((event: string, cb: () => boolean) => {
+      if (event === 'hardwareBackPress') hardwareBack = cb;
+      return { remove: jest.fn() } as unknown as ReturnType<typeof BackHandler.addEventListener>;
+    });
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+  (Platform as { OS: string }).OS = originalOS;
+});
+
+const pressHardwareBack = (): boolean => {
+  let handled = false;
+  act(() => {
+    handled = hardwareBack ? hardwareBack() : false;
+  });
+  return handled;
+};
 
 describe('onboarding orchestrator — navigation + side effects', () => {
   it('mounts on the value step and fires started + step_viewed(value)', () => {
@@ -193,5 +235,89 @@ describe('onboarding orchestrator — navigation + side effects', () => {
     expect(screen.queryByText('LOGIN')).toBeNull();
     // Backing out of login never completes onboarding.
     expect(completeOnboarding).not.toHaveBeenCalled();
+  });
+
+  // MINOR: analytics can never see demand for uncovered cities because the grid
+  // only lists covered ones. Notify-me is the sole `covered:false` producer.
+  it('notify-me for an uncovered city fires city_selected {covered:false} without advancing', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-start')); // → city step
+    expect(screen.getByText('step:1')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('city-notify'));
+    expect(mockTrack).toHaveBeenCalledWith({
+      event: 'onboarding_city_selected',
+      city: '',
+      covered: false,
+    });
+    // Uncovered selection must NOT advance or write a city.
+    expect(screen.getByText('step:1')).toBeTruthy();
+    expect(setSelectedCity).not.toHaveBeenCalled();
+  });
+
+  // MINOR: back-navigation must not re-emit `step_viewed` for steps already seen,
+  // or the funnel view counts inflate.
+  it('does not re-fire step_viewed when navigating back to an already-seen step', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-start')); // value → city (city viewed)
+    fireEvent.press(screen.getByTestId('bg-back')); // city → value (already seen)
+    fireEvent.press(screen.getByTestId('value-start')); // value → city again (already seen)
+
+    const stepViews = mockTrack.mock.calls
+      .map((c) => c[0])
+      .filter((e) => e.event === 'onboarding_step_viewed');
+    const valueViews = stepViews.filter((e) => e.step === 'value');
+    const cityViews = stepViews.filter((e) => e.step === 'city');
+    expect(valueViews).toHaveLength(1);
+    expect(cityViews).toHaveLength(1);
+  });
+});
+
+// MAJOR: the gate renders onboarding outside any navigator, so the Android
+// hardware back button has no handler unless the orchestrator installs one.
+// `onboarding-flow.test` above only ever exercised the JS chevron (`bg-back`),
+// leaving the physical back — the real dead-end on Android — uncovered.
+describe('onboarding orchestrator — Android hardware back', () => {
+  it('registers a hardwareBackPress handler on Android', () => {
+    render(<OnboardingScreen />);
+    expect(BackHandler.addEventListener).toHaveBeenCalledWith(
+      'hardwareBackPress',
+      expect.any(Function),
+    );
+    expect(hardwareBack).toBeInstanceOf(Function);
+  });
+
+  it('does NOT register the handler on iOS (no hardware back)', () => {
+    (Platform as { OS: string }).OS = 'ios';
+    render(<OnboardingScreen />);
+    expect(BackHandler.addEventListener).not.toHaveBeenCalled();
+  });
+
+  it('back on the inline login dismisses it to the flow (returns to value)', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-signin'));
+    expect(screen.getByText('LOGIN')).toBeTruthy();
+
+    expect(pressHardwareBack()).toBe(true); // consumed
+    expect(screen.getByTestId('value-start')).toBeTruthy();
+    expect(screen.queryByText('LOGIN')).toBeNull();
+    expect(completeOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('back on a non-first step steps the flow backwards (step 2 → step 1)', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-start')); // step 1
+    fireEvent.press(screen.getByTestId('city-select')); // covered → step 2
+    expect(screen.getByText('step:2')).toBeTruthy();
+
+    expect(pressHardwareBack()).toBe(true); // consumed
+    expect(screen.getByText('step:1')).toBeTruthy();
+  });
+
+  it('back on the first step is NOT consumed (OS default exits the app)', () => {
+    render(<OnboardingScreen />);
+    expect(screen.getByText('step:0')).toBeTruthy();
+    expect(pressHardwareBack()).toBe(false); // yields to OS default
+    expect(screen.getByText('step:0')).toBeTruthy();
   });
 });

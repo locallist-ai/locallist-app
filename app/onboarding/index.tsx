@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { BackHandler, Platform } from 'react-native';
 import { track, type OnboardingStepName } from '../../lib/analytics';
 import { completeOnboarding, setOnboardingPrefs } from '../../lib/onboarding-store';
 import { setSelectedCity } from '../../lib/trip-context-store';
@@ -46,14 +47,42 @@ export default function OnboardingScreen() {
     track({ event: 'onboarding_started' });
   }, []);
 
-  // Fire `onboarding_step_viewed` whenever the active step changes (including the
-  // initial value screen). Toggling the inline login does not change stepIndex,
-  // so returning from login never re-fires it.
+  // Fire `onboarding_step_viewed` only the FIRST time each step becomes visible.
+  // Back-navigation (city → back → value → forward → city) must not re-emit views
+  // for steps already seen, or the funnel view counts inflate. Toggling the inline
+  // login does not change stepIndex, so returning from login never re-fires it.
+  const seenSteps = useRef<Set<number>>(new Set());
   useEffect(() => {
+    if (seenSteps.current.has(stepIndex)) return;
+    seenSteps.current.add(stepIndex);
     track({ event: 'onboarding_step_viewed', step: STEP_NAMES[stepIndex] });
   }, [stepIndex]);
 
   const goTo = (index: number) => setStepIndex(index);
+
+  // Android hardware back: mirror the on-screen chevron so the OS back button is
+  // never a dead-end on the platform that has one. The gate renders onboarding
+  // OUTSIDE any navigator, so without this handler the physical back sends the app
+  // to the background at every step (iOS has no hardware back, hence the guard).
+  // Precedence matches `onClose`/`onBack`: dismiss the inline login first, else
+  // step back one screen, else (step 0) let the OS default fire (exit). Returning
+  // `true` consumes the event; `false` yields to the default.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const onHardwareBack = (): boolean => {
+      if (showLogin) {
+        setShowLogin(false);
+        return true;
+      }
+      if (stepIndex > 0) {
+        goTo(stepIndex - 1);
+        return true;
+      }
+      return false;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+    return () => subscription.remove();
+  }, [showLogin, stepIndex]);
 
   const handleSelectCity = (cityName: string, covered: boolean) => {
     setSelectedCityState(cityName);
@@ -65,6 +94,15 @@ export default function OnboardingScreen() {
     );
     track({ event: 'onboarding_city_selected', city: cityName, covered });
     if (covered) goTo(2);
+  };
+
+  // Notify-me for a city we do not cover yet. The grid only lists covered cities,
+  // so this is the ONLY producer of `covered:false` — without it PostHog can never
+  // measure demand for uncovered cities (a signal for expansion priority). No city
+  // name is captured yet (there is no free-text input; QW4's waitlist endpoint will
+  // add one), so `city` is empty for now — the count is the signal. Does not advance.
+  const handleNotifyUncovered = () => {
+    track({ event: 'onboarding_city_selected', city: '', covered: false });
   };
 
   const handleTasteContinue = (prefs: { interests: string[]; budget: string | null }) => {
@@ -96,7 +134,12 @@ export default function OnboardingScreen() {
       {stepIndex === 0 && (
         <OnboardingValueScreen onStart={() => goTo(1)} onSignIn={() => setShowLogin(true)} />
       )}
-      {stepIndex === 1 && <OnboardingCityScreen onSelectCity={handleSelectCity} />}
+      {stepIndex === 1 && (
+        <OnboardingCityScreen
+          onSelectCity={handleSelectCity}
+          onNotifyUncovered={handleNotifyUncovered}
+        />
+      )}
       {stepIndex === 2 && (
         <OnboardingTasteScreen onContinue={handleTasteContinue} onSkip={() => goTo(3)} />
       )}
