@@ -44,8 +44,9 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 
 | File | Description |
 |---|---|
-| `_layout.tsx` | Root layout: Sentry init, fonts, SafeAreaProvider, animated splash, preload, AuthGate |
+| `_layout.tsx` | Root layout: Sentry init, fonts, SafeAreaProvider, animated splash, preload, **EntryGate** (guest mode: invitado O autenticado entran a la app; onboarding solo primera ejecución vía `lib/entry-state` + `lib/onboarding-store`) |
 | `index.tsx` | Redirect to `/(tabs)/home` |
+| `onboarding/index.tsx` | Onboarding pantalla 1 (esqueleto W1): valor + CTA "Empezar" (marca `onboarding_completed`) + "Ya tengo cuenta". Flujo completo 3–5 pantallas + paywall timeline en W2 |
 | `(tabs)/_layout.tsx` | Tab bar (Home, Plans, Account) |
 | `(tabs)/home.tsx` | City picker: hero photo + Skia bg, CityCard grid → sets trip context, routes to `/chat` |
 | `(tabs)/plans.tsx` | Plans list: PhotoHero covers, category filter chips, skeleton loading; CTA → `/builder/custom` |
@@ -112,6 +113,8 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `plan/bulk-ops.ts` | Batch stop reordering + persistence helpers |
 | `chat-store.ts` | Chat session id persistence (SecureStore) |
 | `trip-context-store.ts` | Selected city store (module-level + SafeStore persistence, `useTripContext`) |
+| `onboarding-store.ts` | First-run onboarding state (`onboarding_completed` + `onboarding_prefs`), SafeStore-persisted (muere con la desinstalación, NO Keychain); `useOnboarding`, `completeOnboarding`, getters sync. Mismo patrón que `trip-context-store` |
+| `entry-state.ts` | Pure decision del EntryGate (`resolveEntryState` → loading/onboarding/app + `isGuestSession`) — invitado O autenticado entran a la app, onboarding solo primera ejecución |
 | `use-profile.ts` | Hook: user profile CRUD (pace/budget/dietary) via API |
 | `trial-reminder/` | Recordatorio local del día 5 del trial (promesa "aviso el día 5, cobro el día 8"). Se programa SOLO con trial REAL (`entitlementPeriodType 'TRIAL'` del outcome de compra — elegibilidad del usuario, no el introPrice del producto); una compra efectiva sin trial cancela el pendiente obsoleto (cambio de plan). `native-module.ts`: require perezoso+guardado de expo-notifications — sin el módulo nativo (binario pre-rebuild) TODO el API degrada a no-op, jamás crash de arranque. `logic.ts` pura e inyectable (trigger compra+5d a las 10:00 locales — margen al cobro [37h,62h] con DST, siempre >24h; idempotencia por identificador; gracia de 24h para `pending_backend`; sesgo a conservar ante ambigüedad); `index.ts` wiring — SOLO locales, config plugin NO registrado a propósito (añadiría el entitlement push `aps-environment`) — con permiso pedido EN la compra con trial (nunca en arranque; denegado = log, la compra sigue), contenido i18n congelado al programar y `purchasedAt` persistido en el payload; `useTrialReminder` (AppStack): handler foreground, tap → `trial_reminder_shown {day:5}` + deep link a cuenta (el tap es la única señal observable con la app matada), reconciliación por `isPro` (pro→free o free fuera de gracia ⇒ cancel). Logout cancela vía `lib/auth` |
 | `analytics.ts` | PostHog REST capture, fire-and-forget `track()` — no-op without `EXPO_PUBLIC_POSTHOG_KEY`. Anon `distinct_id` persistente (UUID en fichero local `analytics_anon_id` — sobrevive reinicios, MUERE con la desinstalación; nunca Keychain, sería un device-id no reseteable) + `$identify` en anon→user; todos los eventos llevan `country` (locale) y `storefront` (caché RevenueCat) cuando hay valor; `trackPlanLimitIfGate403` emite `plan_limit_hit` desde los 403 estructurados de gates Plus (wired en `api.ts`) |
