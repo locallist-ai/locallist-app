@@ -11,7 +11,9 @@ import { render, screen, fireEvent } from '@testing-library/react-native';
 import { DurationStep } from '../DurationStep';
 import { useAuth } from '../../../lib/auth';
 
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }));
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
+}));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -41,7 +43,7 @@ describe('DurationStep — free', () => {
   beforeEach(() => mockUseAuth.mockReturnValue({ isPro: false }));
 
   it('muestra pills 1..3 y la afford. Plus bloqueada, sin pill de 4', () => {
-    render(<DurationStep selectedDays={null} onSelectDays={jest.fn()} onContinue={jest.fn()} />);
+    render(<DurationStep selectedDays={null} onSelectDays={jest.fn()} startDate="2026-07-23" onChangeStartDate={jest.fn()} onContinue={jest.fn()} />);
 
     expect(screen.getByTestId('duration-pill-1')).toBeTruthy();
     expect(screen.getByTestId('duration-pill-3')).toBeTruthy();
@@ -50,7 +52,7 @@ describe('DurationStep — free', () => {
   });
 
   it('tocar la afford. bloqueada dispara el upsell duration_requires_plus', () => {
-    render(<DurationStep selectedDays={null} onSelectDays={jest.fn()} onContinue={jest.fn()} />);
+    render(<DurationStep selectedDays={null} onSelectDays={jest.fn()} startDate="2026-07-23" onChangeStartDate={jest.fn()} onContinue={jest.fn()} />);
 
     fireEvent.press(screen.getByTestId('duration-plus-locked'));
 
@@ -61,7 +63,7 @@ describe('DurationStep — free', () => {
 
   it('seleccionar un día llama onSelectDays con el número', () => {
     const onSelectDays = jest.fn();
-    render(<DurationStep selectedDays={null} onSelectDays={onSelectDays} onContinue={jest.fn()} />);
+    render(<DurationStep selectedDays={null} onSelectDays={onSelectDays} startDate="2026-07-23" onChangeStartDate={jest.fn()} onContinue={jest.fn()} />);
 
     fireEvent.press(screen.getByTestId('duration-pill-2'));
 
@@ -73,7 +75,7 @@ describe('DurationStep — plus', () => {
   beforeEach(() => mockUseAuth.mockReturnValue({ isPro: true }));
 
   it('muestra pills hasta 14 y NO la afford. bloqueada', () => {
-    render(<DurationStep selectedDays={null} onSelectDays={jest.fn()} onContinue={jest.fn()} />);
+    render(<DurationStep selectedDays={null} onSelectDays={jest.fn()} startDate="2026-07-23" onChangeStartDate={jest.fn()} onContinue={jest.fn()} />);
 
     expect(screen.getByTestId('duration-pill-14')).toBeTruthy();
     expect(screen.queryByTestId('duration-plus-locked')).toBeNull();

@@ -60,6 +60,10 @@ export type Plan = {
   type: string;
   description: string | null;
   durationDays: number;
+  // Trip start date (`yyyy-MM-dd`). Optional/tolerant: legacy plans persisted
+  // before the backend exposed StartDate (API-3) omit it, and the display simply
+  // shows no per-day date rather than crashing.
+  startDate?: string | null;
   tripContext: Record<string, unknown> | null;
   isPublic: boolean;
   isShowcase?: boolean;
@@ -181,6 +185,12 @@ export type LiveCity = {
 
 export type ChatGenerateRequest = {
   sessionId: string;
+  // Trip start date (`yyyy-MM-dd`). The chat flow does NOT extract a date per
+  // slot (out of scope — that is a backend extractor change); it always sends
+  // the trip-context start date (default today) so a viable date is present.
+  // Additive on the wire: the backend ignores unknown JSON fields today and can
+  // consume it once it reads StartDate from the generate request.
+  startDate?: string;
 };
 
 export type ChatMessage = {

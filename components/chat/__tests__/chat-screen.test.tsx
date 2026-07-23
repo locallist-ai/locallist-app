@@ -55,6 +55,8 @@ jest.mock('../../../lib/auth', () => ({
 }));
 jest.mock('../../../lib/trip-context-store', () => ({
   useTripContext: jest.fn(),
+  // La generación por chat manda SIEMPRE la fecha del trip-context (default hoy).
+  getStartDateSync: jest.fn(() => '2026-07-23'),
 }));
 jest.mock('../../../lib/api', () => ({
   chatTurn: jest.fn(),
@@ -231,7 +233,7 @@ describe('chat — guard de doble-tap en el CTA de generación', () => {
     });
 
     expect(chatGenerate).toHaveBeenCalledTimes(1);
-    expect(chatGenerate).toHaveBeenCalledWith({ sessionId: 's1' });
+    expect(chatGenerate).toHaveBeenCalledWith({ sessionId: 's1', startDate: '2026-07-23' });
 
     await act(async () => {
       resolveGenerate({ data: { plan: { id: 'p1' } }, error: null, errorBody: null, status: 200 });

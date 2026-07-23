@@ -7,7 +7,7 @@ import { track } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan/plan-store';
 import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX, tierFromBudgetAmount, maxDaysForTier } from './constants';
-import { useTripContext } from '../../lib/trip-context-store';
+import { useTripContext, setStartDate as persistStartDate } from '../../lib/trip-context-store';
 import { useAuth } from '../../lib/auth';
 import { useGateHandler } from '../../lib/useGateHandler';
 import { mapGateError, parseClampedHint, type AiPlansQuota } from '../../lib/gate-errors';
@@ -69,6 +69,11 @@ export interface UseWizardResult {
   /** Ciudad seleccionada (step 0). */
   city: string | null;
 
+  /** Fecha de inicio del viaje (`yyyy-MM-dd`). Siempre presente (default hoy). */
+  startDate: string;
+  /** Actualiza y persiste la fecha de inicio del viaje. */
+  setStartDate: (iso: string) => void;
+
   /** Selecciona el nº de días del viaje (step 1). Escribe selections[0]. */
   handleSelectDays: (days: number) => void;
   /** Cuota mensual de planes IA ({used,limit,resetsAt}) o null si el backend no la expone. */
@@ -88,7 +93,7 @@ export const useWizard = (): UseWizardResult => {
   // reclama SÍNCRONAMENTE al entrar en handleGenerate, antes de cualquier await,
   // para que dos taps no disparen ambos un POST /builder/chat (quema 2 planes).
   const pendingRef = useRef(false);
-  const { city: tripCity } = useTripContext();
+  const { city: tripCity, startDate: tripStartDate } = useTripContext();
   const { isPro, aiPlansMonth, refreshAiPlansQuota } = useAuth();
   const { presentGate, presentClamped } = useGateHandler();
 
@@ -222,6 +227,14 @@ export const useWizard = (): UseWizardResult => {
     });
   }, []);
 
+  // Persist the chosen start date to the trip-context store (single source of
+  // truth). The hook re-renders via the store subscription, so `tripStartDate`
+  // stays current for the payload below.
+  const setStartDate = useCallback((iso: string) => {
+    hapticImpact(ImpactFeedbackStyle.Light);
+    void persistStartDate(iso);
+  }, []);
+
   // Selector de parent con drill-down. RefineableStep llama este handler
   // cuando el usuario tap un parent — NO auto-advance aquí, el sheet del
   // RefineableStep maneja el continue. Al cambiar de parent, reseteamos los
@@ -341,6 +354,13 @@ export const useWizard = (): UseWizardResult => {
       message: WIZARD_ONLY ? '' : message.trim(),
       tripContext: {
         city: city ?? undefined,
+        // La fecha de inicio SIEMPRE se envía (default hoy, editable en el
+        // DurationStep) como `yyyy-MM-dd`. El backend genera un plan viable para
+        // ese día (no manda a sitios cerrados) vía TripContextDto.StartDate.
+        // `tripStartDate` viene de `useTripContext`, que ya normaliza a la ventana
+        // [hoy, hoy+365] al leer (getStartDateSync), así que una fecha rancia
+        // resuelve a HOY y nunca llega al backend fuera de rango (→ no 400).
+        startDate: tripStartDate,
         groupType: selections[1] ?? 'solo',
         days: daysFromDuration(selections[0]),
         budget: selections[3] ?? undefined,
@@ -395,7 +415,7 @@ export const useWizard = (): UseWizardResult => {
       pendingRef.current = false;
       setLoading(false);
     }
-  }, [loading, message, selections, city, interests, subcategoryPicks, budgetAmount, companySubs, t, isPro, presentGate, presentClamped, refreshAiPlansQuota]);
+  }, [loading, message, selections, city, tripStartDate, interests, subcategoryPicks, budgetAmount, companySubs, t, isPro, presentGate, presentClamped, refreshAiPlansQuota]);
 
   // Mantener el ref siempre apuntando al último handleGenerate. advanceToNext
   // lo invoca cuando el usuario completa el último step de prefs y necesitamos
@@ -430,6 +450,8 @@ export const useWizard = (): UseWizardResult => {
     setCompanySubs,
     selectCompany,
     city,
+    startDate: tripStartDate,
+    setStartDate,
     handleSelectDays,
     aiPlansMonth,
     isPro,

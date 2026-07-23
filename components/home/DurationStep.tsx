@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { fonts, colors } from '../../lib/theme';
 import { EditorialTitle, StepSubtitle } from '../ui/design-system';
+import { StartDateField } from '../ui/StartDateField';
 import { useAuth } from '../../lib/auth';
 import { useGateHandler } from '../../lib/useGateHandler';
 import { FREE_MAX_DAYS, PLUS_MAX_DAYS, maxDaysForTier } from './constants';
@@ -17,6 +18,10 @@ interface DurationStepProps {
   selectedDays: number | null;
   /** Called when the user picks an allowed day count. */
   onSelectDays: (days: number) => void;
+  /** Trip start date (`yyyy-MM-dd`), always present (default today). */
+  startDate: string;
+  /** Called when the user picks a start date; persists to trip-context. */
+  onChangeStartDate: (iso: string) => void;
   /** Continue / Skip to the next wizard step. */
   onContinue: () => void;
 }
@@ -33,6 +38,8 @@ interface DurationStepProps {
 export const DurationStep: React.FC<DurationStepProps> = ({
   selectedDays,
   onSelectDays,
+  startDate,
+  onChangeStartDate,
   onContinue,
 }) => {
   const { t } = useTranslation();
@@ -114,6 +121,15 @@ export const DurationStep: React.FC<DurationStepProps> = ({
         )}
       </ScrollView>
 
+      <View style={styles.dateFieldWrap}>
+        <StartDateField
+          value={startDate}
+          onChange={onChangeStartDate}
+          tone="onDark"
+          label={t('wizard.startDateLabel')}
+        />
+      </View>
+
       <View style={[styles.continueWrapper, { paddingBottom: insets.bottom + 20 }]}>
         <TouchableOpacity
           activeOpacity={0.85}
@@ -194,6 +210,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodySemiBold,
     fontSize: 13,
     color: '#FFFFFF',
+  },
+  dateFieldWrap: {
+    marginTop: 24,
   },
   continueWrapper: {
     marginTop: 20,
