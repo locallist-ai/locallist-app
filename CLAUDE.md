@@ -72,6 +72,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `ui/design-system/` | ChoiceChip, EditorialTitle, StepSubtitle, ProgressDots — wizard design system |
 | `chat/` | Chat UI: MessageBubble, CityNoticeBubble (aviso de ciudad no cubierta + CTA), ChatErrorBubble (error de infra `ai_unavailable` + reintento), QuickReplyChips, SlotBadges, SaveProfileSheet |
 | `account/` | Account screen sections: PlusUpsellCard, ProfileCard, TravelPreferencesSection (consumes useProfile), SettingsSection (settings + legal in-app + actions), DevToolsSection, LanguagePickerModal |
+| `paywall/TrialTimeline.tsx` | Timeline vertical Hoy→Día5→Día8 de la fase `ready` del paywall (sin urgencia/countdowns): promesa real del recordatorio del trial + primer cobro con el precio interpolado. Se monta solo si el package seleccionado tiene trial real (introPrice gratuito) |
 | `auth/` | Login screen pieces: AuthModeToggle, AppleSignInButton, GoogleSignInButton, EmailSignInButton, CredentialsForm, PasswordStrengthIndicator (state/OAuth in `lib/auth/useAuthForm.ts`) |
 | `map/PlanMap.tsx` | MapLibre map: pins, route line, animated camera |
 | `map/route-geojson.ts` | Pure helper: builds the route LineString GeoJSON (segments by active day or straight-line fallback) |
