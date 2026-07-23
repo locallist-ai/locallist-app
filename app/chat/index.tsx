@@ -34,7 +34,7 @@ import { useAuth } from '../../lib/auth';
 import { useGateHandler } from '../../lib/useGateHandler';
 import { mapGateError, parseClampedHint } from '../../lib/gate-errors';
 import { track, countFilledSlots } from '../../lib/analytics';
-import { useTripContext } from '../../lib/trip-context-store';
+import { useTripContext, getStartDateSync } from '../../lib/trip-context-store';
 import type { ChatMessage, ChatSlots, QuickReply, BuilderResponse } from '../../lib/types';
 
 const EMPTY_SLOTS: ChatSlots = {
@@ -312,7 +312,12 @@ export default function ChatScreen() {
     setGenerating(true);
 
     try {
-      const result = await chatGenerate({ sessionId });
+      // El chat NO extrae la fecha por slot (eso sería un cambio del extractor
+      // del backend, fuera de scope). Enviamos SIEMPRE la fecha del trip-context
+      // (default hoy, editable en el wizard) como `yyyy-MM-dd` para que el plan
+      // sea viable ese día. Campo aditivo: el backend genera desde los slots de
+      // la sesión y puede consumir StartDate cuando lo lea del request.
+      const result = await chatGenerate({ sessionId, startDate: getStartDateSync() });
 
       if (result.error || !result.data) {
         const errorBody = result.errorBody as { error?: string; city?: string | null } | null;

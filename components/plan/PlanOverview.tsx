@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { PhotoMosaic } from '../ui/PhotoMosaic';
 import { type Category } from '../ui/PhotoHero';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
+import { formatDayDate } from '../../lib/dates';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import { DaySection } from '../plan-editor/DaySection';
 import { usePlanEditorContext } from './PlanEditorContext';
@@ -38,6 +39,8 @@ interface PlanOverviewProps {
   currentDay: number;
   allDays: number[];
   onDayChange: (day: number) => void;
+  /** Trip start date (`yyyy-MM-dd`); null for legacy plans (no date shown). */
+  startDate?: string | null;
 }
 
 export const PlanOverview: React.FC<PlanOverviewProps> = React.memo(({
@@ -55,8 +58,18 @@ export const PlanOverview: React.FC<PlanOverviewProps> = React.memo(({
   currentDay,
   allDays,
   onDayChange,
+  startDate,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // Fecha del día seleccionado: día N = start + (N-1). null en planes legacy sin
+  // fecha → no se renderiza nada (tolerante, no crashea).
+  const currentDayDate = formatDayDate(startDate, currentDay, i18n.language || 'en');
+  const dayDateLabel = currentDayDate ? (
+    <View style={styles.dayDateRow}>
+      <Ionicons name="calendar-outline" size={13} color={colors.sunsetOrange} />
+      <Text style={styles.dayDateText} testID="plan-day-date">{currentDayDate}</Text>
+    </View>
+  ) : null;
   const { days: editorDays, isDirty: editorIsDirty, isSaving: editorIsSaving, dispatch, save } = usePlanEditorContext();
   const { requestMove, requestAdd, requestReplace } = usePlanEditorModals();
   const heroFallback = (plan.category ?? plan.type ?? 'Culture') as Category;
@@ -154,6 +167,7 @@ export const PlanOverview: React.FC<PlanOverviewProps> = React.memo(({
           </View>
 
           {dayChips}
+          {dayDateLabel}
         </View>
       </>
     );
@@ -345,6 +359,7 @@ export const PlanOverview: React.FC<PlanOverviewProps> = React.memo(({
               })}
             </View>
           )}
+          {dayDateLabel}
           {stopsForCurrentDay.map((s, idx) => {
             const rowIcon = s.timeBlock ? TIME_BLOCK_ICON[s.timeBlock] ?? DEFAULT_STOP_ICON : DEFAULT_STOP_ICON;
             const arrival = s.suggestedArrival ? ` · ${s.suggestedArrival}` : '';
@@ -430,6 +445,19 @@ const styles = StyleSheet.create({
   },
   summaryDayChipTextActive: {
     color: '#FFFFFF',
+  },
+  dayDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  dayDateText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textTransform: 'capitalize',
   },
 
   /* Overview — shared */

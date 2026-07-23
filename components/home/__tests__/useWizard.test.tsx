@@ -78,7 +78,7 @@ const generateWith = async (result: ReturnType<typeof renderHook<ReturnType<type
 beforeEach(() => {
   jest.clearAllMocks();
   mockPresentGate.mockReturnValue('gate-msg');
-  mockUseTripContext.mockReturnValue({ city: 'Miami', loading: false });
+  mockUseTripContext.mockReturnValue({ city: 'Miami', startDate: '2026-07-23', loading: false });
   // Por defecto hay token en SecureStore (usuario autenticado). Los tests de
   // guest lo ponen a null.
   mockGetAccessToken.mockResolvedValue('valid-token');
@@ -154,6 +154,20 @@ describe('useWizard — cap de duración por tier', () => {
 
     const body = (mockApi.mock.calls[0][1] as { body: { tripContext: { days?: number } } }).body;
     expect(body.tripContext.days).toBe(14);
+  });
+});
+
+describe('useWizard — fecha de inicio (siempre se manda como yyyy-MM-dd)', () => {
+  it('incluye startDate del trip-context en el payload de generación', async () => {
+    setAuth({ isPro: false });
+    mockApi.mockResolvedValue(okResponse());
+    const { result } = renderHook(() => useWizard());
+
+    await generateWith(result, 2);
+
+    const body = (mockApi.mock.calls[0][1] as { body: { tripContext: { startDate?: string } } }).body;
+    expect(body.tripContext.startDate).toBe('2026-07-23');
+    expect(body.tripContext.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });
 

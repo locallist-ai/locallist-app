@@ -143,6 +143,8 @@ export const HomeScreen: React.FC = () => {
               <DurationStep
                 selectedDays={wizard.selections[0] ? parseInt(wizard.selections[0], 10) : null}
                 onSelectDays={wizard.handleSelectDays}
+                startDate={wizard.startDate}
+                onChangeStartDate={wizard.setStartDate}
                 onContinue={wizard.advanceToNext}
               />
             </Animated.View>

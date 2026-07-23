@@ -18,6 +18,7 @@ import { useAuth } from '../../lib/auth';
 import { useGateHandler } from '../../lib/useGateHandler';
 import { mapGateError } from '../../lib/gate-errors';
 import { getPreviewPlan } from '../../lib/plan/plan-store';
+import { useTripContext } from '../../lib/trip-context-store';
 import { PlanCardPager } from '../../components/plan/PlanCardPager';
 import { PlanEditorProvider } from '../../components/plan/PlanEditorContext';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
@@ -56,13 +57,15 @@ function groupStopsByDay(stops: PlanStop[], durationDays: number) {
 
 export default function PlanDetailScreen() {
   const { t } = useTranslation();
-  const { id, planName, planCity, planDays } = useLocalSearchParams<{
+  const { id, planName, planCity, planDays, planStartDate } = useLocalSearchParams<{
     id: string;
     planName?: string;
     planCity?: string;
     planDays?: string;
+    planStartDate?: string;
   }>();
   const { isAuthenticated, user } = useAuth();
+  const { startDate: tripStartDate } = useTripContext();
   const { presentGate } = useGateHandler();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -75,9 +78,10 @@ export default function PlanDetailScreen() {
             name: planName,
             city: planCity,
             durationDays: Number(planDays) || 2,
+            startDate: planStartDate,
           }
         : undefined,
-    [isNew, planName, planCity, planDays],
+    [isNew, planName, planCity, planDays, planStartDate],
   );
 
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -192,6 +196,13 @@ export default function PlanDetailScreen() {
   const visibleStops: PlanStop[] = editorReady
     ? flattenStopsFromDays(editorDays)
     : stops;
+
+  // Fecha de inicio para el display de "día N = start + N-1". Preferimos la que
+  // trae el plan del backend (API-3); para un plan recién creado que aún no la
+  // expone (preview/new), caemos a la fecha del trip-context. Legacy sin fecha
+  // en ningún sitio → null → el display simplemente no muestra fecha.
+  const displayStartDate: string | null =
+    visiblePlan?.startDate ?? (isNew || id === 'preview' ? tripStartDate : null);
 
   const heroPhotos = useMemo<string[]>(() => {
     const picked: string[] = [];
@@ -318,6 +329,7 @@ export default function PlanDetailScreen() {
           onDelete={!isNew && effectivePlanId && isOwner ? handleDelete : undefined}
           onBack={() => router.back()}
           totalDays={visiblePlan.durationDays ?? editorDays.length}
+          startDate={displayStartDate}
           safeAreaTop={insets.top}
         />
       </PlanEditorProvider>

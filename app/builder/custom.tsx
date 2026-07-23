@@ -19,6 +19,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
+import { StartDateField } from '../../components/ui/StartDateField';
+import { getStartDateSync, setStartDate as persistStartDate } from '../../lib/trip-context-store';
 import type { CityDto } from '../../lib/types';
 
 const DURATION_OPTIONS = [1, 2, 3] as const;
@@ -30,6 +32,9 @@ export default function CustomBuilderScreen() {
   const [name, setName] = useState('');
   const [city, setCity] = useState('Miami');
   const [days, setDays] = useState(2);
+  // Fecha de inicio del viaje. Siempre presente (default hoy vía trip-context),
+  // editable. Se envía como `yyyy-MM-dd` al crear el plan.
+  const [startDate, setStartDate] = useState<string>(() => getStartDateSync());
 
   const [nameTouched, setNameTouched] = useState(false);
   // "Miami" es ciudad seed válida — empieza confirmada
@@ -144,6 +149,7 @@ export default function CustomBuilderScreen() {
         planName: name.trim(),
         planCity: city.trim(),
         planDays: String(days),
+        planStartDate: startDate,
       },
     });
   };
@@ -292,6 +298,21 @@ export default function CustomBuilderScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+            </View>
+
+            {/* Start date */}
+            <View style={s.field}>
+              <Text style={s.label}>{t('builder.startDateLabel')}</Text>
+              <StartDateField
+                value={startDate}
+                onChange={(iso) => {
+                  setStartDate(iso);
+                  // Persistimos también en el trip-context para que quede como
+                  // preferencia entre flujos (wizard/builder comparten la fecha).
+                  void persistStartDate(iso);
+                }}
+                tone="onLight"
+              />
             </View>
           </View>
         </Animated.View>

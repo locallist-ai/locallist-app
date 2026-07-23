@@ -157,6 +157,8 @@ type NewPlanConfig = {
   name: string;
   city: string;
   durationDays: number;
+  /** Trip start date (`yyyy-MM-dd`). Always present (default today). */
+  startDate?: string;
 };
 
 type UsePlanEditorOpts = {
@@ -198,6 +200,7 @@ export function usePlanEditor(planId: string, opts: UsePlanEditorOpts = {}) {
         type: 'custom',
         description: null,
         durationDays: totalDays,
+        startDate: newPlanConfig.startDate ?? null,
         tripContext: null,
         isPublic: false,
         days: [],
@@ -267,6 +270,9 @@ export function usePlanEditor(planId: string, opts: UsePlanEditorOpts = {}) {
           name: newPlanConfig.name,
           city: newPlanConfig.city,
           durationDays: newPlanConfig.durationDays,
+          // Fecha de inicio del viaje (`yyyy-MM-dd`), siempre presente. Aditivo:
+          // el backend la persiste como StartDate del plan (API-3).
+          startDate: newPlanConfig.startDate,
         },
       });
 

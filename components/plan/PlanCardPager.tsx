@@ -44,6 +44,8 @@ interface PlanCardPagerProps {
   onDelete?: () => void;
   onBack?: () => void;
   totalDays?: number;
+  /** Trip start date (`yyyy-MM-dd`) for per-day dates; null for legacy plans. */
+  startDate?: string | null;
   safeAreaTop?: number;
 }
 
@@ -60,6 +62,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
   onDelete,
   onBack,
   totalDays,
+  startDate,
   safeAreaTop = 0,
 }) => {
   const { t } = useTranslation();
@@ -199,6 +202,7 @@ export const PlanCardPager: React.FC<PlanCardPagerProps> = ({
             currentDay={currentDay}
             allDays={allDays}
             onDayChange={handleDayChange}
+            startDate={startDate}
           />
           <DayStopsCarousel stops={stopsForDay} dayNumber={currentDay} isOwner={isOwner} />
         </ScrollView>
