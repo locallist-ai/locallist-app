@@ -55,6 +55,13 @@ describe('mapPrefsToProfile', () => {
   it('maps a partial pref (city only)', () => {
     expect(mapPrefsToProfile({ city: 'Lisboa' })).toEqual({ favoriteCity: 'Lisboa' });
   });
+
+  // MINOR-1: a deselected budget is persisted as `null`. The deferred sync must
+  // treat it like an unset field — never send a phantom `defaultBudgetTier`.
+  it('does not send defaultBudgetTier when budget is null', () => {
+    expect(mapPrefsToProfile({ budget: null, city: 'Miami' })).toEqual({ favoriteCity: 'Miami' });
+    expect(mapPrefsToProfile({ budget: null })).toBeNull();
+  });
 });
 
 describe('syncOnboardingPrefsToProfile', () => {

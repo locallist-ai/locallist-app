@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Platform } from 'react-native';
 import { track, type OnboardingStepName } from '../../lib/analytics';
 import { completeOnboarding, setOnboardingPrefs } from '../../lib/onboarding-store';
@@ -60,17 +60,28 @@ export default function OnboardingScreen() {
 
   const goTo = (index: number) => setStepIndex(index);
 
+  // The inline login publishes its internal back handler here (see `LoginScreen`
+  // `onRegisterInnerBack`). Kept in a ref so the Android back closure always reads
+  // the live sub-step handler without re-registering the BackHandler on it.
+  const loginInnerBackRef = useRef<(() => boolean) | null>(null);
+  const registerLoginInnerBack = useCallback((handler: (() => boolean) | null) => {
+    loginInnerBackRef.current = handler;
+  }, []);
+
   // Android hardware back: mirror the on-screen chevron so the OS back button is
   // never a dead-end on the platform that has one. The gate renders onboarding
   // OUTSIDE any navigator, so without this handler the physical back sends the app
   // to the background at every step (iOS has no hardware back, hence the guard).
-  // Precedence matches `onClose`/`onBack`: dismiss the inline login first, else
-  // step back one screen, else (step 0) let the OS default fire (exit). Returning
-  // `true` consumes the event; `false` yields to the default.
+  // Precedence matches `onBack`/`onClose`: when the inline login is up, first let
+  // it consume its own sub-step (credentials → choose); only when it reports the
+  // event unhandled (already on `choose`) do we dismiss the whole login. Else step
+  // back one screen, else (step 0) let the OS default fire (exit). Returning `true`
+  // consumes the event; `false` yields to the default.
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const onHardwareBack = (): boolean => {
       if (showLogin) {
+        if (loginInnerBackRef.current?.()) return true;
         setShowLogin(false);
         return true;
       }
@@ -106,9 +117,13 @@ export default function OnboardingScreen() {
   };
 
   const handleTasteContinue = (prefs: { interests: string[]; budget: string | null }) => {
+    // Persist BOTH fields unconditionally. Writing `budget: null` (not omitting
+    // it) is what lets a deselection stick: a falsy-guarded spread would drop the
+    // null and leave a previously chosen tier in the store, which would then
+    // re-seed a selected chip on the next remount and sync a phantom tier on login.
     setOnboardingPrefs({
       interests: prefs.interests,
-      ...(prefs.budget ? { budget: prefs.budget } : {}),
+      budget: prefs.budget,
     }).catch((err) => logger.warn('onboarding: persist taste prefs failed', err));
     goTo(3);
   };
@@ -122,7 +137,12 @@ export default function OnboardingScreen() {
   };
 
   if (showLogin) {
-    return <LoginScreen onClose={() => setShowLogin(false)} />;
+    return (
+      <LoginScreen
+        onClose={() => setShowLogin(false)}
+        onRegisterInnerBack={registerLoginInnerBack}
+      />
+    );
   }
 
   return (

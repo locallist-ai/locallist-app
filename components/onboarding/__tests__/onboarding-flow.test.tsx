@@ -101,6 +101,12 @@ jest.mock('../OnboardingTasteScreen', () => {
         <TouchableOpacity testID="taste-continue" onPress={() => onContinue({ interests: ['food'], budget: 'moderate' })}>
           <Text>continue</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          testID="taste-continue-nobudget"
+          onPress={() => onContinue({ interests: ['food'], budget: null })}
+        >
+          <Text>continue no budget</Text>
+        </TouchableOpacity>
         <TouchableOpacity testID="taste-skip" onPress={onSkip}>
           <Text>skip</Text>
         </TouchableOpacity>
@@ -118,21 +124,49 @@ jest.mock('../OnboardingPreviewScreen', () => {
     ),
   };
 });
+// The login is mocked, but it MODELS its internal `choose` → `credentials`
+// sub-step and publishes the same `onRegisterInnerBack` handler the real screen
+// does. Without modelling the sub-step, a flat `LOGIN` node cannot reveal the
+// over-dismiss bug (physical back tearing the whole login down instead of
+// stepping credentials → choose).
 jest.mock('../../../app/login', () => {
+  const { useState, useEffect } = jest.requireActual('react');
   const { TouchableOpacity, Text } = jest.requireActual('react-native');
-  return {
-    __esModule: true,
-    default: ({ onClose }: { onClose?: () => void }) => (
+  const MockLoginScreen = ({
+    onClose,
+    onRegisterInnerBack,
+  }: {
+    onClose?: () => void;
+    onRegisterInnerBack?: (handler: (() => boolean) | null) => void;
+  }) => {
+    const [subStep, setSubStep] = useState('choose');
+    useEffect(() => {
+      if (!onRegisterInnerBack) return;
+      onRegisterInnerBack(() => {
+        if (subStep === 'credentials') {
+          setSubStep('choose');
+          return true;
+        }
+        return false;
+      });
+      return () => onRegisterInnerBack(null);
+    }, [onRegisterInnerBack, subStep]);
+    return (
       <>
         <Text>LOGIN</Text>
+        <Text>{`login-step:${subStep}`}</Text>
+        <TouchableOpacity testID="login-to-credentials" onPress={() => setSubStep('credentials')}>
+          <Text>to credentials</Text>
+        </TouchableOpacity>
         {onClose && (
           <TouchableOpacity testID="login-close" onPress={onClose}>
             <Text>close</Text>
           </TouchableOpacity>
         )}
       </>
-    ),
+    );
   };
+  return { __esModule: true, default: MockLoginScreen };
 });
 
 const mockTrack = track as jest.Mock;
@@ -141,7 +175,8 @@ const mockTrack = track as jest.Mock;
 // can simulate the Android physical back button. The handler is Android-only, so
 // we force `Platform.OS` and stub `addEventListener` to grab the latest closure
 // (the effect re-registers on every step/login change).
-let hardwareBack: (() => boolean) | null = null;
+type BackCb = () => boolean | null | undefined;
+let hardwareBack: BackCb | null = null;
 const originalOS = Platform.OS;
 
 beforeEach(() => {
@@ -150,7 +185,7 @@ beforeEach(() => {
   (Platform as { OS: string }).OS = 'android';
   jest
     .spyOn(BackHandler, 'addEventListener')
-    .mockImplementation((event: string, cb: () => boolean) => {
+    .mockImplementation((event: string, cb: BackCb) => {
       if (event === 'hardwareBackPress') hardwareBack = cb;
       return { remove: jest.fn() } as unknown as ReturnType<typeof BackHandler.addEventListener>;
     });
@@ -164,7 +199,7 @@ afterEach(() => {
 const pressHardwareBack = (): boolean => {
   let handled = false;
   act(() => {
-    handled = hardwareBack ? hardwareBack() : false;
+    handled = hardwareBack?.() === true;
   });
   return handled;
 };
@@ -203,6 +238,19 @@ describe('onboarding orchestrator — navigation + side effects', () => {
     fireEvent.press(screen.getByTestId('preview-create'));
     expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_completed', skippedPaywall: true });
     await waitFor(() => expect(completeOnboarding).toHaveBeenCalledTimes(1));
+  });
+
+  // MINOR-1 (data correctness): a deselected budget must be persisted as `null`,
+  // not dropped. A falsy-guarded spread would omit `budget`, leaving a previously
+  // chosen tier in the store — re-seeding a selected chip and syncing a phantom
+  // tier on login. Budget must be written unconditionally, exactly like interests.
+  it('persists a deselected budget as null (unconditional write, symmetric with interests)', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-start'));
+    fireEvent.press(screen.getByTestId('city-select'));
+    fireEvent.press(screen.getByTestId('taste-continue-nobudget'));
+    expect(setOnboardingPrefs).toHaveBeenCalledWith({ interests: ['food'], budget: null });
+    expect(screen.getByText('step:3')).toBeTruthy();
   });
 
   it('Skip on tastes still advances to preview', () => {
@@ -293,15 +341,39 @@ describe('onboarding orchestrator — Android hardware back', () => {
     expect(BackHandler.addEventListener).not.toHaveBeenCalled();
   });
 
-  it('back on the inline login dismisses it to the flow (returns to value)', () => {
+  it('back on the inline login at the choose sub-step dismisses it to the flow (returns to value)', () => {
     render(<OnboardingScreen />);
     fireEvent.press(screen.getByTestId('value-signin'));
     expect(screen.getByText('LOGIN')).toBeTruthy();
+    expect(screen.getByText('login-step:choose')).toBeTruthy();
 
     expect(pressHardwareBack()).toBe(true); // consumed
     expect(screen.getByTestId('value-start')).toBeTruthy();
     expect(screen.queryByText('LOGIN')).toBeNull();
     expect(completeOnboarding).not.toHaveBeenCalled();
+  });
+
+  // MINOR-2 (UX): the physical back must respect the login's INTERNAL sub-step.
+  // On `credentials` it returns to `choose` (equivalent to the on-screen chevron
+  // `onBack`), keeping the login open — it must NOT tear the whole login down and
+  // strand the user back on the value screen (the over-dismiss bug).
+  it('back on the login credentials sub-step returns to choose without closing the login', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-signin'));
+    fireEvent.press(screen.getByTestId('login-to-credentials'));
+    expect(screen.getByText('login-step:credentials')).toBeTruthy();
+
+    expect(pressHardwareBack()).toBe(true); // consumed by the login's own sub-step
+    // Login is still open, back on its provider-choice sub-step.
+    expect(screen.getByText('LOGIN')).toBeTruthy();
+    expect(screen.getByText('login-step:choose')).toBeTruthy();
+    expect(screen.queryByTestId('value-start')).toBeNull();
+    expect(completeOnboarding).not.toHaveBeenCalled();
+
+    // A second back — now on `choose` — dismisses the whole login to the flow.
+    expect(pressHardwareBack()).toBe(true);
+    expect(screen.getByTestId('value-start')).toBeTruthy();
+    expect(screen.queryByText('LOGIN')).toBeNull();
   });
 
   it('back on a non-first step steps the flow backwards (step 2 → step 1)', () => {

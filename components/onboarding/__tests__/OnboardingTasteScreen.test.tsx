@@ -105,4 +105,30 @@ describe('OnboardingTasteScreen', () => {
     fireEvent.press(screen.getByText('onboarding.continue'));
     expect(onContinue).toHaveBeenCalledWith({ interests: ['food', 'coffee'], budget: 'moderate' });
   });
+
+  // MINOR-1 (data correctness): deselecting a previously-seeded budget must
+  // re-deliver `budget: null` (not the stale seeded tier), so the orchestrator can
+  // persist the deselection. This is the screen half of the deselect round trip.
+  it('deselecting a seeded budget re-delivers budget:null on Continue', () => {
+    mockGetPrefs.mockReturnValue({ interests: ['food'], budget: 'moderate' });
+    const onContinue = jest.fn();
+    render(<OnboardingTasteScreen onContinue={onContinue} onSkip={jest.fn()} />);
+
+    // The seeded tier renders selected...
+    expect(screen.getByText('[x] wizard.budgetModerate')).toBeTruthy();
+    // ...tapping it again deselects (single-select toggles off).
+    fireEvent.press(screen.getByTestId('budget-moderate'));
+    fireEvent.press(screen.getByText('onboarding.continue'));
+    expect(onContinue).toHaveBeenCalledWith({ interests: ['food'], budget: null });
+  });
+
+  // MINOR-1: after a deselection is persisted as null, a remount seeds `null` and
+  // the budget chip must render UNSELECTED (never fall back to a stale tier).
+  it('seeds no selected budget chip when the persisted budget is null', () => {
+    mockGetPrefs.mockReturnValue({ interests: ['food'], budget: null });
+    render(<OnboardingTasteScreen onContinue={jest.fn()} onSkip={jest.fn()} />);
+    // Chip is present but not marked selected (no `[x]` prefix).
+    expect(screen.getByTestId('budget-moderate')).toBeTruthy();
+    expect(screen.queryByText('[x] wizard.budgetModerate')).toBeNull();
+  });
 });

@@ -31,8 +31,13 @@ export interface OnboardingPrefs {
   city?: string;
   /** Interest ids picked on screen 3 (e.g. 'food', 'outdoors'). */
   interests?: string[];
-  /** Budget tier from screen 3 ('budget' | 'moderate' | 'premium'). */
-  budget?: string;
+  /**
+   * Budget tier from screen 3 ('budget' | 'moderate' | 'premium'). `null` is a
+   * meaningful value: it records that the user actively deselected a tier ("no
+   * preference"), distinct from `undefined` ("never touched the control"). The
+   * orchestrator persists it unconditionally so a deselection survives a remount.
+   */
+  budget?: string | null;
   /** Pace preference — reserved for an alternate screen-3 control. */
   pace?: string;
   /** Dietary restriction ids — reserved. */

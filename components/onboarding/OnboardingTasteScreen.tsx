@@ -43,8 +43,10 @@ export function OnboardingTasteScreen({ onContinue, onSkip }: OnboardingTasteScr
   // Pre-fill from prefs already persisted this session. The screen mounts
   // conditionally (`stepIndex === 2`), so revisiting it from the preview remounts
   // it fresh; without seeding, tapping Continue again would overwrite captured
-  // interests with `[]`. Seeding keeps back-navigation non-destructive (matches the
-  // budget's condition-preserving spread in the orchestrator).
+  // interests with `[]`. Seeding keeps back-navigation non-destructive: the
+  // orchestrator persists BOTH interests and budget unconditionally, so a seeded
+  // `null` budget correctly renders no selected tier after a deselection (a
+  // deselected budget is stored as `null`, never dropped back to a stale tier).
   const [interests, setInterests] = useState<string[]>(
     () => getOnboardingPrefsSync().interests ?? [],
   );
