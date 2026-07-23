@@ -18,6 +18,7 @@ import { api } from '../../lib/api';
 import { track } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
 import { useAuth } from '../../lib/auth';
+import { useGateHandler } from '../../lib/useGateHandler';
 import { PlanMap } from '../../components/map/PlanMap';
 import { FollowDaySheet } from '../../components/follow/FollowDaySheet';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
@@ -46,6 +47,7 @@ export default function FollowModeScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { isAuthenticated } = useAuth();
+  const { presentGate } = useGateHandler();
   const insets = useSafeAreaInsets();
 
   const [session, setSession] = useState<FollowSession | null>(null);
@@ -95,7 +97,12 @@ export default function FollowModeScreen() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.replace('/login');
+      // A guest can deep-link straight into Follow Mode. Self-guard before any
+      // network (no raw 401) and show the deferred-signup gate, mirroring the
+      // plan screen's handleFollow, instead of the legacy hard /login wall.
+      // Send them into the guest app so they aren't stranded on the spinner.
+      presentGate({ type: 'signup_required' });
+      router.replace('/(tabs)/home');
       return;
     }
     let cancelled = false;
