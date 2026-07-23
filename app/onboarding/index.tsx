@@ -10,32 +10,34 @@ import { OnboardingValueScreen } from '../../components/onboarding/OnboardingVal
 import { OnboardingCityScreen } from '../../components/onboarding/OnboardingCityScreen';
 import { OnboardingTasteScreen } from '../../components/onboarding/OnboardingTasteScreen';
 import { OnboardingPreviewScreen } from '../../components/onboarding/OnboardingPreviewScreen';
+import { OnboardingPaywallStep } from '../../components/onboarding/OnboardingPaywallStep';
 
 /**
- * First-run onboarding flow (W2). Four screens — value, city, tastes, value
- * preview — rendered directly by the root entry gate (no navigator mounted yet),
- * as an internal step machine. "I already have an account" swaps to an inline
- * login that can be dismissed back to the flow (fixes the W1 dead-end); a
- * successful login flips `isAuthenticated`, re-rendering the gate into the app.
+ * First-run onboarding flow (W2 + W5). Five steps — value, city, tastes, value
+ * preview, and the timeline paywall — rendered directly by the root entry gate
+ * (no navigator mounted yet), as an internal step machine. "I already have an
+ * account" swaps to an inline login that can be dismissed back to the flow
+ * (fixes the W1 dead-end); a successful login flips `isAuthenticated`,
+ * re-rendering the gate into the app.
  *
- * The final "Create my plan" CTA marks onboarding complete (city already written
- * to the trip context for preselection) and lands the guest in the app.
+ * The preview "Create my plan" CTA advances to the paywall step (W5); the flow
+ * completes from there — after a purchase/restore (`skippedPaywall:false`), on
+ * "not now", or on a clean auto-skip when RevenueCat is not configured
+ * (`skippedPaywall:true`). Completion lands the guest in the app (city already
+ * written to the trip context for preselection).
  *
  * PRODUCT DECISION TO FLAG (does not block): a brand-new user who taps "I already
  * have an account" and then REGISTERS never sees these value screens — `login()`
  * marks `onboarding_completed`. The UX study wants onboarding for EVERYONE, so
  * this path skips the highest-leverage surface. Left for Pablo to decide whether
  * an up-front registrant should be routed through onboarding first.
- *
- * W5 HOOK: the dismissable timeline paywall (step 5) slots into `finishOnboarding`
- * between the preview CTA and completion. It depends on W4 (paywall) and ships in
- * its own cycle, so today the flow completes straight through and reports
- * `skippedPaywall: true`. When W5 lands, present the paywall there and pass its
- * real outcome to the `onboarding_completed` event.
  */
 
-const STEP_NAMES: OnboardingStepName[] = ['value', 'city', 'interests', 'preview'];
+const STEP_NAMES: OnboardingStepName[] = ['value', 'city', 'interests', 'preview', 'paywall'];
 const TOTAL_STEPS = STEP_NAMES.length;
+// Index of the W5 paywall step (the last one), rendered full-screen outside the
+// OnboardingBackground chrome since PaywallView carries its own layout.
+const PAYWALL_STEP = STEP_NAMES.indexOf('paywall');
 
 export default function OnboardingScreen() {
   const [stepIndex, setStepIndex] = useState(0);
@@ -128,9 +130,14 @@ export default function OnboardingScreen() {
     goTo(3);
   };
 
-  const finishOnboarding = () => {
-    // W5 hook point — see the file header. Today: complete straight through.
-    track({ event: 'onboarding_completed', skippedPaywall: true });
+  // Preview CTA now advances to the paywall step (W5) instead of completing; the
+  // flow is finished by the paywall step's outcome via `completeFlow`.
+  const goToPaywall = () => goTo(PAYWALL_STEP);
+
+  // Terminal completion, invoked from the W5 paywall step: skip / auto-skip →
+  // `skippedPaywall:true`, effective purchase/restore → false.
+  const completeFlow = (skippedPaywall: boolean) => {
+    track({ event: 'onboarding_completed', skippedPaywall });
     // Fire-and-forget: the entry gate flips to the app as soon as the in-memory
     // completion flag notifies subscribers.
     completeOnboarding().catch((err) => logger.warn('onboarding: completeOnboarding failed', err));
@@ -141,6 +148,21 @@ export default function OnboardingScreen() {
       <LoginScreen
         onClose={() => setShowLogin(false)}
         onRegisterInnerBack={registerLoginInnerBack}
+      />
+    );
+  }
+
+  // W5 paywall step: full-screen (PaywallView owns its layout), OUTSIDE the
+  // OnboardingBackground chrome. The step is never a dead-end — its close X and
+  // the Android hardware back (via the orchestrator's handler above, step-1)
+  // both retreat to the preview; "not now"/auto-skip and a purchase both
+  // complete the flow.
+  if (stepIndex === PAYWALL_STEP) {
+    return (
+      <OnboardingPaywallStep
+        onBack={() => goTo(PAYWALL_STEP - 1)}
+        onSkip={() => completeFlow(true)}
+        onPurchased={() => completeFlow(false)}
       />
     );
   }
@@ -164,7 +186,7 @@ export default function OnboardingScreen() {
         <OnboardingTasteScreen onContinue={handleTasteContinue} onSkip={() => goTo(3)} />
       )}
       {stepIndex === 3 && (
-        <OnboardingPreviewScreen city={selectedCity} onCreatePlan={finishOnboarding} />
+        <OnboardingPreviewScreen city={selectedCity} onCreatePlan={goToPaywall} />
       )}
     </OnboardingBackground>
   );

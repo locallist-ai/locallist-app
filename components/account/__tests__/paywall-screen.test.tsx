@@ -11,7 +11,7 @@
  *  - Restore sin compras: aviso "nada que restaurar".
  */
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
 import PaywallScreen from '../../../app/paywall';
 import { useLocalSearchParams } from 'expo-router';
 import {
@@ -142,6 +142,29 @@ it('retry desde no-disponible: si configure ya confirma la identidad, llega a re
   fireEvent.press(await screen.findByText('paywall.retry'));
 
   expect(await screen.findByTestId('paywall-cta')).toBeOnTheScreen();
+});
+
+// MINOR-1 (contraparte standalone): el timeout de la fase loading es EXCLUSIVO
+// del modo onboarding (`autoSkipOnUnavailable`). En el paywall standalone, el
+// mismo cuelgue de `configure` NO auto-salta ni degrada: el spinner persiste
+// hasta que RC responda (quedarse ahí es inofensivo, el usuario sigue en la app).
+it('load colgado en standalone: sin timeout, NO auto-salta ni degrada (sigue en loading)', async () => {
+  jest.useFakeTimers();
+  try {
+    mockConfigure.mockReturnValue(new Promise(() => {})); // configure jamás settle
+    render(<PaywallScreen />);
+
+    // Aunque pase de sobra el margen del onboarding, el standalone no reacciona.
+    act(() => {
+      jest.advanceTimersByTime(30000);
+    });
+
+    // Nunca llega a ready (sin CTA) ni degrada a no-disponible: permanece en loading.
+    expect(screen.queryByTestId('paywall-cta')).toBeNull();
+    expect(screen.queryByText('paywall.unavailableTitle')).toBeNull();
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 it('offering sin packages (productos ASC no creados): degrada a no-disponible', async () => {

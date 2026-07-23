@@ -352,6 +352,8 @@ export default {
     restoreNoneBody: "We couldn't find a previous purchase for this Apple ID.",
     close: 'Close',
     done: 'Done',
+    // Skip affordance shown only when the paywall is a step of the onboarding.
+    notNow: 'Not now',
     trialReminderNotice: "We'll remind you 2 days before your free trial ends. First charge on day {{day}} — never before.",
   },
   trialReminder: {
