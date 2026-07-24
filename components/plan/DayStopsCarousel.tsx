@@ -87,6 +87,7 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total, isOw
       <View style={styles.stopHeroWrap}>
         <PhotoHero
           imageUrl={activePhoto}
+          photoSource={place?.photoSource}
           fallbackCategory={fallbackCategory}
           height={260}
           blurBackdrop

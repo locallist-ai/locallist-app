@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
+import { PhotoAttribution } from '../ui/PhotoAttribution';
+import { resolvePhotoUrl, isPhotoDisplayable } from '../../lib/helpers/photo-url';
 import type { Place } from '../../lib/types';
 import { SUBCATEGORIES_BY_INTEREST } from '../home/constants';
 
@@ -36,6 +38,52 @@ type Props = {
   city: string;
   onSelect: (place: Place) => void;
   onClose: () => void;
+};
+
+// Own component (not an inline arrow inside renderItem) so the photo-load
+// failure state is per-row and follows the Rules of Hooks. Exported for a
+// dedicated 404-to-gradient regression test.
+export const PlaceRow: React.FC<{ item: Place; onPress: () => void }> = ({ item, onPress }) => {
+  const photoUrl = resolvePhotoUrl(item.photos?.[0]);
+  // Keyed by URL so a recycled row (FlatList reuse) retries a new photo
+  // instead of staying on the gradient after a prior URL 404'd.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const showPhoto = isPhotoDisplayable(photoUrl, failedUrl);
+
+  return (
+    <TouchableOpacity style={s.placeRow} onPress={onPress} activeOpacity={0.7}>
+      <View style={s.placeThumbnail}>
+        <LinearGradient colors={['#0f172a', '#1e293b']} style={s.placeImg} />
+        {showPhoto && (
+          <Image
+            source={{ uri: photoUrl }}
+            style={[s.placeImg, StyleSheet.absoluteFill]}
+            contentFit="cover"
+            onError={() => setFailedUrl(photoUrl)}
+          />
+        )}
+        {showPhoto && item.photoSource === 'google' && <PhotoAttribution variant="compact" />}
+      </View>
+      <View style={s.placeInfo}>
+        <Text style={s.placeName} numberOfLines={1}>
+          {item.name}
+        </Text>
+        <View style={s.placeMetaRow}>
+          {item.category && (
+            <View style={s.placeCatChip}>
+              <Text style={s.placeCatText}>{item.category}</Text>
+            </View>
+          )}
+          {item.neighborhood && (
+            <Text style={s.placeNeighborhood} numberOfLines={1}>
+              {item.neighborhood}
+            </Text>
+          )}
+        </View>
+      </View>
+      <Ionicons name="add-circle" size={24} color={colors.sunsetOrange} />
+    </TouchableOpacity>
+  );
 };
 
 export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
@@ -114,53 +162,19 @@ export function PlaceSearchModal({ visible, city, onSelect, onClose }: Props) {
     }
   }, [visible]);
 
-  const renderPlace = ({ item }: { item: Place }) => {
-    const photoUrl = item.photos?.[0] ?? null;
-
-    return (
-      <TouchableOpacity
-        style={s.placeRow}
-        onPress={() => {
-          onSelect(item);
-          setQuery('');
-          setCategory(null);
-          setSubcategory(null);
-          setAllResults([]);
-          setSearched(false);
-        }}
-        activeOpacity={0.7}
-      >
-        <View style={s.placeThumbnail}>
-          {photoUrl ? (
-            <Image source={{ uri: photoUrl }} style={s.placeImg} contentFit="cover" />
-          ) : (
-            <LinearGradient
-              colors={['#0f172a', '#1e293b']}
-              style={s.placeImg}
-            />
-          )}
-        </View>
-        <View style={s.placeInfo}>
-          <Text style={s.placeName} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <View style={s.placeMetaRow}>
-            {item.category && (
-              <View style={s.placeCatChip}>
-                <Text style={s.placeCatText}>{item.category}</Text>
-              </View>
-            )}
-            {item.neighborhood && (
-              <Text style={s.placeNeighborhood} numberOfLines={1}>
-                {item.neighborhood}
-              </Text>
-            )}
-          </View>
-        </View>
-        <Ionicons name="add-circle" size={24} color={colors.sunsetOrange} />
-      </TouchableOpacity>
-    );
-  };
+  const renderPlace = ({ item }: { item: Place }) => (
+    <PlaceRow
+      item={item}
+      onPress={() => {
+        onSelect(item);
+        setQuery('');
+        setCategory(null);
+        setSubcategory(null);
+        setAllResults([]);
+        setSearched(false);
+      }}
+    />
+  );
 
   return (
     <Modal

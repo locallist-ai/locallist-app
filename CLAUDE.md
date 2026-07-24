@@ -65,8 +65,9 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 
 | Path | Description |
 |---|---|
-| `ui/PhotoHero.tsx` | Full-bleed image with gradient fallback by category |
-| `ui/PhotoMosaic.tsx` | Multi-photo mosaic with category gradient fallback |
+| `ui/PhotoHero.tsx` | Full-bleed image with gradient fallback by category. Resolves relative proxy URLs (`lib/helpers/photo-url.ts`) and shows a discreet "Google" `PhotoAttribution` overlay when `photoSource === 'google'` (Places API ToS) |
+| `ui/PhotoMosaic.tsx` | Multi-photo mosaic with category gradient fallback. Accepts `PhotoMosaicItem` (`string \| { url, photoSource }`) so each tile can carry its own Google attribution |
+| `ui/PhotoAttribution.tsx` | Discreet "Google" label overlay for photos with `photoSource === 'google'`; v1 = brand name only, per-photo author (`authorAttributions`) is v1.1 |
 | `ui/SkeletonCard.tsx` | Shimmer skeleton loader |
 | `ui/CategoryBadge.tsx` | Category pill with per-category color |
 | `ui/ConfirmModal.tsx` | Reusable confirm/cancel modal |
@@ -127,6 +128,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `cities.ts` | Static city catalog for the home picker |
 | `follow/resume-store.ts` | Persisted Follow Mode resume position per plan |
 | `helpers/price.ts` | Price range label formatting |
+| `helpers/photo-url.ts` | Resolves a place photo URL from the backend's Google photo proxy: absolute passes through, relative (`/places/{id}/photos/0`, no `Api:PublicBaseUrl` on the backend) resolves against `EXPO_PUBLIC_API_URL`; unrecognized/empty → `null` so callers fall back to the category gradient |
 | `trial-timeline.ts` | Derivación PURA de la duración del trial (introPrice DAY/WEEK/MONTH/YEAR → días) y del timeline del paywall (recordatorio N-2, cobro N+1). Nada hardcodeado a 7; alimenta `paywall/TrialTimeline.tsx` |
 | `api-cache.ts` | Simple in-memory stale-while-revalidate cache |
 | `safe-store.ts` | SecureStore wrapper with web fallback |

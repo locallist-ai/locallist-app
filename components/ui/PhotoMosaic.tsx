@@ -3,9 +3,17 @@ import { View, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Category } from './PhotoHero';
+import { PhotoAttribution } from './PhotoAttribution';
+import { resolvePhotoUrl, isDisplayablePhotoUrl } from '../../lib/helpers/photo-url';
+
+type PhotoSource = 'google' | 'external' | null;
+
+/** A mosaic tile: a plain URL string (no attribution info), or an item that
+ * carries the place's `photoSource` so we can attribute Google photos. */
+export type PhotoMosaicItem = string | { url: string; photoSource?: PhotoSource };
 
 interface PhotoMosaicProps {
-  photos: string[];
+  photos: PhotoMosaicItem[];
   height?: number;
   fallbackCategory?: Category;
 }
@@ -20,8 +28,20 @@ const CATEGORY_GRADIENTS: Record<Category, [string, string]> = {
   Shopping: ['#be185d', '#9d174d'],
 };
 
-const Tile: React.FC<{ uri?: string; gradient: [string, string]; style?: object }> = ({ uri, gradient, style }) => {
-  const isValid = uri && uri.startsWith('https://');
+function normalize(item: PhotoMosaicItem): { url: string; photoSource: PhotoSource } {
+  return typeof item === 'string'
+    ? { url: item, photoSource: null }
+    : { url: item.url, photoSource: item.photoSource ?? null };
+}
+
+const Tile: React.FC<{ uri?: string; photoSource?: PhotoSource; gradient: [string, string]; style?: object }> = ({
+  uri,
+  photoSource = null,
+  gradient,
+  style,
+}) => {
+  const [failed, setFailed] = React.useState(false);
+  const isValid = isDisplayablePhotoUrl(uri) && !failed;
   return (
     <View style={[styles.tile, style]}>
       <LinearGradient
@@ -37,8 +57,10 @@ const Tile: React.FC<{ uri?: string; gradient: [string, string]; style?: object 
           contentFit="cover"
           transition={200}
           cachePolicy="memory-disk"
+          onError={() => setFailed(true)}
         />
       )}
+      {isValid && photoSource === 'google' && <PhotoAttribution variant="compact" />}
     </View>
   );
 };
@@ -49,13 +71,27 @@ export const PhotoMosaic: React.FC<PhotoMosaicProps> = ({
   fallbackCategory = 'Culture',
 }) => {
   const gradient = CATEGORY_GRADIENTS[fallbackCategory] ?? CATEGORY_GRADIENTS.Culture;
-  const unique = Array.from(new Set(photos.filter((p) => p && p.startsWith('https://')))).slice(0, 4);
+
+  const unique = React.useMemo(() => {
+    const seen = new Set<string>();
+    const result: { url: string; photoSource: PhotoSource }[] = [];
+    for (const item of photos) {
+      const { url: rawUrl, photoSource } = normalize(item);
+      const url = resolvePhotoUrl(rawUrl);
+      if (!isDisplayablePhotoUrl(url) || seen.has(url)) continue;
+      seen.add(url);
+      result.push({ url, photoSource });
+      if (result.length >= 4) break;
+    }
+    return result;
+  }, [photos]);
+
   const count = unique.length;
 
   if (count <= 1) {
     return (
       <View style={[styles.container, { height }]}>
-        <Tile uri={unique[0]} gradient={gradient} style={StyleSheet.absoluteFill} />
+        <Tile uri={unique[0]?.url} photoSource={unique[0]?.photoSource} gradient={gradient} style={StyleSheet.absoluteFill} />
       </View>
     );
   }
@@ -64,9 +100,9 @@ export const PhotoMosaic: React.FC<PhotoMosaicProps> = ({
     return (
       <View style={[styles.container, { height }]}>
         <View style={styles.row}>
-          <Tile uri={unique[0]} gradient={gradient} style={styles.half} />
+          <Tile uri={unique[0].url} photoSource={unique[0].photoSource} gradient={gradient} style={styles.half} />
           <View style={styles.gap} />
-          <Tile uri={unique[1]} gradient={gradient} style={styles.half} />
+          <Tile uri={unique[1].url} photoSource={unique[1].photoSource} gradient={gradient} style={styles.half} />
         </View>
       </View>
     );
@@ -76,12 +112,12 @@ export const PhotoMosaic: React.FC<PhotoMosaicProps> = ({
     return (
       <View style={[styles.container, { height }]}>
         <View style={styles.row}>
-          <Tile uri={unique[0]} gradient={gradient} style={styles.left62} />
+          <Tile uri={unique[0].url} photoSource={unique[0].photoSource} gradient={gradient} style={styles.left62} />
           <View style={styles.gap} />
           <View style={styles.right38}>
-            <Tile uri={unique[1]} gradient={gradient} style={styles.halfV} />
+            <Tile uri={unique[1].url} photoSource={unique[1].photoSource} gradient={gradient} style={styles.halfV} />
             <View style={styles.gapV} />
-            <Tile uri={unique[2]} gradient={gradient} style={styles.halfV} />
+            <Tile uri={unique[2].url} photoSource={unique[2].photoSource} gradient={gradient} style={styles.halfV} />
           </View>
         </View>
       </View>
@@ -92,15 +128,15 @@ export const PhotoMosaic: React.FC<PhotoMosaicProps> = ({
     <View style={[styles.container, { height }]}>
       <View style={styles.col}>
         <View style={styles.row}>
-          <Tile uri={unique[0]} gradient={gradient} style={styles.quad} />
+          <Tile uri={unique[0].url} photoSource={unique[0].photoSource} gradient={gradient} style={styles.quad} />
           <View style={styles.gap} />
-          <Tile uri={unique[1]} gradient={gradient} style={styles.quad} />
+          <Tile uri={unique[1].url} photoSource={unique[1].photoSource} gradient={gradient} style={styles.quad} />
         </View>
         <View style={styles.gapV} />
         <View style={styles.row}>
-          <Tile uri={unique[2]} gradient={gradient} style={styles.quad} />
+          <Tile uri={unique[2].url} photoSource={unique[2].photoSource} gradient={gradient} style={styles.quad} />
           <View style={styles.gap} />
-          <Tile uri={unique[3]} gradient={gradient} style={styles.quad} />
+          <Tile uri={unique[3].url} photoSource={unique[3].photoSource} gradient={gradient} style={styles.quad} />
         </View>
       </View>
     </View>

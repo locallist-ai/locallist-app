@@ -26,6 +26,7 @@ import { usePlanEditor } from '../../lib/plan/use-plan-editor';
 import { track } from '../../lib/analytics';
 import type { Plan, PlanStop, PlanDetailResponse } from '../../lib/types';
 import type { DayGroup } from '../../lib/plan/use-plan-editor';
+import type { PhotoMosaicItem } from '../../components/ui/PhotoMosaic';
 
 function flattenStopsFromDays(days: DayGroup[]): PlanStop[] {
   return days
@@ -204,17 +205,22 @@ export default function PlanDetailScreen() {
   const displayStartDate: string | null =
     visiblePlan?.startDate ?? (isNew || id === 'preview' ? tripStartDate : null);
 
-  const heroPhotos = useMemo<string[]>(() => {
-    const picked: string[] = [];
+  const heroPhotos = useMemo<PhotoMosaicItem[]>(() => {
+    // Un place tiene UN solo photoSource (el proxy solo sirve la foto hero,
+    // index 0), así que emparejar la url con `place.photoSource` es correcto
+    // aunque en teoría hubiera más de una foto guardada.
+    const picked: PhotoMosaicItem[] = [];
     const seen = new Set<string>();
     for (const st of visibleStops) {
       const photo = st.place?.photos?.[0];
       if (photo && !seen.has(photo)) {
-        picked.push(photo);
+        picked.push({ url: photo, photoSource: st.place?.photoSource ?? null });
         seen.add(photo);
         if (picked.length >= 4) break;
       }
     }
+    // La imagen del plan es un campo admin-curado, nunca proviene de Google
+    // (ver Plan.ImageUrl en el backend) → sin photoSource, sin atribución.
     if (visiblePlan?.image && !seen.has(visiblePlan.image)) {
       picked.unshift(visiblePlan.image);
       if (picked.length > 4) picked.length = 4;

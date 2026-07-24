@@ -23,6 +23,8 @@ import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { formatPriceLabel } from '../../lib/helpers/price';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
+import { PhotoAttribution } from '../ui/PhotoAttribution';
+import { resolvePhotoUrl, isPhotoDisplayable } from '../../lib/helpers/photo-url';
 import type { PlanStop } from '../../lib/types';
 
 const COLLAPSED_PEEK_HEIGHT = 56;
@@ -53,6 +55,36 @@ interface FollowDaySheetProps {
   onChangeDay?: (day: number) => void;
   onComplete?: () => void;
 }
+
+// Own component so each row's photo-load failure state is independent (and
+// follows the Rules of Hooks — this is called from inside a `.map()`).
+const DayStopThumb: React.FC<{
+  photoUrl?: string;
+  photoSource?: 'google' | 'external' | null;
+  gradient: [string, string];
+}> = ({ photoUrl, photoSource, gradient }) => {
+  const resolved = resolvePhotoUrl(photoUrl);
+  // Keyed by URL (not a boolean): if this row is reused for a different photo,
+  // the previous failure must not keep suppressing the new one.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const isValid = isPhotoDisplayable(resolved, failedUrl);
+
+  return (
+    <View style={styles.thumbContainer}>
+      <LinearGradient colors={gradient} style={styles.thumb} />
+      {isValid && (
+        <Image
+          source={{ uri: resolved }}
+          style={[styles.thumb, StyleSheet.absoluteFill]}
+          contentFit="cover"
+          transition={200}
+          onError={() => setFailedUrl(resolved)}
+        />
+      )}
+      {isValid && photoSource === 'google' && <PhotoAttribution variant="compact" />}
+    </View>
+  );
+};
 
 export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
   allStops,
@@ -151,8 +183,12 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
 
   // Current stop data shortcuts
   const place = currentStop?.place;
-  const photoUrl = place?.photos?.[0];
-  const isValidPhoto = photoUrl?.startsWith('https://');
+  const resolvedPhotoUrl = resolvePhotoUrl(place?.photos?.[0]);
+  // Tracks the URL that failed (not a plain boolean): the featured card stays
+  // mounted across stops, so a boolean would keep suppressing the photo of
+  // the NEXT stop after one failure. Comparing URLs resets it naturally.
+  const [failedPhotoUrl, setFailedPhotoUrl] = useState<string | null>(null);
+  const isValidPhoto = isPhotoDisplayable(resolvedPhotoUrl, failedPhotoUrl);
   const categoryColor = CATEGORY_COLOR[place?.category ?? 'Culture'] ?? '#0f172a';
   const categoryGradient: [string, string] = CATEGORY_GRADIENT[place?.category ?? 'Culture'] ?? ['#0f172a', '#1e293b'];
   const iconName = currentStop?.timeBlock
@@ -180,16 +216,17 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
         <View style={styles.featuredCard}>
           {/* Photo / gradient backdrop */}
           <View style={styles.featuredPhoto}>
-            {isValidPhoto ? (
+            <LinearGradient colors={categoryGradient} style={StyleSheet.absoluteFill} />
+            {isValidPhoto && (
               <Image
-                source={{ uri: photoUrl }}
+                source={{ uri: resolvedPhotoUrl }}
                 style={StyleSheet.absoluteFill}
                 contentFit="cover"
                 transition={300}
+                onError={() => setFailedPhotoUrl(resolvedPhotoUrl)}
               />
-            ) : (
-              <LinearGradient colors={categoryGradient} style={StyleSheet.absoluteFill} />
             )}
+            {isValidPhoto && place.photoSource === 'google' && <PhotoAttribution />}
             <LinearGradient
               colors={['transparent', 'rgba(0,0,0,0.55)']}
               style={styles.featuredGradient}
@@ -299,7 +336,6 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
             ? TIME_BLOCK_ICON[stop.timeBlock] ?? DEFAULT_STOP_ICON
             : DEFAULT_STOP_ICON;
           const stopPhoto = stop.place?.photos?.[0];
-          const isValidStopPhoto = stopPhoto?.startsWith('https://');
           const stopCategoryGradient: [string, string] =
             CATEGORY_GRADIENT[stop.place?.category ?? 'Culture'] ?? ['#0f172a', '#1e293b'];
           const isLast = idx === dayItems.length - 1;
@@ -342,18 +378,11 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
               </View>
 
               {/* Thumbnail */}
-              <View style={styles.thumbContainer}>
-                {isValidStopPhoto ? (
-                  <Image
-                    source={{ uri: stopPhoto }}
-                    style={styles.thumb}
-                    contentFit="cover"
-                    transition={200}
-                  />
-                ) : (
-                  <LinearGradient colors={stopCategoryGradient} style={styles.thumb} />
-                )}
-              </View>
+              <DayStopThumb
+                photoUrl={stopPhoto}
+                photoSource={stop.place?.photoSource}
+                gradient={stopCategoryGradient}
+              />
             </TouchableOpacity>
           );
         })}

@@ -21,29 +21,10 @@ import { useTranslation } from 'react-i18next';
 import { colors, fonts, borderRadius, spacing } from '../../lib/theme';
 import { useResponsive } from '../../lib/responsive';
 import { LinearGradient } from 'expo-linear-gradient';
-
-export interface Stop {
-  id: string;
-  name: string;
-  category?: string;
-  neighborhood?: string;
-  photos?: { url: string }[];
-  whyThisPlace?: string;
-  duration?: number;
-  priceRange?: string;
-  googleRating?: number | null;
-  googleReviewCount?: number | null;
-  timeBlock?: string;
-  suggestedArrival?: string;
-  travelFromPrevious?: {
-    distance_km: number;
-    duration_min: number;
-    mode: string;
-  } | null;
-}
+import type { PlanStop } from '../../lib/types';
 
 interface BottomSheetStopProps {
-  stop: Stop;
+  stop: PlanStop;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
   onPause?: () => void;
@@ -84,7 +65,7 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
       stiffness: 130,
       overshootClamping: false,
     });
-  }, [stop.id, entrance]);
+  }, [stop.placeId, entrance]);
 
   const callSwipeLeft = () => { if (onSwipeLeft) onSwipeLeft(); };
   const callSwipeRight = () => { if (onSwipeRight) onSwipeRight(); };

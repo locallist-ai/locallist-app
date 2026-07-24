@@ -134,6 +134,7 @@ export default function PlaceDetailScreen() {
       <Animated.View style={[s.heroContainer, heroAnimatedStyle]}>
         <PhotoHero
           imageUrl={heroImageUrl}
+          photoSource={place.photoSource}
           fallbackCategory={heroFallbackCategory}
           title={place.name}
           subtitle={heroSubtitle}

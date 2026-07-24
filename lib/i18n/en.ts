@@ -151,6 +151,7 @@ export default {
     timeDinner: 'Dinner',
     timeEvening: 'Evening',
     defaultMessage: 'Plan a great trip for me',
+    photoAttributionA11y: 'Photo by Google',
   },
   account: {
     header: 'Account',
