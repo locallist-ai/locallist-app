@@ -16,12 +16,13 @@
  *  - g3: generación exitosa refresca la cuota (refreshAiPlansQuota).
  */
 
-import { act, renderHook } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { api, getAccessToken } from '../../../lib/api';
 import { setPreviewPlan } from '../../../lib/plan/plan-store';
 import { useTripContext } from '../../../lib/trip-context-store';
 import { useAuth } from '../../../lib/auth';
+import { getOnboardingPrefsSync } from '../../../lib/onboarding-store';
 import { useWizard } from '../useWizard';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
@@ -39,6 +40,7 @@ jest.mock('../../../lib/logger', () => ({
 jest.mock('../../../lib/plan/plan-store', () => ({ setPreviewPlan: jest.fn() }));
 jest.mock('../../../lib/trip-context-store', () => ({ useTripContext: jest.fn() }));
 jest.mock('../../../lib/auth', () => ({ useAuth: jest.fn() }));
+jest.mock('../../../lib/onboarding-store', () => ({ getOnboardingPrefsSync: jest.fn(() => ({})) }));
 
 const mockPresentGate = jest.fn((): string | null => 'gate-msg');
 const mockPresentClamped = jest.fn();
@@ -50,6 +52,7 @@ const mockApi = api as jest.Mock;
 const mockGetAccessToken = getAccessToken as jest.Mock;
 const mockUseTripContext = useTripContext as jest.Mock;
 const mockUseAuth = useAuth as jest.Mock;
+const mockGetOnboardingPrefs = getOnboardingPrefsSync as jest.Mock;
 const mockRefreshAiPlansQuota = jest.fn();
 
 const okResponse = (over: Record<string, unknown> = {}) => ({
@@ -82,6 +85,10 @@ beforeEach(() => {
   // Por defecto hay token en SecureStore (usuario autenticado). Los tests de
   // guest lo ponen a null.
   mockGetAccessToken.mockResolvedValue('valid-token');
+  // Sin prefs de onboarding por defecto — el wizard muestra todos los pasos.
+  // clearAllMocks limpia llamadas pero NO la implementación, así que reseteamos
+  // explícitamente para que un test previo no filtre sus prefs.
+  mockGetOnboardingPrefs.mockReturnValue({});
   setAuth();
 });
 
@@ -323,5 +330,135 @@ describe('useWizard — guard síncrono anti-doble-tap', () => {
     await act(async () => { await result.current.handleGenerate(); });
 
     expect(mockApi).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('useWizard — herencia del onboarding (D3: saltar pasos ya respondidos)', () => {
+  const bodyOf = (call: number) =>
+    (mockApi.mock.calls[call][1] as { body: { tripContext: Record<string, unknown> } }).body.tripContext;
+
+  it('prefs {interests, budget tier}: pre-rellena ambos, salta sus pasos y el payload los hereda', async () => {
+    mockGetOnboardingPrefs.mockReturnValue({ interests: ['food', 'culture'], budget: 'moderate' });
+    mockApi.mockResolvedValue(okResponse());
+    const { result } = renderHook(() => useWizard());
+
+    // Solo duración + grupo quedan activos (2 dots).
+    expect(result.current.progress.total).toBe(2);
+    expect(result.current.step).toBe(1); // duración
+    expect(result.current.progress.current).toBe(0);
+    // Los intereses ya vienen pre-rellenados desde el onboarding.
+    expect(result.current.interests).toEqual(['food', 'culture']);
+    // El tier heredado se refleja en el amount representativo y en selections[3].
+    expect(result.current.budgetAmount).toBe(150);
+    expect(result.current.selections[3]).toBe('moderate');
+
+    act(() => { result.current.handleSelectDays(2); });
+    act(() => { result.current.advanceToNext(); });
+    expect(result.current.step).toBe(2); // grupo (NO interests)
+    expect(result.current.progress.current).toBe(1);
+    act(() => { result.current.selectCompany('solo'); });
+
+    // El payload de generación incluye intereses/tier heredados aunque sus pasos
+    // no se hayan mostrado.
+    await act(async () => { await result.current.handleGenerate(); });
+
+    expect(mockApi).toHaveBeenCalledTimes(1);
+    const ctx = bodyOf(0);
+    expect(ctx.categories).toEqual(['food', 'culture']);
+    expect(ctx.budget).toBe('moderate');
+    expect(ctx.budgetAmount).toBe(150);
+    expect(ctx.days).toBe(2);
+    expect(ctx.groupType).toBe('solo');
+  });
+
+  it('advanceToNext desde el último paso activo (grupo) dispara generate saltando interests+budget', async () => {
+    mockGetOnboardingPrefs.mockReturnValue({ interests: ['food', 'culture'], budget: 'moderate' });
+    mockApi.mockResolvedValue(okResponse());
+    const { result } = renderHook(() => useWizard());
+
+    act(() => { result.current.handleSelectDays(2); });
+    act(() => { result.current.advanceToNext(); }); // 1→2
+    act(() => { result.current.selectCompany('solo'); });
+    // Grupo es el último activo: advanceToNext difiere el generate (setTimeout 50ms).
+    act(() => { result.current.advanceToNext(); });
+
+    // waitFor envuelve en act y sondea hasta que el generate diferido completa,
+    // evitando timers colgados tras el teardown de Jest.
+    await waitFor(() => expect(mockApi).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.step).toBe(2); // no avanzó a un step inexistente
+  });
+
+  it('budget=null (sin preferencia): salta budget SIN aplicar filtro, interests se muestra', async () => {
+    mockGetOnboardingPrefs.mockReturnValue({ budget: null });
+    mockApi.mockResolvedValue(okResponse());
+    const { result } = renderHook(() => useWizard());
+
+    // Budget saltado, interests mostrado → duración + grupo + interests = 3 dots.
+    expect(result.current.progress.total).toBe(3);
+    expect(result.current.budgetAmount).toBeNull();
+    expect(result.current.selections[3]).toBeNull();
+
+    act(() => { result.current.toggleInterest('food'); });
+    act(() => { result.current.handleSelectDays(2); });
+    act(() => { result.current.selectCompany('solo'); });
+    await act(async () => { await result.current.handleGenerate(); });
+
+    expect(mockApi).toHaveBeenCalledTimes(1);
+    const ctx = bodyOf(0);
+    // null = deselección activa → sin filtro de presupuesto en el payload.
+    expect(ctx.budget).toBeUndefined();
+    expect(ctx.budgetAmount).toBeUndefined();
+    expect(ctx.categories).toEqual(['food']);
+  });
+
+  it('budget=undefined (no respondido) + interests heredados: muestra budget, salta interests', () => {
+    mockGetOnboardingPrefs.mockReturnValue({ interests: ['food'] });
+    const { result } = renderHook(() => useWizard());
+
+    // interests saltado, budget mostrado → duración + grupo + budget = 3 dots.
+    expect(result.current.progress.total).toBe(3);
+
+    act(() => { result.current.handleSelectDays(2); });
+    act(() => { result.current.advanceToNext(); });
+    expect(result.current.step).toBe(2); // grupo
+    act(() => { result.current.selectCompany('solo'); });
+    act(() => { result.current.advanceToNext(); });
+    // Salta interests(3) y aterriza en budget(4), que SÍ se muestra.
+    expect(result.current.step).toBe(4);
+    expect(result.current.progress.current).toBe(2);
+  });
+
+  it('sin prefs: todos los pasos como antes (no regresión) — 4 dots, avance 1→2→3→4', () => {
+    // beforeEach ya deja prefs vacías.
+    const { result } = renderHook(() => useWizard());
+
+    expect(result.current.progress.total).toBe(4);
+    expect(result.current.interests).toEqual([]);
+    expect(result.current.budgetAmount).toBeNull();
+
+    act(() => { result.current.handleSelectDays(2); });
+    act(() => { result.current.advanceToNext(); });
+    expect(result.current.step).toBe(2);
+    act(() => { result.current.advanceToNext(); });
+    expect(result.current.step).toBe(3); // interests mostrado
+    act(() => { result.current.advanceToNext(); });
+    expect(result.current.step).toBe(4); // budget mostrado
+    expect(result.current.progress.current).toBe(3);
+  });
+
+  it('reachability: un paso heredado (interests) sigue accesible yendo atrás', () => {
+    mockGetOnboardingPrefs.mockReturnValue({ interests: ['food'] });
+    const { result } = renderHook(() => useWizard());
+
+    act(() => { result.current.handleSelectDays(2); });
+    act(() => { result.current.advanceToNext(); }); // 1→2
+    act(() => { result.current.selectCompany('solo'); });
+    act(() => { result.current.advanceToNext(); }); // 2→4 (salta interests)
+    expect(result.current.step).toBe(4);
+
+    // Atrás desde budget surface el interests heredado (3) para poder ajustarlo.
+    act(() => { result.current.handleBack(); });
+    expect(result.current.step).toBe(3);
   });
 });

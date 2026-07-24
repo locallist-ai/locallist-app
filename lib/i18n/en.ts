@@ -400,7 +400,7 @@ export default {
     skip: 'Skip',
     // Screen 1 — value
     valueClaim: 'Plans you can actually follow',
-    valueBullet1: 'One plan, not 40 tabs',
+    valueBullet1: 'We pick for you: one plan, not a hundred options',
     valueBullet2: 'Ready to follow, step by step',
     valueBullet3: 'Start free. Cancel anytime.',
     // Screen 2 — city
