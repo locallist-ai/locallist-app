@@ -392,7 +392,7 @@ export default {
     skip: 'Omitir',
     // Pantalla 1 — valor
     valueClaim: 'Planes que puedes seguir de verdad',
-    valueBullet1: 'Un plan, no 40 pestañas',
+    valueBullet1: 'Elegimos por ti: un plan, no mil opciones',
     valueBullet2: 'Listo para seguir, paso a paso',
     valueBullet3: 'Empieza gratis. Cancela cuando quieras.',
     // Pantalla 2 — ciudad

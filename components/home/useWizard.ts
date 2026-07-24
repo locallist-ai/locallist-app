@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ImpactFeedbackStyle } from 'expo-haptics';
@@ -6,7 +6,8 @@ import { api, getAccessToken } from '../../lib/api';
 import { track } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan/plan-store';
-import { hapticImpact, WIZARD_ONLY, LAST_STEP_INDEX, tierFromBudgetAmount, maxDaysForTier } from './constants';
+import { hapticImpact, WIZARD_ONLY, tierFromBudgetAmount, maxDaysForTier, BUDGET_AMOUNT_PRESETS } from './constants';
+import { getOnboardingPrefsSync } from '../../lib/onboarding-store';
 import { useTripContext, setStartDate as persistStartDate } from '../../lib/trip-context-store';
 import { useAuth } from '../../lib/auth';
 import { useGateHandler } from '../../lib/useGateHandler';
@@ -80,6 +81,13 @@ export interface UseWizardResult {
   aiPlansMonth: AiPlansQuota | null;
   /** True para usuarios Plus — habilita hasta 14 días en el picker de duración. */
   isPro: boolean;
+
+  /**
+   * Progreso del flujo ACTIVO (los pasos heredados del onboarding se omiten):
+   * `current` = índice 0-based del dot activo, `total` = nº de pasos mostrados.
+   * Alimenta `ProgressDots` para que el "paso X de Y" cuadre con los omitidos.
+   */
+  progress: { current: number; total: number };
 }
 
 // ── Hook ──
@@ -97,11 +105,50 @@ export const useWizard = (): UseWizardResult => {
   const { isPro, aiPlansMonth, refreshAiPlansQuota } = useAuth();
   const { presentGate, presentClamped } = useGateHandler();
 
+  // ── Herencia del onboarding (W2) ──
+  // El onboarding pudo capturar intereses (pantalla tastes) y presupuesto (tier).
+  // Cuando lo hizo, el wizard NO vuelve a preguntar: pre-rellena el valor y SALTA
+  // ese paso hacia delante, aplicándolo en el plan generado. Se lee UNA sola vez
+  // al montar (ref) para que el flujo no mute si el store cambia a mitad de sesión.
+  // Sin prefs (usuario directo / invitado) todo cae a los defaults de siempre.
+  const onboardingPrefs = useRef(getOnboardingPrefsSync()).current;
+  const inheritedInterests =
+    onboardingPrefs.interests && onboardingPrefs.interests.length > 0
+      ? onboardingPrefs.interests
+      : null;
+  // budget: tier válido | `null` ("sin preferencia" elegida activamente) |
+  // `undefined` (control nunca tocado). Solo un tier del preset se hereda como
+  // importe; `null` salta el paso sin aplicar filtro; `undefined` lo muestra.
+  const budgetPref = onboardingPrefs.budget;
+  const inheritedBudgetTier =
+    typeof budgetPref === 'string' && budgetPref in BUDGET_AMOUNT_PRESETS ? budgetPref : null;
+  const inheritedBudgetAmount = inheritedBudgetTier ? BUDGET_AMOUNT_PRESETS[inheritedBudgetTier] : null;
+  // Saltar interests si el onboarding aportó ≥1. Saltar budget si aportó un tier
+  // válido O `null` (deselección activa = no re-preguntar, sin filtro de presupuesto).
+  const skipInterests = inheritedInterests !== null;
+  const skipBudget = budgetPref === null || inheritedBudgetTier !== null;
+
+  // Pasos ACTIVOS del flujo, en orden, tras aplicar la herencia. Raw step ids:
+  // 1=duración, 2=grupo, 3=interests, 4=budget (5=chat legacy cuando !WIZARD_ONLY).
+  // Los omitidos siguen existiendo (render por `step`) y son alcanzables yendo
+  // atrás; solo salen del avance por defecto y del recuento de dots.
+  const activeSteps = useMemo(() => {
+    const s = [1, 2];
+    if (!skipInterests) s.push(3);
+    if (!skipBudget) s.push(4);
+    if (!WIZARD_ONLY) s.push(5);
+    return s;
+  }, [skipInterests, skipBudget]);
+
   // City is pre-selected via the city-picker home screen; wizard starts at step 1.
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   // Slot indices: 0=days, 1=company, 2=interests-marker (unused), 3=budget.
-  const [selections, setSelections] = useState<(string | null)[]>([null, null, null, null]);
+  // selections[3] arranca con el tier heredado del onboarding (si lo hay) para
+  // que el payload de generación lo incluya aunque el BudgetStep no se muestre.
+  const [selections, setSelections] = useState<(string | null)[]>(
+    () => [null, null, null, inheritedBudgetTier ?? null],
+  );
   const [city, setCity] = useState<string | null>(tripCity);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -109,12 +156,15 @@ export const useWizard = (): UseWizardResult => {
   const [showBubbleText, setShowBubbleText] = useState(false);
 
   // Interests step state — multi-select + sub-categorías por interest.
-  const [interests, setInterests] = useState<string[]>([]);
+  // Se pre-rellena con los intereses heredados del onboarding (si hay ≥1); el
+  // paso se salta pero el payload los sigue enviando como `categories`.
+  const [interests, setInterests] = useState<string[]>(() => inheritedInterests ?? []);
   const [subcategoryPicks, setSubcategoryPicks] = useState<Record<string, string[]>>({});
 
   // Budget custom amount (USD/día/persona). El tier derivado se mantiene en
-  // selections[3] para no cambiar la firma del payload existente.
-  const [budgetAmount, setBudgetAmountState] = useState<number | null>(null);
+  // selections[3] para no cambiar la firma del payload existente. Arranca con el
+  // importe representativo del tier heredado del onboarding (si lo hay).
+  const [budgetAmount, setBudgetAmountState] = useState<number | null>(() => inheritedBudgetAmount);
   const setBudgetAmount = useCallback((n: number | null) => {
     setBudgetAmountState(n);
     setSelections((prev) => {
@@ -157,29 +207,33 @@ export const useWizard = (): UseWizardResult => {
     hapticImpact(ImpactFeedbackStyle.Light);
     setDirection('forward');
     setStep((s) => {
-      // Si ya estamos en el último step interactivo, disparar generate en vez
-      // de avanzar a un step inexistente. Diferimos al siguiente tick para que
-      // generateRef tenga el handleGenerate con las selections más recientes.
-      if (s >= LAST_STEP_INDEX) {
+      // Siguiente paso ACTIVO por delante del actual (salta los heredados del
+      // onboarding). Si no hay ninguno, ya estamos en el último paso interactivo:
+      // disparamos generate en vez de avanzar a un step inexistente. Diferimos al
+      // siguiente tick para que generateRef tenga las selections más recientes.
+      const next = activeSteps.find((x) => x > s);
+      if (next == null) {
         setTimeout(() => generateRef.current(), 50);
         return s;
       }
-      return s + 1;
+      return next;
     });
-  }, []);
+  }, [activeSteps]);
 
   const handleReset = useCallback(() => {
-    setStep(1);
+    // Reset re-aplica la herencia del onboarding: vuelve al primer paso activo y
+    // restaura interests/budget heredados para conservar el mismo salto de pasos.
+    setStep(activeSteps[0]);
     setDirection('forward');
-    setSelections([null, null, null, null]);
+    setSelections([null, null, null, inheritedBudgetTier ?? null]);
     setCity(tripCity);
     setMessage('');
     setError(null);
-    setInterests([]);
+    setInterests(inheritedInterests ?? []);
     setSubcategoryPicks({});
-    setBudgetAmountState(null);
+    setBudgetAmountState(inheritedBudgetAmount);
     setCompanySubs([]);
-  }, [tripCity]);
+  }, [tripCity, activeSteps, inheritedInterests, inheritedBudgetTier, inheritedBudgetAmount]);
 
   const handleBack = useCallback(() => {
     if (step <= 1) {
@@ -425,6 +479,17 @@ export const useWizard = (): UseWizardResult => {
     generateRef.current = handleGenerate;
   }, [handleGenerate]);
 
+  // Progreso sobre los pasos ACTIVOS (los heredados no cuentan). Si el usuario
+  // aterriza yendo atrás en un paso heredado (fuera de la lista activa), lo
+  // ubicamos por nº de activos por delante, sin exceder el último dot.
+  const progress = useMemo(() => {
+    const total = activeSteps.length;
+    const idx = activeSteps.indexOf(step);
+    if (idx >= 0) return { current: idx, total };
+    const before = activeSteps.filter((x) => x < step).length;
+    return { current: Math.min(before, total - 1), total };
+  }, [activeSteps, step]);
+
   return {
     step,
     direction,
@@ -455,5 +520,6 @@ export const useWizard = (): UseWizardResult => {
     handleSelectDays,
     aiPlansMonth,
     isPro,
+    progress,
   };
 };

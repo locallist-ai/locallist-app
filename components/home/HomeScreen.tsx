@@ -8,7 +8,6 @@ import { router, Redirect } from 'expo-router';
 import { fonts, colors } from '../../lib/theme';
 import {
   STEPS,
-  TOTAL_STEPS,
   WIZARD_ONLY,
   INTERESTS_STEP_INDEX_IN_STEPS,
   COMPANY_SUBCATEGORIES,
@@ -97,7 +96,7 @@ export const HomeScreen: React.FC = () => {
             <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.dotsCenter}>
-            <ProgressDots current={wizard.step - 1} total={TOTAL_STEPS} />
+            <ProgressDots current={wizard.progress.current} total={wizard.progress.total} />
           </View>
           <TouchableOpacity
             onPress={() => router.push('/(tabs)/home')}
