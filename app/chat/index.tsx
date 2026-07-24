@@ -400,11 +400,16 @@ export default function ChatScreen() {
 
   const handleUseWizard = useCallback(() => {
     track({ event: 'chat_to_wizard_escape', sessionId, turnCount });
-    // El wizard es el flujo PRIMARIO. `navigate` (no `push`) reusa la pantalla
-    // del wizard si ya está en el stack (entrada wizard→chat vía opt-in),
-    // evitando apilar wizards duplicados / loops. En deep-link directo a /chat
-    // (sin wizard debajo) hace un push normal.
-    router.navigate('/builder/wizard');
+    // El wizard es el flujo PRIMARIO. `dismissTo` emite POP_TO: si el wizard ya
+    // existe en el stack (entrada wizard→chat vía opt-in con push), hace POP
+    // hasta esa instancia — misma route/key, así que las respuestas del wizard
+    // sobreviven y el ida-vuelta no acumula stack. NO usar `navigate`: en
+    // @react-navigation/routers 7.5.3 NAVIGATE solo reutiliza la ruta si es la
+    // TOP actual; una ruta enterrada se re-PUSHea (wizard nuevo, estado perdido).
+    // Deep-link (chat sin wizard debajo): POP_TO sustituye la ruta actual por el
+    // wizard (verificado en StackRouter case 'POP_TO', rama index === -1) — no
+    // revienta y navega igualmente, sin fallback necesario.
+    router.dismissTo('/builder/wizard');
   }, [sessionId, turnCount]);
 
   const handleProfileSave = async (fields: {

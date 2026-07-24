@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { colors, fonts } from '../../lib/theme';
+import { fonts } from '../../lib/theme';
 
 /**
  * Aviso claro pero no intrusivo de que el chat es IA y puede equivocarse. El
@@ -13,12 +13,14 @@ import { colors, fonts } from '../../lib/theme';
  */
 export function AiDisclaimerBanner() {
   const { t } = useTranslation();
+  // Sin accessibilityRole="alert": es una nota estática, no un aviso urgente —
+  // "alert" haría que VoiceOver lo re-anunciara en cada remontaje del chat.
   return (
-    <View style={styles.banner} accessibilityRole="alert">
+    <View style={styles.banner}>
       <MaterialCommunityIcons
         name="information-outline"
         size={16}
-        color={colors.paperWhite}
+        color="rgba(255, 255, 255, 0.85)"
         style={styles.icon}
       />
       <Text style={styles.text}>{t('chat.aiDisclaimer')}</Text>

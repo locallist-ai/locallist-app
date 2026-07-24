@@ -13,7 +13,9 @@ import { DurationStep } from '../DurationStep';
 import { useAuth } from '../../../lib/auth';
 import { track } from '../../../lib/analytics';
 
-jest.mock('expo-router', () => ({ router: { navigate: jest.fn(), push: jest.fn() } }));
+jest.mock('expo-router', () => ({
+  router: { navigate: jest.fn(), push: jest.fn(), dismissTo: jest.fn() },
+}));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }));
@@ -74,13 +76,18 @@ describe('DurationStep — free', () => {
     expect(onSelectDays).toHaveBeenCalledWith(2);
   });
 
-  it('el link opt-in navega al chat (navigate, no push) y trackea el opt-in', () => {
+  it('el link opt-in hace PUSH del chat (encima del wizard) y trackea el opt-in', () => {
+    // `push`, NO `navigate`: en @react-navigation/routers 7.5.3 NAVIGATE solo
+    // reutiliza la ruta si es la top actual, así que no aporta reuso aquí y
+    // ocultaría la semántica real. El chat va ENCIMA del wizard; la vuelta la
+    // hace el escape del chat con dismissTo (POP_TO) — ver test del chat.
     render(<DurationStep selectedDays={null} onSelectDays={jest.fn()} startDate="2026-07-23" onChangeStartDate={jest.fn()} onContinue={jest.fn()} />);
 
     fireEvent.press(screen.getByTestId('wizard-to-chat-link'));
 
-    expect(router.navigate).toHaveBeenCalledWith('/chat');
-    expect(router.push).not.toHaveBeenCalled();
+    expect(router.push).toHaveBeenCalledWith('/chat');
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(router.dismissTo).not.toHaveBeenCalled();
     expect(track).toHaveBeenCalledWith({ event: 'wizard_to_chat_optin' });
   });
 });

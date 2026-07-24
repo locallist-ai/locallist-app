@@ -54,11 +54,14 @@ export const DurationStep: React.FC<DurationStepProps> = ({
 
   // Opt-in secundario al chat IA. El wizard es el flujo primario; este es el
   // escape hatch discreto del primer paso. La ciudad viaja por el trip-context
-  // persistido, así que basta con navegar. `navigate` (no `push`) reusa la
-  // pantalla de chat si ya está en el stack, evitando loops wizard↔chat.
+  // persistido, así que basta con navegar. `push` a secas (semántica honesta):
+  // el chat se apila ENCIMA del wizard y el back del SO también vuelve. El
+  // camino de vuelta (escape del chat) usa `dismissTo` (POP_TO), que despila el
+  // chat hasta la instancia de wizard existente — N ida-vueltas nunca acumulan
+  // más de [wizard, chat] en el stack y el estado del wizard sobrevive.
   const handleOpenChat = useCallback(() => {
     track({ event: 'wizard_to_chat_optin' });
-    router.navigate('/chat');
+    router.push('/chat');
   }, []);
 
   const handleLockedPress = useCallback(() => {
