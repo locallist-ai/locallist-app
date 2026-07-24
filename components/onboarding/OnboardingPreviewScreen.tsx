@@ -73,7 +73,7 @@ export function OnboardingPreviewScreen({ city, onCreatePlan }: OnboardingPrevie
 
         {loading ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator color={colors.paperWhite} />
+            <ActivityIndicator color={colors.sunsetOrange} />
             <Text style={styles.loadingText}>{t('onboarding.previewLoading')}</Text>
           </View>
         ) : plan ? (
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: colors.paperWhite,
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontFamily: fonts.body,
     fontSize: 14,
-    color: colors.paperWhite,
+    color: colors.textSecondary,
   },
   card: {
     backgroundColor: colors.bgCard,

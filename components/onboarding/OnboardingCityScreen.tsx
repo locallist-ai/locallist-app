@@ -57,8 +57,8 @@ export function OnboardingCityScreen({ onSelectCity, onNotifyUncovered }: Onboar
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <EditorialTitle text={t('onboarding.cityTitle')} size="md" color={colors.paperWhite} withShadow />
-      <StepSubtitle text={t('onboarding.citySubtitle')} color={colors.paperWhite} style={styles.subtitle} />
+      <EditorialTitle text={t('onboarding.cityTitle')} size="md" color={colors.deepOcean} />
+      <StepSubtitle text={t('onboarding.citySubtitle')} color={colors.textSecondary} style={styles.subtitle} />
 
       <View style={styles.cards}>
         {cities.map((city, index) => (
@@ -109,13 +109,13 @@ const styles = StyleSheet.create({
   notifyText: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 14,
-    color: colors.paperWhite,
+    color: colors.electricBlue,
     textDecorationLine: 'underline',
   },
   notifyThanks: {
     fontFamily: fonts.body,
     fontSize: 14,
-    color: colors.paperWhite,
+    color: colors.textSecondary,
     textAlign: 'center',
     paddingVertical: 14,
   },
