@@ -26,6 +26,10 @@ export interface ChoiceChipProps {
   onPress: () => void;
   /** Index en una lista para stagger de enter animation (default 0). */
   index?: number;
+  /** Color del borde en estado idle (no seleccionado). Default `rgba(255,255,255,0.3)`
+   *  — pensado para el fondo OSCURO del wizard. Sobre fondos claros (onboarding)
+   *  pásale un borde oscuro tenue, p.ej. `rgba(15,23,42,0.15)`. */
+  idleBorderColor?: string;
   /** Dispara haptic selection feedback al presionar (default true). */
   haptics?: boolean;
   /** Accessibility label. Default: label. */
@@ -41,6 +45,7 @@ export const ChoiceChip: React.FC<ChoiceChipProps> = React.memo(function ChoiceC
   selected,
   onPress,
   index = 0,
+  idleBorderColor,
   haptics = true,
   accessibilityLabel,
   testID,
@@ -73,6 +78,7 @@ export const ChoiceChip: React.FC<ChoiceChipProps> = React.memo(function ChoiceC
           style={[
             styles.card,
             selected ? styles.cardSelected : styles.cardIdle,
+            !selected && idleBorderColor ? { borderColor: idleBorderColor } : null,
           ]}
         >
           <BlurView

@@ -26,7 +26,7 @@ export function OnboardingValueScreen({ onStart, onSignIn }: OnboardingValueScre
   return (
     <View style={styles.root}>
       <View style={styles.hero}>
-        <EditorialTitle text={t('onboarding.valueClaim')} size="lg" color={colors.paperWhite} withShadow />
+        <EditorialTitle text={t('onboarding.valueClaim')} size="lg" color={colors.deepOcean} />
 
         <View style={styles.bullets}>
           {BULLET_KEYS.map((key) => (
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyMedium,
     fontSize: 16,
     lineHeight: 22,
-    color: colors.paperWhite,
+    color: colors.textMain,
   },
   footer: {
     paddingBottom: spacing.xl,
@@ -113,5 +113,5 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
-  secondaryBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.paperWhite },
+  secondaryBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.electricBlue },
 });

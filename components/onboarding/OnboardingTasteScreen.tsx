@@ -65,8 +65,8 @@ export function OnboardingTasteScreen({ onContinue, onSkip }: OnboardingTasteScr
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <EditorialTitle text={t('onboarding.tasteTitle')} size="md" color={colors.paperWhite} withShadow />
-        <StepSubtitle text={t('onboarding.tasteSubtitle')} color={colors.paperWhite} style={styles.subtitle} />
+        <EditorialTitle text={t('onboarding.tasteTitle')} size="md" color={colors.deepOcean} />
+        <StepSubtitle text={t('onboarding.tasteSubtitle')} color={colors.textSecondary} style={styles.subtitle} />
 
         {interestChips.map((opt, index) => (
           <ChoiceChip
@@ -77,6 +77,7 @@ export function OnboardingTasteScreen({ onContinue, onSkip }: OnboardingTasteScr
             selected={interests.includes(opt.id)}
             onPress={() => toggleInterest(opt.id)}
             index={index}
+            idleBorderColor="rgba(15, 23, 42, 0.15)"
             testID={`interest-${opt.id}`}
           />
         ))}
@@ -91,6 +92,7 @@ export function OnboardingTasteScreen({ onContinue, onSkip }: OnboardingTasteScr
             selected={budget === opt.id}
             onPress={() => setBudget((prev) => (prev === opt.id ? null : opt.id))}
             index={index}
+            idleBorderColor="rgba(15, 23, 42, 0.15)"
             testID={`budget-${opt.id}`}
           />
         ))}
@@ -135,7 +137,7 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontFamily: fonts.headingSemiBold,
     fontSize: 20,
-    color: colors.paperWhite,
+    color: colors.deepOcean,
     marginTop: spacing.lg,
     marginBottom: spacing.md,
   },
@@ -157,5 +159,5 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
-  skipText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.paperWhite },
+  skipText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.textSecondary },
 });
