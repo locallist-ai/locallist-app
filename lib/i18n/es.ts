@@ -355,7 +355,7 @@ export default {
     done: 'Listo',
     // Salida de saltar; solo se pinta cuando el paywall es un paso del onboarding.
     notNow: 'Ahora no',
-    trialReminderNotice: 'Te avisaremos 2 días antes de que acabe tu prueba gratis. Primer cobro el día {{day}} — nunca antes.',
+    trialReminderNotice: 'Te avisaremos 2 días antes de que acabe tu prueba gratis. Primer cobro el día {{day}}, nunca antes.',
   },
   trialReminder: {
     notificationTitle: 'Tu prueba gratis acaba en 2 días',
