@@ -28,7 +28,11 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('../../../lib/responsive', () => ({
   useResponsive: () => ({ width: 390, height: 844, compact: false }),
 }));
-jest.mock('../../../lib/api', () => ({ getLiveCities: jest.fn() }));
+jest.mock('../../../lib/api', () => ({ getLiveCities: jest.fn(), requestCity: jest.fn() }));
+// HomeTab now renders the shared CityRequestInline, which pulls in lib/analytics
+// → lib/purchases → react-native-purchases (untransformable in jest). Mock it so
+// the picker test stays about coverage/handoff, not the request affordance.
+jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../lib/trip-context-store', () => ({
   setSelectedCity: jest.fn(() => Promise.resolve()),
 }));

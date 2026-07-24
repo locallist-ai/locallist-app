@@ -11,7 +11,8 @@ import { getLiveCities } from '../../../lib/api';
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
-jest.mock('../../../lib/api', () => ({ getLiveCities: jest.fn() }));
+jest.mock('../../../lib/api', () => ({ getLiveCities: jest.fn(), requestCity: jest.fn() }));
+jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../ui/design-system', () => {
   const { Text } = jest.requireActual('react-native');
   return {
@@ -65,13 +66,15 @@ describe('OnboardingCityScreen', () => {
     expect(screen.getByText('Miami')).toBeTruthy();
   });
 
-  it('notify-me reveals a local acknowledgement and reports uncovered demand', async () => {
+  it('tapping "my city isn\'t listed" reveals the request input and reports demand', async () => {
     mockGetLiveCities.mockResolvedValueOnce(liveOk(['Miami']));
     const onNotifyUncovered = jest.fn();
     render(<OnboardingCityScreen onSelectCity={jest.fn()} onNotifyUncovered={onNotifyUncovered} />);
     await waitFor(() => expect(screen.getByText('Miami')).toBeTruthy());
     fireEvent.press(screen.getByText('onboarding.cityNotListed'));
-    expect(screen.getByText('onboarding.cityNotifyThanks')).toBeTruthy();
+    // Reveals the shared inline input (not an immediate ack) and fires the
+    // covered:false demand signal exactly once.
+    expect(screen.getByPlaceholderText('cityRequest.placeholder')).toBeTruthy();
     expect(onNotifyUncovered).toHaveBeenCalledTimes(1);
   });
 });

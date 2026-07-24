@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { colors, fonts, spacing } from '../../lib/theme';
+import { colors, spacing } from '../../lib/theme';
 import { CITIES, cityFromLive, type City } from '../../lib/cities';
 import { getLiveCities } from '../../lib/api';
 import { logger } from '../../lib/logger';
 import { CityCard } from '../home/CityCard';
+import { CityRequestInline } from '../home/CityRequestInline';
 import { EditorialTitle, StepSubtitle } from '../ui/design-system';
 
 // Onboarding screen 2 — city / intent. Mirrors the home picker: offers ONLY
@@ -24,10 +25,6 @@ interface OnboardingCityScreenProps {
 export function OnboardingCityScreen({ onSelectCity, onNotifyUncovered }: OnboardingCityScreenProps) {
   const { t } = useTranslation();
   const [cities, setCities] = useState<City[]>(CITIES);
-  // Notify-me (QW4) is not built yet — this only reveals a local acknowledgement
-  // and logs intent. When the waitlist endpoint lands, wire it here to capture
-  // the uncovered city and POST it (see W2 brief: "deja el hook").
-  const [notifyRequested, setNotifyRequested] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -42,14 +39,6 @@ export function OnboardingCityScreen({ onSelectCity, onNotifyUncovered }: Onboar
     })();
     return () => controller.abort();
   }, []);
-
-  const handleNotifyMe = () => {
-    setNotifyRequested(true);
-    logger.info('onboarding: notify-me requested for an uncovered city (QW4 pending)');
-    // Surface demand for uncovered cities to analytics (the only `covered:false`
-    // producer). Keep the local ack + logger; the orchestrator owns the event.
-    onNotifyUncovered();
-  };
 
   return (
     <ScrollView
@@ -71,19 +60,13 @@ export function OnboardingCityScreen({ onSelectCity, onNotifyUncovered }: Onboar
         ))}
       </View>
 
-      {notifyRequested ? (
-        <Text style={styles.notifyThanks}>{t('onboarding.cityNotifyThanks')}</Text>
-      ) : (
-        <TouchableOpacity
-          style={styles.notifyBtn}
-          activeOpacity={0.7}
-          onPress={handleNotifyMe}
-          accessibilityRole="button"
-          accessibilityLabel={t('onboarding.cityNotListed')}
-        >
-          <Text style={styles.notifyText}>{t('onboarding.cityNotListed')}</Text>
-        </TouchableOpacity>
-      )}
+      <CityRequestInline
+        source="onboarding"
+        variant="light"
+        promptLabel={t('onboarding.cityNotListed')}
+        ackLabel={t('onboarding.cityNotifyThanks')}
+        onReveal={onNotifyUncovered}
+      />
     </ScrollView>
   );
 }
@@ -101,22 +84,5 @@ const styles = StyleSheet.create({
   },
   cards: {
     gap: 0,
-  },
-  notifyBtn: {
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  notifyText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 14,
-    color: colors.electricBlue,
-    textDecorationLine: 'underline',
-  },
-  notifyThanks: {
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingVertical: 14,
   },
 });

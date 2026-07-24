@@ -96,6 +96,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `plan-editor/PlaceSearchModal.tsx` | Search places to add to a plan |
 | `home/HomeScreen.tsx` | AI wizard step flow (used by `builder/wizard.tsx`): DurationStep (tier-aware day pills 1..14 Plus / 1..3 free + upsell), InterestsStep + SubcategorySheet, BudgetStep, RefineableStep, ChatStep (legacy), `useWizard` state hook (guest gate + gate-error mapping + quota), `useTaxonomy`, constants |
 | `home/CityCard.tsx` + `home/HeroSkiaBg.tsx` | City picker card + Skia hero background (home tab) |
+| `home/CityRequestInline.tsx` | "Pide tu ciudad" compartido (onboarding + home): link discreto → TextInput inline (autofocus ref+setTimeout) + enviar. Validación cliente espejo del server (máx 100, regex unicode) antes de `POST /cities/request`; estados enviando/ack/400/429/red; `track({event:'city_request_submitted', source})` solo en éxito (sin PII). Prop `variant` claro/oscuro |
 | `home/TypingDots.tsx` | Typing indicator (shared with chat) |
 
 ## Key Libs (`lib/`)

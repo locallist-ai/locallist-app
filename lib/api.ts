@@ -232,6 +232,17 @@ export async function getLiveCities(signal?: AbortSignal) {
   return api<{ cities: LiveCity[] }>('/cities/live', { signal });
 }
 
+/**
+ * Señal de demanda de una ciudad no cubierta ("pide tu ciudad"). El endpoint es
+ * `[AllowAnonymous]` (adjunta el JWT si hay sesión → atribuye al usuario, si no
+ * anónimo). 201 creado / 200 dedup idempotente (ambos `{ message }`); errores
+ * 400 estructurados `{ error: 'city_required' | 'city_too_long' | 'city_invalid' }`;
+ * 429 si supera el rate limit (5/min/IP). El caller valida en cliente antes.
+ */
+export async function requestCity(city: string) {
+  return api<{ message: string }>('/cities/request', { method: 'POST', body: { city } });
+}
+
 // ─── Plans API ───────────────────────────────────────────────────────────────
 
 /**

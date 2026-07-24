@@ -169,6 +169,10 @@ export type AppEvent =
   // City chosen on screen 2. `covered` is false for the "my city isn't here"
   // notify-me path (the live grid only lists covered cities).
   | { event: 'onboarding_city_selected'; city: string; covered: boolean }
+  // Demanda de una ciudad no cubierta enviada al backend (`POST /cities/request`).
+  // Solo en éxito (201/200). SIN PII: nunca se manda el texto de la ciudad (ya
+  // vive en BBDD); `source` = superficie desde la que se pidió.
+  | { event: 'city_request_submitted'; source: 'onboarding' | 'home' }
   // Flow finished (from the W5 paywall step). `skippedPaywall` is true when the
   // user tapped "not now" or the paywall degraded (auto-skip), false after an
   // effective purchase/restore.
