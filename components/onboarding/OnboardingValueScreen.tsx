@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { EditorialTitle } from '../ui/design-system';
 
-// Onboarding screen 1 — value proposition. Logo + editorial claim + three
+// Onboarding screen 1 — value proposition. Editorial claim + three
 // benefit bullets, a primary "Get started" CTA that advances the flow, and a
 // secondary "I already have an account" link that swaps to the inline login.
 
@@ -26,11 +26,6 @@ export function OnboardingValueScreen({ onStart, onSignIn }: OnboardingValueScre
   return (
     <View style={styles.root}>
       <View style={styles.hero}>
-        <Image
-          source={require('../../assets/images/icon.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
         <EditorialTitle text={t('onboarding.valueClaim')} size="lg" color={colors.paperWhite} withShadow />
 
         <View style={styles.bullets}>
@@ -76,11 +71,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  logo: {
-    width: 96,
-    height: 96,
-    marginBottom: spacing.lg,
   },
   bullets: {
     marginTop: spacing.xl,

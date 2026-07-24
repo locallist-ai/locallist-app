@@ -330,11 +330,11 @@ export default {
     // Free-trial framing — kept subordinate to the billed price (Apple 3.1.2).
     trialFreeBadge: '{{days}} days free',
     timelineTodayTitle: 'Today',
-    timelineTodayBody: 'Unlock every LocalList Plus feature.',
+    timelineTodayBody: 'Start free. Full access to Plus.',
     timelineReminderTitle: 'Day {{day}}',
-    timelineReminderBody: "We'll remind you your free trial is ending.",
+    timelineReminderBody: 'A friendly reminder that your free trial is ending.',
     timelineChargeTitle: 'Day {{day}}',
-    timelineChargeBody: 'First charge of {{price}}.',
+    timelineChargeBody: 'First payment of {{price}}, only if you stay.',
     cta: 'Subscribe',
     restore: 'Restore purchases',
     disclaimer: 'Auto-renewable subscription billed to your Apple ID. Cancel anytime in Settings.',
@@ -355,7 +355,7 @@ export default {
     done: 'Done',
     // Skip affordance shown only when the paywall is a step of the onboarding.
     notNow: 'Not now',
-    trialReminderNotice: "We'll remind you 2 days before your free trial ends. First charge on day {{day}}, never before.",
+    trialReminderNotice: "Cancel anytime before day {{day}} and you won't be charged.",
   },
   trialReminder: {
     notificationTitle: 'Your free trial ends in 2 days',
@@ -402,7 +402,7 @@ export default {
     valueClaim: 'Plans you can actually follow',
     valueBullet1: 'One plan, not 40 tabs',
     valueBullet2: 'Ready to follow, step by step',
-    valueBullet3: 'Honest trial: we remind you before you pay',
+    valueBullet3: 'Start free. Cancel anytime.',
     // Screen 2 — city
     cityTitle: 'Where are you headed next?',
     citySubtitle: 'Pick a city we cover and see a real plan.',
