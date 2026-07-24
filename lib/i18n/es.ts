@@ -151,6 +151,7 @@ export default {
     timeDinner: 'Cena',
     timeEvening: 'Noche',
     defaultMessage: 'Planifica un gran viaje para mí',
+    photoAttributionA11y: 'Foto de Google',
   },
   account: {
     header: 'Cuenta',

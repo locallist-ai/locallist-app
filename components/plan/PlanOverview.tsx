@@ -12,7 +12,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
-import { PhotoMosaic } from '../ui/PhotoMosaic';
+import { PhotoMosaic, type PhotoMosaicItem } from '../ui/PhotoMosaic';
 import { type Category } from '../ui/PhotoHero';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { formatDayDate } from '../../lib/dates';
@@ -29,7 +29,7 @@ interface PlanOverviewProps {
   stops: PlanStop[];
   totalStops: number;
   message?: string | null;
-  heroPhotos: string[];
+  heroPhotos: PhotoMosaicItem[];
   isAuthenticated: boolean;
   isOwner: boolean;
   isNew: boolean;

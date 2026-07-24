@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
+import { PhotoAttribution } from '../ui/PhotoAttribution';
+import { resolvePhotoUrl, isDisplayablePhotoUrl } from '../../lib/helpers/photo-url';
 import type { PlanStop } from '../../lib/types';
 
 type Category = 'Food' | 'Outdoors' | 'Coffee' | 'Nightlife' | 'Culture' | 'Wellness';
@@ -30,7 +32,9 @@ type Props = {
 export function EditableStopCard({ stop, onMovePress, onReplacePress, drag, isActive, onPress }: Props) {
   const { t } = useTranslation();
   const place = stop.place;
-  const photoUrl = place?.photos?.[0] ?? null;
+  const photoUrl = resolvePhotoUrl(place?.photos?.[0]);
+  const [photoFailed, setPhotoFailed] = React.useState(false);
+  const showPhoto = isDisplayablePhotoUrl(photoUrl) && !photoFailed;
   const category = (place?.category ?? 'Culture') as Category;
   const gradient = CATEGORY_GRADIENTS[category] ?? CATEGORY_GRADIENTS.Culture;
 
@@ -49,11 +53,16 @@ export function EditableStopCard({ stop, onMovePress, onReplacePress, drag, isAc
 
       {/* Thumbnail */}
       <View style={s.thumbnail}>
-        {photoUrl ? (
-          <Image source={{ uri: photoUrl }} style={s.thumbnailImg} contentFit="cover" />
-        ) : (
-          <LinearGradient colors={gradient} style={s.thumbnailImg} />
+        <LinearGradient colors={gradient} style={s.thumbnailImg} />
+        {showPhoto && (
+          <Image
+            source={{ uri: photoUrl }}
+            style={[s.thumbnailImg, StyleSheet.absoluteFill]}
+            contentFit="cover"
+            onError={() => setPhotoFailed(true)}
+          />
         )}
+        {showPhoto && place?.photoSource === 'google' && <PhotoAttribution variant="compact" />}
       </View>
 
       {/* Right column: name (full width) + chips & buttons row */}

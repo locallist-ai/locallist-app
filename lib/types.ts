@@ -30,6 +30,11 @@ export type Place = {
   bestTime: string | null;
   priceRange: string | null;
   photos: string[] | null;
+  // "google" (proxy runtime, ver PlacePhotoUrls en el backend) | "external" (URL
+  // directa no-Google) | null (sin fotos). Aditivo: payloads viejos sin este
+  // campo no rompen. La app lo usa para mostrar la atribución "Google" que
+  // exige el ToS de Google Places cuando la foto viene de su proxy.
+  photoSource?: 'google' | 'external' | null;
   latitude: number | null;
   longitude: number | null;
   googleRating: number | null;

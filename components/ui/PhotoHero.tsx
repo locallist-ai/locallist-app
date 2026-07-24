@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ImageSourcePropType, Image as RNImage } from 'r
 import { Image, ImageSource } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { resolvePhotoUrl, isDisplayablePhotoUrl } from '../../lib/helpers/photo-url';
+import { PhotoAttribution } from './PhotoAttribution';
 
 export type Category = 'Food' | 'Outdoors' | 'Coffee' | 'Nightlife' | 'Culture' | 'Wellness' | 'Shopping';
 
@@ -10,6 +12,12 @@ interface PhotoHeroProps {
   imageUrl?: string;
   /** Local asset via require() — takes priority over imageUrl */
   localImage?: ImageSourcePropType;
+  /**
+   * Google Places ToS requires attribution on photos served by our Google
+   * photo proxy. `'google'` renders a discrete "Google" overlay; `'external'`
+   * / `null` / omitted renders none.
+   */
+  photoSource?: 'google' | 'external' | null;
   fallbackCategory?: Category;
   title?: string;
   subtitle?: string;
@@ -34,6 +42,7 @@ const CATEGORY_GRADIENTS: Record<Category, [string, string]> = {
 export const PhotoHero: React.FC<PhotoHeroProps> = ({
   imageUrl,
   localImage,
+  photoSource = null,
   fallbackCategory = 'Culture',
   title,
   subtitle,
@@ -45,10 +54,11 @@ export const PhotoHero: React.FC<PhotoHeroProps> = ({
   const insets = useSafeAreaInsets();
   const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
 
-  // Local asset takes priority, then HTTPS URL
-  const isValidUrl = imageUrl && imageUrl.startsWith('https://');
+  // Local asset takes priority, then a resolved (relative or absolute) URL.
+  const resolvedUrl = resolvePhotoUrl(imageUrl);
+  const isValidUrl = isDisplayablePhotoUrl(resolvedUrl);
   const shouldShowImage = (localImage || isValidUrl) && !imageLoadFailed;
-  const imageSource = localImage || { uri: imageUrl };
+  const imageSource = localImage || { uri: resolvedUrl ?? undefined };
 
   const gradientColors = CATEGORY_GRADIENTS[fallbackCategory] ?? CATEGORY_GRADIENTS.Culture;
   const [overlayColor1, overlayColor2] = gradientColors;
@@ -89,6 +99,9 @@ export const PhotoHero: React.FC<PhotoHeroProps> = ({
           }}
         />
       )}
+
+      {/* "Google" attribution, required by the Places API photo ToS */}
+      {shouldShowImage && !localImage && photoSource === 'google' && <PhotoAttribution />}
 
       {/* Dark overlay for text readability (only when text is shown) */}
       {shouldShowImage && (title || subtitle) && (

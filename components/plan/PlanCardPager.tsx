@@ -27,6 +27,7 @@ import { usePlanEditorContext } from './PlanEditorContext';
 import { PlanEditorModalsHost } from './PlanEditorModals';
 import { PlanOverview } from './PlanOverview';
 import { DayStopsCarousel } from './DayStopsCarousel';
+import type { PhotoMosaicItem } from '../ui/PhotoMosaic';
 import type { Plan, PlanStop } from '../../lib/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -39,7 +40,7 @@ interface PlanCardPagerProps {
   isAuthenticated: boolean;
   isOwner: boolean;
   isNew?: boolean;
-  heroPhotos: string[];
+  heroPhotos: PhotoMosaicItem[];
   onFollow: () => void;
   onDelete?: () => void;
   onBack?: () => void;

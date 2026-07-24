@@ -17,7 +17,7 @@ interface Stop {
   name: string;
   category?: string;
   neighborhood?: string;
-  photos?: { url: string }[];
+  photos?: { url: string; photoSource?: 'google' | 'external' | null }[];
   whyThisPlace?: string;
   duration?: number;
   priceRange?: string;
@@ -56,6 +56,7 @@ const formatDuration = (minutes?: number): string => {
 export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
   const { t } = useTranslation();
   const photoUrl = stop.photos?.[0]?.url;
+  const photoSource = stop.photos?.[0]?.photoSource ?? null;
   const categoryColor = CATEGORY_COLOR[stop.category ?? 'Culture'] ?? '#0f172a';
 
   const timeIcon = stop.timeBlock ? TIME_BLOCK_ICON[stop.timeBlock] ?? DEFAULT_STOP_ICON : null;
@@ -72,6 +73,7 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
     >
       <PhotoHero
         imageUrl={photoUrl}
+        photoSource={photoSource}
         fallbackCategory={(stop.category as Category) || 'Culture'}
         height={180}
         blurBackdrop
