@@ -96,6 +96,10 @@ export function CityRequestInline({
   const [status, setStatus] = useState<'idle' | 'submitting' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
+  // Latch anti-reentrada: `canSubmit` lee `status`, que es stale hasta el
+  // re-render — un doble-tap en el mismo frame dispararía requestCity y track
+  // dos veces. El ref es síncrono, así que el segundo tap sale aquí.
+  const inFlightRef = useRef(false);
 
   const palette = variant === 'dark' ? darkPalette : lightPalette;
   const canSubmit = value.trim().length > 0 && status !== 'submitting';
@@ -109,44 +113,50 @@ export function CityRequestInline({
   };
 
   const handleSubmit = async () => {
-    const city = value.trim();
-    // Client-side mirror of the server validation (empty is already gated by the
-    // disabled button, but guard anyway for the onSubmitEditing path).
-    if (!city) return;
-    if (city.length > CITY_MAX) {
-      setError(t('cityRequest.tooLong'));
-      return;
-    }
-    if (!CITY_REGEX.test(city)) {
-      setError(t('cityRequest.invalid'));
-      return;
-    }
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    try {
+      const city = value.trim();
+      // Client-side mirror of the server validation (empty is already gated by
+      // the disabled button, but guard anyway for the onSubmitEditing path).
+      if (!city) return;
+      if (city.length > CITY_MAX) {
+        setError(t('cityRequest.tooLong'));
+        return;
+      }
+      if (!CITY_REGEX.test(city)) {
+        setError(t('cityRequest.invalid'));
+        return;
+      }
 
-    setError(null);
-    setStatus('submitting');
-    Keyboard.dismiss();
-    const res = await requestCity(city);
+      setError(null);
+      setStatus('submitting');
+      Keyboard.dismiss();
+      const res = await requestCity(city);
 
-    // 201 created OR 200 idempotent dedup — both are success.
-    if (res.status === 200 || res.status === 201) {
-      // SIN PII: no mandamos el texto de la ciudad, ya vive en BBDD.
-      track({ event: 'city_request_submitted', source });
-      setStatus('done');
-      return;
-    }
+      // 201 created OR 200 idempotent dedup — both are success.
+      if (res.status === 200 || res.status === 201) {
+        // SIN PII: no mandamos el texto de la ciudad, ya vive en BBDD.
+        track({ event: 'city_request_submitted', source });
+        setStatus('done');
+        return;
+      }
 
-    setStatus('idle');
-    if (res.status === 429) {
-      setError(t('cityRequest.rateLimited'));
-      return;
+      setStatus('idle');
+      if (res.status === 429) {
+        setError(t('cityRequest.rateLimited'));
+        return;
+      }
+      if (res.status === 400) {
+        const code = (res.errorBody as { error?: string } | null)?.error;
+        setError(code === 'city_too_long' ? t('cityRequest.tooLong') : t('cityRequest.invalid'));
+        return;
+      }
+      // Network / unexpected — generic retriable message.
+      setError(t('cityRequest.error'));
+    } finally {
+      inFlightRef.current = false;
     }
-    if (res.status === 400) {
-      const code = (res.errorBody as { error?: string } | null)?.error;
-      setError(code === 'city_too_long' ? t('cityRequest.tooLong') : t('cityRequest.invalid'));
-      return;
-    }
-    // Network / unexpected — generic retriable message.
-    setError(t('cityRequest.error'));
   };
 
   if (status === 'done') {

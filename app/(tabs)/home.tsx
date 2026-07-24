@@ -90,6 +90,7 @@ export default function HomeTab() {
           ))}
         </View>
 
+        {/* Deuda 1.0.x aceptada: sin keyboard avoidance aquí; cuando la lista de ciudades crezca, el teclado puede tapar el input. */}
         <CityRequestInline source="home" variant="dark" />
       </ScrollView>
     </View>

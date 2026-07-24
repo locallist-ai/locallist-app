@@ -6,7 +6,7 @@
  * `cityRequest` block is asserted against the real resources.
  */
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { CityRequestInline } from '../CityRequestInline';
 import { requestCity } from '../../../lib/api';
 import { track } from '../../../lib/analytics';
@@ -104,6 +104,24 @@ describe('CityRequestInline', () => {
     fireEvent.press(screen.getByText('cityRequest.submit'));
     await waitFor(() => expect(screen.getByText('onboarding.cityNotifyThanks')).toBeTruthy());
     expect(mockTrack).toHaveBeenCalledWith({ event: 'city_request_submitted', source: 'onboarding' });
+  });
+
+  it('a same-frame double submit calls the API and track only once (in-flight latch)', async () => {
+    mockRequestCity.mockResolvedValue(ok(201));
+    render(<CityRequestInline source="home" variant="dark" />);
+    const input = reveal();
+    fireEvent.changeText(input, 'Kyoto');
+    // Two synchronous submits from the SAME render closure: `canSubmit` reads a
+    // stale `status`, so without the inFlightRef latch both would pass the guard
+    // and fire requestCity + track twice. (fireEvent.press twice wouldn't cover
+    // this: it flushes the re-render between taps and the button disables.)
+    await act(async () => {
+      input.props.onSubmitEditing();
+      input.props.onSubmitEditing();
+    });
+    expect(mockRequestCity).toHaveBeenCalledTimes(1);
+    expect(mockTrack).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('cityRequest.thanks')).toBeTruthy();
   });
 
   it('(d) dedup (200) shows the same ack', async () => {
