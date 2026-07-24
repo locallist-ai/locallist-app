@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { PhotoAttribution } from '../ui/PhotoAttribution';
-import { resolvePhotoUrl, isDisplayablePhotoUrl } from '../../lib/helpers/photo-url';
+import { resolvePhotoUrl, isPhotoDisplayable } from '../../lib/helpers/photo-url';
 import type { PlanStop } from '../../lib/types';
 
 type Category = 'Food' | 'Outdoors' | 'Coffee' | 'Nightlife' | 'Culture' | 'Wellness';
@@ -33,8 +33,10 @@ export function EditableStopCard({ stop, onMovePress, onReplacePress, drag, isAc
   const { t } = useTranslation();
   const place = stop.place;
   const photoUrl = resolvePhotoUrl(place?.photos?.[0]);
-  const [photoFailed, setPhotoFailed] = React.useState(false);
-  const showPhoto = isDisplayablePhotoUrl(photoUrl) && !photoFailed;
+  // Keyed by URL so a "Replace" that swaps the stop's place retries the new
+  // photo instead of staying on the gradient because the old one 404'd.
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+  const showPhoto = isPhotoDisplayable(photoUrl, failedUrl);
   const category = (place?.category ?? 'Culture') as Category;
   const gradient = CATEGORY_GRADIENTS[category] ?? CATEGORY_GRADIENTS.Culture;
 
@@ -59,7 +61,7 @@ export function EditableStopCard({ stop, onMovePress, onReplacePress, drag, isAc
             source={{ uri: photoUrl }}
             style={[s.thumbnailImg, StyleSheet.absoluteFill]}
             contentFit="cover"
-            onError={() => setPhotoFailed(true)}
+            onError={() => setFailedUrl(photoUrl)}
           />
         )}
         {showPhoto && place?.photoSource === 'google' && <PhotoAttribution variant="compact" />}

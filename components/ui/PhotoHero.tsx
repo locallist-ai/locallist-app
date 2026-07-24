@@ -3,10 +3,14 @@ import { View, Text, StyleSheet, ImageSourcePropType, Image as RNImage } from 'r
 import { Image, ImageSource } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { resolvePhotoUrl, isDisplayablePhotoUrl } from '../../lib/helpers/photo-url';
+import { resolvePhotoUrl, isPhotoDisplayable } from '../../lib/helpers/photo-url';
 import { PhotoAttribution } from './PhotoAttribution';
 
 export type Category = 'Food' | 'Outdoors' | 'Coffee' | 'Nightlife' | 'Culture' | 'Wellness' | 'Shopping';
+
+// Sentinel for the failed-URL state when the shown image is a local require()
+// asset (no URL to key by). Cannot collide with any http(s) URL.
+const LOCAL_IMAGE_KEY = '__local__';
 
 interface PhotoHeroProps {
   imageUrl?: string;
@@ -52,12 +56,16 @@ export const PhotoHero: React.FC<PhotoHeroProps> = ({
   onImageLoadError,
 }) => {
   const insets = useSafeAreaInsets();
-  const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
+  // Keyed by URL (not a boolean): a paginated carousel keeps this hero mounted
+  // while imageUrl changes, so a prior failure must not suppress the new photo.
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
 
   // Local asset takes priority, then a resolved (relative or absolute) URL.
   const resolvedUrl = resolvePhotoUrl(imageUrl);
-  const isValidUrl = isDisplayablePhotoUrl(resolvedUrl);
-  const shouldShowImage = (localImage || isValidUrl) && !imageLoadFailed;
+  const failedLocal = localImage != null && failedUrl === LOCAL_IMAGE_KEY;
+  const shouldShowImage = localImage != null
+    ? !failedLocal
+    : isPhotoDisplayable(resolvedUrl, failedUrl);
   const imageSource = localImage || { uri: resolvedUrl ?? undefined };
 
   const gradientColors = CATEGORY_GRADIENTS[fallbackCategory] ?? CATEGORY_GRADIENTS.Culture;
@@ -94,7 +102,7 @@ export const PhotoHero: React.FC<PhotoHeroProps> = ({
           transition={200}
           cachePolicy="memory-disk"
           onError={() => {
-            setImageLoadFailed(true);
+            setFailedUrl(localImage != null ? LOCAL_IMAGE_KEY : resolvedUrl);
             onImageLoadError?.();
           }}
         />

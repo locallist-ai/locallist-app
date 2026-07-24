@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { PhotoAttribution } from '../ui/PhotoAttribution';
-import { resolvePhotoUrl, isDisplayablePhotoUrl } from '../../lib/helpers/photo-url';
+import { resolvePhotoUrl, isPhotoDisplayable } from '../../lib/helpers/photo-url';
 import type { Place } from '../../lib/types';
 import { SUBCATEGORIES_BY_INTEREST } from '../home/constants';
 
@@ -41,11 +41,14 @@ type Props = {
 };
 
 // Own component (not an inline arrow inside renderItem) so the photo-load
-// failure state is per-row and follows the Rules of Hooks.
-const PlaceRow: React.FC<{ item: Place; onPress: () => void }> = ({ item, onPress }) => {
+// failure state is per-row and follows the Rules of Hooks. Exported for a
+// dedicated 404-to-gradient regression test.
+export const PlaceRow: React.FC<{ item: Place; onPress: () => void }> = ({ item, onPress }) => {
   const photoUrl = resolvePhotoUrl(item.photos?.[0]);
-  const [photoFailed, setPhotoFailed] = useState(false);
-  const showPhoto = isDisplayablePhotoUrl(photoUrl) && !photoFailed;
+  // Keyed by URL so a recycled row (FlatList reuse) retries a new photo
+  // instead of staying on the gradient after a prior URL 404'd.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const showPhoto = isPhotoDisplayable(photoUrl, failedUrl);
 
   return (
     <TouchableOpacity style={s.placeRow} onPress={onPress} activeOpacity={0.7}>
@@ -56,7 +59,7 @@ const PlaceRow: React.FC<{ item: Place; onPress: () => void }> = ({ item, onPres
             source={{ uri: photoUrl }}
             style={[s.placeImg, StyleSheet.absoluteFill]}
             contentFit="cover"
-            onError={() => setPhotoFailed(true)}
+            onError={() => setFailedUrl(photoUrl)}
           />
         )}
         {showPhoto && item.photoSource === 'google' && <PhotoAttribution variant="compact" />}

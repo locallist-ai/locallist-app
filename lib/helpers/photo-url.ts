@@ -32,3 +32,19 @@ export function resolvePhotoUrl(url: string | null | undefined): string | null {
 export function isDisplayablePhotoUrl(url: string | null | undefined): url is string {
   return typeof url === 'string' && ABSOLUTE_URL_RE.test(url);
 }
+
+/**
+ * Decide si una foto (ya resuelta) debe mostrarse, teniendo en cuenta la ÚLTIMA
+ * URL que falló al cargar. El estado de fallo se keyea por URL — no un booleano —
+ * a propósito: un componente que permanece montado mientras su `resolved` cambia
+ * (carrusel paginado, "Replace" en el editor, tarjeta destacada del follow que
+ * avanza de stop) volvería a intentar la nueva URL en vez de quedarse en el
+ * gradiente por un fallo anterior. Un fallo solo suprime la EXACTA URL que falló;
+ * cualquier URL distinta (incl. la del siguiente stop) se vuelve a intentar.
+ */
+export function isPhotoDisplayable(
+  resolved: string | null | undefined,
+  failedUrl: string | null | undefined,
+): resolved is string {
+  return isDisplayablePhotoUrl(resolved) && resolved !== failedUrl;
+}

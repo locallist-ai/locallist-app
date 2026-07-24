@@ -11,29 +11,10 @@ import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { formatPriceLabel } from '../../lib/helpers/price';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
-
-interface Stop {
-  id: string;
-  name: string;
-  category?: string;
-  neighborhood?: string;
-  photos?: { url: string; photoSource?: 'google' | 'external' | null }[];
-  whyThisPlace?: string;
-  duration?: number;
-  priceRange?: string;
-  googleRating?: number | null;
-  googleReviewCount?: number | null;
-  timeBlock?: string;
-  suggestedArrival?: string;
-  travelFromPrevious?: {
-    distance_km: number;
-    duration_min: number;
-    mode: string;
-  } | null;
-}
+import type { PlanStop } from '../../lib/types';
 
 interface StopCardProps {
-  stop: Stop;
+  stop: PlanStop;
 }
 
 const CATEGORY_COLOR: Record<string, string> = {
@@ -55,13 +36,17 @@ const formatDuration = (minutes?: number): string => {
 
 export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
   const { t } = useTranslation();
-  const photoUrl = stop.photos?.[0]?.url;
-  const photoSource = stop.photos?.[0]?.photoSource ?? null;
-  const categoryColor = CATEGORY_COLOR[stop.category ?? 'Culture'] ?? '#0f172a';
+  // Same shape the backend actually sends (PlanStop.place = PlaceDto): the
+  // photo array and its `photoSource` live at place level — matching
+  // FollowDaySheet — not a per-photo `{ url, photoSource }` object.
+  const place = stop.place;
+  const photoUrl = place?.photos?.[0];
+  const photoSource = place?.photoSource ?? null;
+  const categoryColor = CATEGORY_COLOR[place?.category ?? 'Culture'] ?? '#0f172a';
 
   const timeIcon = stop.timeBlock ? TIME_BLOCK_ICON[stop.timeBlock] ?? DEFAULT_STOP_ICON : null;
   const travel = stop.travelFromPrevious;
-  const why = stop.whyThisPlace ?? '';
+  const why = place?.whyThisPlace ?? '';
 
   return (
     <ScrollView
@@ -74,7 +59,7 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
       <PhotoHero
         imageUrl={photoUrl}
         photoSource={photoSource}
-        fallbackCategory={(stop.category as Category) || 'Culture'}
+        fallbackCategory={(place?.category as Category) || 'Culture'}
         height={180}
         blurBackdrop
       />
@@ -107,44 +92,44 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
           </View>
         )}
 
-        <Text style={styles.name}>{stop.name}</Text>
+        <Text style={styles.name}>{place?.name}</Text>
 
         <View style={styles.metaRow}>
-          {stop.category && (
+          {place?.category && (
             <View style={[styles.categoryBadge, { backgroundColor: categoryColor }]}>
-              <Text style={styles.categoryText}>{stop.category}</Text>
+              <Text style={styles.categoryText}>{place.category}</Text>
             </View>
           )}
-          {stop.neighborhood && (
+          {place?.neighborhood && (
             <View style={styles.neighborhoodRow}>
               <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
-              <Text style={styles.neighborhood}>{stop.neighborhood}</Text>
+              <Text style={styles.neighborhood}>{place.neighborhood}</Text>
             </View>
           )}
         </View>
 
-        {(stop.duration || stop.priceRange || stop.googleRating) && (
+        {(stop.suggestedDurationMin || place?.priceRange || place?.googleRating) && (
           <View style={styles.infoRow}>
-            {stop.duration && (
+            {stop.suggestedDurationMin != null && stop.suggestedDurationMin > 0 && (
               <View style={styles.infoPill}>
                 <MaterialCommunityIcons name="clock-outline" size={14} color={colors.deepOcean} />
-                <Text style={styles.infoPillText}>{formatDuration(stop.duration)}</Text>
+                <Text style={styles.infoPillText}>{formatDuration(stop.suggestedDurationMin)}</Text>
               </View>
             )}
-            {stop.priceRange && (
+            {place?.priceRange && (
               <View style={[styles.infoPill, styles.pricePill]}>
                 <Text style={styles.pricePillText}>
-                  {formatPriceLabel(stop.priceRange, t)}
+                  {formatPriceLabel(place.priceRange, t)}
                 </Text>
               </View>
             )}
-            {typeof stop.googleRating === 'number' && stop.googleRating > 0 && (
+            {typeof place?.googleRating === 'number' && place.googleRating > 0 && (
               <View style={[styles.infoPill, styles.ratingPill]}>
                 <MaterialCommunityIcons name="star" size={13} color="#b45309" />
                 <Text style={styles.ratingPillText}>
-                  {stop.googleRating.toFixed(1)}
-                  {typeof stop.googleReviewCount === 'number' && stop.googleReviewCount > 0
-                    ? ` · ${stop.googleReviewCount}`
+                  {place.googleRating.toFixed(1)}
+                  {typeof place.googleReviewCount === 'number' && place.googleReviewCount > 0
+                    ? ` · ${place.googleReviewCount}`
                     : ''}
                 </Text>
               </View>

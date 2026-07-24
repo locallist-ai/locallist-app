@@ -69,4 +69,19 @@ describe('PhotoHero', () => {
 
     expect(screen.queryByTestId('photo-attribution-google')).toBeNull();
   });
+
+  it('tras un 404, paginar a otra URL (hero montado) reintenta la nueva foto', () => {
+    const OTHER_URL = 'https://cdn.example.com/other.jpg';
+    const { rerender } = render(<PhotoHero imageUrl={HTTPS_URL} photoSource="google" />);
+    // La primera foto falla → gradiente, sin atribución.
+    fireEvent(screen.UNSAFE_getByType(require('expo-image').Image), 'error');
+    expect(screen.queryByTestId('photo-attribution-google')).toBeNull();
+
+    // El carrusel pagina: cambia imageUrl sin desmontar el hero.
+    rerender(<PhotoHero imageUrl={OTHER_URL} photoSource="google" />);
+    // El fallo estaba keyeado por la URL vieja → la nueva se intenta y atribuye.
+    const img = screen.UNSAFE_getByType(require('expo-image').Image);
+    expect(img.props.source?.uri).toBe(OTHER_URL);
+    expect(screen.getByTestId('photo-attribution-google')).toBeTruthy();
+  });
 });

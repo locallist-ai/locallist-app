@@ -24,7 +24,7 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { formatPriceLabel } from '../../lib/helpers/price';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import { PhotoAttribution } from '../ui/PhotoAttribution';
-import { resolvePhotoUrl, isDisplayablePhotoUrl } from '../../lib/helpers/photo-url';
+import { resolvePhotoUrl, isPhotoDisplayable } from '../../lib/helpers/photo-url';
 import type { PlanStop } from '../../lib/types';
 
 const COLLAPSED_PEEK_HEIGHT = 56;
@@ -64,8 +64,10 @@ const DayStopThumb: React.FC<{
   gradient: [string, string];
 }> = ({ photoUrl, photoSource, gradient }) => {
   const resolved = resolvePhotoUrl(photoUrl);
-  const [failed, setFailed] = useState(false);
-  const isValid = isDisplayablePhotoUrl(resolved) && !failed;
+  // Keyed by URL (not a boolean): if this row is reused for a different photo,
+  // the previous failure must not keep suppressing the new one.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const isValid = isPhotoDisplayable(resolved, failedUrl);
 
   return (
     <View style={styles.thumbContainer}>
@@ -76,7 +78,7 @@ const DayStopThumb: React.FC<{
           style={[styles.thumb, StyleSheet.absoluteFill]}
           contentFit="cover"
           transition={200}
-          onError={() => setFailed(true)}
+          onError={() => setFailedUrl(resolved)}
         />
       )}
       {isValid && photoSource === 'google' && <PhotoAttribution variant="compact" />}
@@ -186,7 +188,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
   // mounted across stops, so a boolean would keep suppressing the photo of
   // the NEXT stop after one failure. Comparing URLs resets it naturally.
   const [failedPhotoUrl, setFailedPhotoUrl] = useState<string | null>(null);
-  const isValidPhoto = isDisplayablePhotoUrl(resolvedPhotoUrl) && resolvedPhotoUrl !== failedPhotoUrl;
+  const isValidPhoto = isPhotoDisplayable(resolvedPhotoUrl, failedPhotoUrl);
   const categoryColor = CATEGORY_COLOR[place?.category ?? 'Culture'] ?? '#0f172a';
   const categoryGradient: [string, string] = CATEGORY_GRADIENT[place?.category ?? 'Culture'] ?? ['#0f172a', '#1e293b'];
   const iconName = currentStop?.timeBlock
