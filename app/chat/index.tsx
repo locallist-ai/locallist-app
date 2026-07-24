@@ -16,7 +16,7 @@ import {
 import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
@@ -545,7 +545,7 @@ export default function ChatScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons name="sparkles" size={20} color="#fff" />
+                <MaterialCommunityIcons name="map-marker-path" size={20} color="#fff" />
                 <Text style={styles.buildBtnText}>{t('chat.buildPlan')}</Text>
               </>
             )}

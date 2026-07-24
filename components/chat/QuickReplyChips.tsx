@@ -40,20 +40,21 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    gap: 8,
+    gap: 6,
     flexDirection: 'row',
+    alignItems: 'center',
   },
   chip: {
     backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.5)',
-    borderRadius: borderRadius.full,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   chipText: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 14,
+    fontSize: 13,
     color: colors.paperWhite,
   },
 });

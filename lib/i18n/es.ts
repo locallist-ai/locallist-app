@@ -330,11 +330,11 @@ export default {
     // El "gratis" queda subordinado al precio facturado (Apple 3.1.2).
     trialFreeBadge: '{{days}} días gratis',
     timelineTodayTitle: 'Hoy',
-    timelineTodayBody: 'Desbloqueas todo LocalList Plus.',
+    timelineTodayBody: 'Empieza gratis. Acceso completo a Plus.',
     timelineReminderTitle: 'Día {{day}}',
-    timelineReminderBody: 'Te avisamos de que tu prueba gratis está por acabar.',
+    timelineReminderBody: 'Un recordatorio de que tu prueba gratis está por acabar.',
     timelineChargeTitle: 'Día {{day}}',
-    timelineChargeBody: 'Primer cobro de {{price}}.',
+    timelineChargeBody: 'Primer pago de {{price}}, solo si sigues.',
     cta: 'Suscribirme',
     restore: 'Restaurar compras',
     disclaimer: 'Suscripción con renovación automática cargada a tu ID de Apple. Cancela cuando quieras en Ajustes.',
@@ -355,7 +355,7 @@ export default {
     done: 'Listo',
     // Salida de saltar; solo se pinta cuando el paywall es un paso del onboarding.
     notNow: 'Ahora no',
-    trialReminderNotice: 'Te avisaremos 2 días antes de que acabe tu prueba gratis. Primer cobro el día {{day}}, nunca antes.',
+    trialReminderNotice: 'Cancela cuando quieras antes del día {{day}} y no se te cobrará nada.',
   },
   trialReminder: {
     notificationTitle: 'Tu prueba gratis acaba en 2 días',
@@ -394,7 +394,7 @@ export default {
     valueClaim: 'Planes que puedes seguir de verdad',
     valueBullet1: 'Un plan, no 40 pestañas',
     valueBullet2: 'Listo para seguir, paso a paso',
-    valueBullet3: 'Prueba honesta: te avisamos antes de cobrarte',
+    valueBullet3: 'Empieza gratis. Cancela cuando quieras.',
     // Pantalla 2 — ciudad
     cityTitle: '¿A dónde vas a ir?',
     citySubtitle: 'Elige una ciudad que cubrimos y mira un plan real.',
