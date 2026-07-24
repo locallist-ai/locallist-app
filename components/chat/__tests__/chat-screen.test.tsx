@@ -27,7 +27,7 @@ import { useAuth } from '../../../lib/auth';
 import type { ChatSlots, ChatTurnResponse } from '../../../lib/types';
 
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn(), back: jest.fn() },
+  router: { push: jest.fn(), back: jest.fn(), navigate: jest.fn(), dismissTo: jest.fn() },
   Stack: { Screen: () => null },
 }));
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
@@ -165,6 +165,49 @@ describe('chat — init con preSeededCity', () => {
 
     await waitFor(() => expect(screen.getByText('chat.welcomeMessage')).toBeTruthy());
     expect(mockChatTurn).not.toHaveBeenCalled();
+  });
+});
+
+describe('chat — aviso de IA', () => {
+  it('muestra el disclaimer de IA al entrar y no rompe el flujo de turnos', async () => {
+    // El chat es el flujo SECUNDARIO opt-in: al entrar avisa de que es IA.
+    await renderPreSeeded();
+
+    // El aviso está presente junto al primer turno (no lo bloquea).
+    expect(screen.getByText('chat.aiDisclaimer')).toBeTruthy();
+    expect(screen.getByText('¿Cuántos días te quedas en Madrid?')).toBeTruthy();
+
+    // El flujo de turnos sigue funcionando con el banner montado.
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({ aiMessage: 'Perfecto, 2 días.', quickReplies: [], turnCount: 2 }),
+    );
+    fireEvent.press(screen.getByText('2 días'));
+
+    await waitFor(() => expect(screen.getByText('Perfecto, 2 días.')).toBeTruthy());
+    // El disclaimer permanece visible tras avanzar un turno.
+    expect(screen.getByText('chat.aiDisclaimer')).toBeTruthy();
+  });
+});
+
+describe('chat — escape hatch al wizard (flujo primario)', () => {
+  it('el escape usa dismissTo (POP_TO hasta el wizard existente), nunca push/navigate', async () => {
+    // dismissTo = POP_TO: despila el chat hasta la instancia de wizard ya en el
+    // stack (estado del wizard conservado). push apilaría un wizard NUEVO y
+    // navigate en @react-navigation/routers 7.5.3 solo reutiliza la ruta TOP —
+    // una enterrada se re-PUSHea igual. La semántica real de stack (pop vs push
+    // del router de verdad) se cubre en wizard-chat-roundtrip.test.tsx.
+    await renderPreSeeded();
+
+    fireEvent.press(screen.getByText('chat.useWizard'));
+
+    expect(router.dismissTo).toHaveBeenCalledWith('/builder/wizard');
+    expect(router.push).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(track).toHaveBeenCalledWith({
+      event: 'chat_to_wizard_escape',
+      sessionId: 's1',
+      turnCount: 1,
+    });
   });
 });
 
