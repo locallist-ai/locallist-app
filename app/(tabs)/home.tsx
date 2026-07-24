@@ -42,7 +42,10 @@ export default function HomeTab() {
 
   const handleCitySelect = async (cityName: string) => {
     await setSelectedCity(cityName);
-    router.push('/chat');
+    // Flujo PRIMARIO = wizard determinista por pasos (decisión de producto
+    // 2026-07-24). El chat IA queda como opción secundaria opt-in desde el
+    // primer paso del wizard. La ciudad viaja por el trip-context persistido.
+    router.push('/builder/wizard');
   };
 
   return (

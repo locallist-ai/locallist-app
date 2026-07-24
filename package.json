@@ -24,6 +24,9 @@
         "functions": 62,
         "branches": 62
       }
+    },
+    "moduleNameMapper": {
+      "^expect/build/matchers$": "<rootDir>/node_modules/@jest/expect/node_modules/expect/build/matchers.js"
     }
   },
   "dependencies": {

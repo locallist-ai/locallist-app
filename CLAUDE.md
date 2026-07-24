@@ -48,13 +48,13 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `index.tsx` | Redirect to `/(tabs)/home` |
 | `onboarding/index.tsx` | Orquestador del onboarding (W2): máquina de 4 pasos (valor / ciudad / gustos / preview de valor, en `components/onboarding/`) + swap a login inline con salida (fix del dead-end de W1) + analytics de pasos + completion con ciudad preseleccionada. Hook documentado para el paso 5 (paywall timeline, W5). Renderizado directo por el EntryGate (sin navigator) |
 | `(tabs)/_layout.tsx` | Tab bar (Home, Plans, Account) |
-| `(tabs)/home.tsx` | City picker: hero photo + Skia bg, CityCard grid → sets trip context, routes to `/chat` |
+| `(tabs)/home.tsx` | City picker: hero photo + Skia bg, CityCard grid → sets trip context, routes to `/builder/wizard` (flujo primario desde 2026-07-24) |
 | `(tabs)/plans.tsx` | Plans list: PhotoHero covers, category filter chips, skeleton loading; CTA → `/builder/custom` |
 | `(tabs)/account.tsx` | Profile (useProfile: pace/budget/dietary), tier badge, language selector, sign out |
 | `login.tsx` | Apple Sign In, Google OAuth, email/password, password strength rules. Prop opcional `onClose` (salida del dead-end): el onboarding lo renderiza inline con un back a las pantallas de valor; como ruta modal va sin `onClose` (dismiss nativo) |
 | `paywall.tsx` | LocalList Plus paywall (modal iOS): offerings de RevenueCat con precio localizado, compra, restore, links legales; degrada a "no disponible" sin API key/productos |
-| `chat/index.tsx` | **Main plan-creation flow**: conversational AI chat — slot extraction (SlotBadges), quick replies, `chatGenerate` → plan, SaveProfileSheet, escape hatch to wizard |
-| `builder/wizard.tsx` | AI plan wizard (renders `components/home/HomeScreen` step flow) — escape hatch from chat |
+| `chat/index.tsx` | **Flujo SECUNDARIO opt-in** (desde 2026-07-24): conversational AI chat — AiDisclaimerBanner (aviso de IA bajo el header), slot extraction (SlotBadges), quick replies, `chatGenerate` → plan, SaveProfileSheet, escape al wizard vía `router.dismissTo` (POP_TO: reusa la instancia de wizard del stack; `navigate` re-pushearía una ruta enterrada) |
+| `builder/wizard.tsx` | **Flujo PRIMARIO de creación de planes** (renders `components/home/HomeScreen` step flow); el 1er paso (DurationStep) tiene un link discreto opt-in al chat (`router.push('/chat')`) |
 | `builder/custom.tsx` | Manual plan builder: name + debounced city search + days (1–3) → opens `/plan/new` editor |
 | `builder/import-video.tsx` | Stub — import-from-video, not yet built |
 | `plan/[id].tsx` | Plan detail + editor: PlanCardPager, inline editing via `usePlanEditor`, handles `/plan/new` and builder preview handoff, Follow button |
@@ -72,7 +72,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `ui/CategoryBadge.tsx` | Category pill with per-category color |
 | `ui/ConfirmModal.tsx` | Reusable confirm/cancel modal |
 | `ui/design-system/` | ChoiceChip, EditorialTitle, StepSubtitle, ProgressDots — wizard design system |
-| `chat/` | Chat UI: MessageBubble, CityNoticeBubble (aviso de ciudad no cubierta + CTA), ChatErrorBubble (error de infra `ai_unavailable` + reintento), QuickReplyChips, SlotBadges, SaveProfileSheet |
+| `chat/` | Chat UI: MessageBubble, AiDisclaimerBanner (aviso fijo "es una IA, puede cometer errores"), CityNoticeBubble (aviso de ciudad no cubierta + CTA), ChatErrorBubble (error de infra `ai_unavailable` + reintento), QuickReplyChips, SlotBadges, SaveProfileSheet |
 | `account/` | Account screen sections: PlusUpsellCard, ProfileCard, TravelPreferencesSection (consumes useProfile), SettingsSection (settings + legal in-app + actions), DevToolsSection, LanguagePickerModal |
 | `paywall/TrialTimeline.tsx` | Timeline vertical Hoy→Día N-2→Día N+1 de la fase `ready` del paywall (sin urgencia/countdowns): promesa real del recordatorio del trial + primer cobro con el precio interpolado. Días DERIVADOS de `introPrice.periodNumberOfUnits`/`periodUnit` (`lib/trial-timeline.ts`), nunca hardcodeados. Se monta solo si el package tiene trial real (introPrice gratuito) Y el usuario es ELEGIBLE (`checkTrialEligibility` en el paywall) |
 | `auth/` | Login screen pieces: AuthModeToggle, AppleSignInButton, GoogleSignInButton, EmailSignInButton, CredentialsForm, PasswordStrengthIndicator (state/OAuth in `lib/auth/useAuthForm.ts`) |
