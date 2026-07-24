@@ -355,7 +355,7 @@ export default {
     done: 'Done',
     // Skip affordance shown only when the paywall is a step of the onboarding.
     notNow: 'Not now',
-    trialReminderNotice: "We'll remind you 2 days before your free trial ends. First charge on day {{day}} — never before.",
+    trialReminderNotice: "We'll remind you 2 days before your free trial ends. First charge on day {{day}}, never before.",
   },
   trialReminder: {
     notificationTitle: 'Your free trial ends in 2 days',
