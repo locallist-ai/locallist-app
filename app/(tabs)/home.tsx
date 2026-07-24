@@ -10,6 +10,7 @@ import { getLiveCities } from '../../lib/api';
 import { logger } from '../../lib/logger';
 import { setSelectedCity } from '../../lib/trip-context-store';
 import { CityCard } from '../../components/home/CityCard';
+import { CityRequestInline } from '../../components/home/CityRequestInline';
 import { HeroSkiaBg } from '../../components/home/HeroSkiaBg';
 import { EditorialTitle } from '../../components/ui/design-system/EditorialTitle';
 import { StepSubtitle } from '../../components/ui/design-system/StepSubtitle';
@@ -88,6 +89,9 @@ export default function HomeTab() {
             />
           ))}
         </View>
+
+        {/* Deuda 1.0.x aceptada: sin keyboard avoidance aquí; cuando la lista de ciudades crezca, el teclado puede tapar el input. */}
+        <CityRequestInline source="home" variant="dark" />
       </ScrollView>
     </View>
   );

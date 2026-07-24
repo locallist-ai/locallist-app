@@ -422,6 +422,17 @@ export default {
     previewGenericHint: 'Built the moment you start.',
     createPlan: 'Create my plan',
   },
+  // Shared "request your city" inline input (onboarding + home city picker).
+  cityRequest: {
+    prompt: "Don't see your city?",
+    placeholder: 'Type a city',
+    submit: 'Send',
+    thanks: "Thanks. We'll let you know when we cover it.",
+    tooLong: 'That name is too long.',
+    invalid: 'Please enter a valid city name.',
+    rateLimited: 'Too many requests, try again in a bit.',
+    error: "Couldn't send that. Tap to try again.",
+  },
   placeSearch: {
     placeholder: 'Search places in {{city}}...',
   },

@@ -414,6 +414,17 @@ export default {
     previewGenericHint: 'Se crea en cuanto empiezas.',
     createPlan: 'Crear mi plan',
   },
+  // Input inline compartido "pide tu ciudad" (onboarding + selector del home).
+  cityRequest: {
+    prompt: '¿No ves tu ciudad?',
+    placeholder: 'Escribe una ciudad',
+    submit: 'Enviar',
+    thanks: 'Gracias. Te avisaremos cuando la cubramos.',
+    tooLong: 'Ese nombre es demasiado largo.',
+    invalid: 'Escribe un nombre de ciudad válido.',
+    rateLimited: 'Demasiadas peticiones, prueba en un rato.',
+    error: 'No se pudo enviar. Toca para reintentar.',
+  },
   placeSearch: {
     placeholder: 'Buscar lugares en {{city}}...',
   },
