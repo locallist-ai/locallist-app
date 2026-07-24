@@ -24,6 +24,7 @@ import { chatTurn, chatGenerate, deleteChatSession, upsertProfile, getAccessToke
 import { getSavedSessionId, saveSessionId, clearSessionId } from '../../lib/chat-store';
 import { BlurView } from 'expo-blur';
 import { MessageBubble } from '../../components/chat/MessageBubble';
+import { AiDisclaimerBanner } from '../../components/chat/AiDisclaimerBanner';
 import { CityNoticeBubble } from '../../components/chat/CityNoticeBubble';
 import { ChatErrorBubble } from '../../components/chat/ChatErrorBubble';
 import { QuickReplyChips } from '../../components/chat/QuickReplyChips';
@@ -399,7 +400,11 @@ export default function ChatScreen() {
 
   const handleUseWizard = useCallback(() => {
     track({ event: 'chat_to_wizard_escape', sessionId, turnCount });
-    router.push('/builder/wizard');
+    // El wizard es el flujo PRIMARIO. `navigate` (no `push`) reusa la pantalla
+    // del wizard si ya está en el stack (entrada wizard→chat vía opt-in),
+    // evitando apilar wizards duplicados / loops. En deep-link directo a /chat
+    // (sin wizard debajo) hace un push normal.
+    router.navigate('/builder/wizard');
   }, [sessionId, turnCount]);
 
   const handleProfileSave = async (fields: {
@@ -486,6 +491,10 @@ export default function ChatScreen() {
           <Ionicons name="refresh-outline" size={20} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>
+
+      {/* Aviso de IA: el chat es el flujo secundario opt-in. Banda fija bajo el
+        * header, siempre visible, no intrusiva y ajena al flujo de turnos. */}
+      <AiDisclaimerBanner />
 
       {/* Message list + input */}
       <KeyboardAvoidingView

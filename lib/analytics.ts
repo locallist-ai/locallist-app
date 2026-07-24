@@ -189,6 +189,8 @@ export type AppEvent =
   | { event: 'chat_generated'; sessionId: string; planId: string; turnCount: number }
   | { event: 'chat_abandoned'; sessionId: string; turnCount: number }
   | { event: 'chat_to_wizard_escape'; sessionId: string | null; turnCount: number }
+  // Opt-in del wizard (flujo primario) al chat IA (secundario), desde el 1er paso.
+  | { event: 'wizard_to_chat_optin' }
   | { event: 'chat_city_unsupported'; sessionId: string | null; city: string | null }
   | { event: 'chat_ai_unavailable'; sessionId: string | null }
   // Profile

@@ -4,10 +4,11 @@
  * El selector ofrece SOLO ciudades cubiertas (`GET /cities/live`). Cubre:
  *  - monta → llama getLiveCities y pinta las ciudades del backend.
  *  - red caída → fallback al catálogo bundled (Miami), sin pantalla rota.
- *  - seleccionar una ciudad guarda el trip context y navega al chat.
+ *  - seleccionar una ciudad guarda el trip context y navega al WIZARD (flujo
+ *    primario desde 2026-07-24; el chat IA pasó a opt-in secundario).
  *
  * CityCard, Skia y el design-system se mockean ligeros: solo nos interesa qué
- * ciudades se ofrecen y el handoff al chat, no su render visual.
+ * ciudades se ofrecen y el handoff al wizard, no su render visual.
  */
 
 import React from 'react';
@@ -83,14 +84,15 @@ describe('home — selector de ciudad desde /cities/live', () => {
     expect(screen.getByText('Miami')).toBeTruthy();
   });
 
-  it('seleccionar una ciudad guarda el trip context y navega al chat', async () => {
+  it('seleccionar una ciudad guarda el trip context y navega al wizard', async () => {
     mockGetLiveCities.mockResolvedValueOnce(liveOk(['Miami']));
     render(<HomeTab />);
     await waitFor(() => expect(screen.getByText('Miami')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Miami'));
 
-    await waitFor(() => expect(router.push).toHaveBeenCalledWith('/chat'));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith('/builder/wizard'));
+    expect(router.push).not.toHaveBeenCalledWith('/chat');
     expect(setSelectedCity).toHaveBeenCalledWith('Miami');
   });
 });

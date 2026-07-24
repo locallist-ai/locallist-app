@@ -168,6 +168,27 @@ describe('chat — init con preSeededCity', () => {
   });
 });
 
+describe('chat — aviso de IA', () => {
+  it('muestra el disclaimer de IA al entrar y no rompe el flujo de turnos', async () => {
+    // El chat es el flujo SECUNDARIO opt-in: al entrar avisa de que es IA.
+    await renderPreSeeded();
+
+    // El aviso está presente junto al primer turno (no lo bloquea).
+    expect(screen.getByText('chat.aiDisclaimer')).toBeTruthy();
+    expect(screen.getByText('¿Cuántos días te quedas en Madrid?')).toBeTruthy();
+
+    // El flujo de turnos sigue funcionando con el banner montado.
+    mockChatTurn.mockResolvedValueOnce(
+      turnOk({ aiMessage: 'Perfecto, 2 días.', quickReplies: [], turnCount: 2 }),
+    );
+    fireEvent.press(screen.getByText('2 días'));
+
+    await waitFor(() => expect(screen.getByText('Perfecto, 2 días.')).toBeTruthy());
+    // El disclaimer permanece visible tras avanzar un turno.
+    expect(screen.getByText('chat.aiDisclaimer')).toBeTruthy();
+  });
+});
+
 describe('chat — guard de doble-tap en QuickReplyChips', () => {
   it('dos taps en el mismo batch disparan un único chatTurn y un único bubble', async () => {
     await renderPreSeeded();

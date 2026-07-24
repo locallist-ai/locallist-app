@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { fonts, colors } from '../../lib/theme';
@@ -9,6 +10,7 @@ import { EditorialTitle, StepSubtitle } from '../ui/design-system';
 import { StartDateField } from '../ui/StartDateField';
 import { useAuth } from '../../lib/auth';
 import { useGateHandler } from '../../lib/useGateHandler';
+import { track } from '../../lib/analytics';
 import { FREE_MAX_DAYS, PLUS_MAX_DAYS, maxDaysForTier } from './constants';
 
 // ── Types ──
@@ -49,6 +51,15 @@ export const DurationStep: React.FC<DurationStepProps> = ({
 
   const maxDays = maxDaysForTier(isPro);
   const days = Array.from({ length: maxDays }, (_, i) => i + 1);
+
+  // Opt-in secundario al chat IA. El wizard es el flujo primario; este es el
+  // escape hatch discreto del primer paso. La ciudad viaja por el trip-context
+  // persistido, así que basta con navegar. `navigate` (no `push`) reusa la
+  // pantalla de chat si ya está en el stack, evitando loops wizard↔chat.
+  const handleOpenChat = useCallback(() => {
+    track({ event: 'wizard_to_chat_optin' });
+    router.navigate('/chat');
+  }, []);
 
   const handleLockedPress = useCallback(() => {
     presentGate({
@@ -145,6 +156,19 @@ export const DurationStep: React.FC<DurationStepProps> = ({
             <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
           </BlurView>
         </TouchableOpacity>
+
+        {/* Opt-in discreto al chat IA (flujo secundario). No es botón primario:
+          * link de texto secundario que no compite con "Continuar". */}
+        <TouchableOpacity
+          testID="wizard-to-chat-link"
+          onPress={handleOpenChat}
+          activeOpacity={0.7}
+          style={styles.chatOptIn}
+          accessibilityRole="link"
+          accessibilityLabel={t('wizard.chatOptIn')}
+        >
+          <Text style={styles.chatOptInText}>{t('wizard.chatOptIn')}</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -239,5 +263,19 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodySemiBold,
     fontSize: 17,
     color: '#FFFFFF',
+  },
+  chatOptIn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  chatOptInText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.75)',
+    textDecorationLine: 'underline',
+    textShadowColor: 'rgba(0, 0, 0, 0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 });
