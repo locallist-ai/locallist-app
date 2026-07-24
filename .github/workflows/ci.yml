@@ -29,8 +29,19 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
+      # ALLOWLIST TEMPORAL (2026-07-25): GHSA-mh99-v99m-4gvg, brace-expansion DoS
+      # (CWE-400/770) publicado 2026-07-24. Sin backports en las lineas 1.x/2.x aun
+      # (unica version parcheada: 5.0.8; los overrides de minimatch@10 o
+      # brace-expansion@5 rompen el tooling CJS, ver PR #92). Exposicion runtime
+      # nula: brace-expansion/minimatch son tooling de build/test (jest, eslint,
+      # glob, RN codegen) y no van en el bundle de la app.
+      # RETIRAR cuando isaacs publique los backports (precedente: los tuvo el
+      # advisory anterior GHSA-3jxr-9vmj-r5cp): bastara `npm update brace-expansion`
+      # (los rangos ^1.1.7/^2.0.1 los recogen solos) y volver a
+      # `npm audit --audit-level=high` sin allowlist.
+      # El gate sigue vivo: audit-ci falla con cualquier OTRO high/critical.
       - name: Run Security Audit
-        run: npm audit --audit-level=high
+        run: npx audit-ci@^7 --high --allowlist GHSA-mh99-v99m-4gvg
 
       - name: Type Check
         run: npx tsc --noEmit
