@@ -121,7 +121,7 @@ export const RefineableStep: React.FC<RefineableStepProps> = ({
                     onPress={() => setActiveSheetParent(option.id)}
                     hitSlop={10}
                     accessibilityRole="button"
-                    accessibilityLabel="Edit refinement"
+                    accessibilityLabel={t('a11y.editRefinement')}
                     style={styles.editBtn}
                   >
                     <Ionicons name="ellipsis-horizontal" size={16} color={colors.sunsetOrange} />

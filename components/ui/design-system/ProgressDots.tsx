@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../../../lib/theme';
 
 // Design system — ProgressDots.
@@ -70,11 +71,12 @@ export const ProgressDots: React.FC<ProgressDotsProps> = ({
   colorCompleted = 'rgba(249, 115, 22, 0.4)',
   colorPending = 'rgba(255, 255, 255, 0.3)',
 }) => {
+  const { t } = useTranslation();
   const heightPx = SIZE_TO_HEIGHT[size];
   return (
     <View
       style={styles.container}
-      accessibilityLabel={`Step ${current + 1} of ${total}`}
+      accessibilityLabel={t('a11y.stepProgress', { current: current + 1, total })}
       accessibilityRole="progressbar"
     >
       {Array.from({ length: total }).map((_, i) => (

@@ -52,7 +52,7 @@ export function CuratedMode({ insets, plans, error, refreshing, onRefresh, onBac
         style={[s.floatingClose, { top: insets.top + spacing.xs }]}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel="Back to plans menu"
+        accessibilityLabel={t('a11y.backToPlansMenu')}
       >
         <Ionicons name="close" size={22} color="#FFFFFF" />
       </TouchableOpacity>

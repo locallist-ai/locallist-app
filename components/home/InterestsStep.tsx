@@ -8,10 +8,10 @@ import { fonts, colors, borderRadius } from '../../lib/theme';
 import { EditorialTitle, StepSubtitle } from '../ui/design-system';
 import {
   INTEREST_OPTIONS,
-  SUBCATEGORIES_BY_INTEREST,
   type StepOption,
 } from './constants';
 import { SubcategorySheet } from './SubcategorySheet';
+import { useTaxonomy, getInterestSubcategories, taxonomyLocale } from './useTaxonomy';
 
 // Step de "interests" — multi-select de categorías top-level + drill-down a
 // subcategorías por categoría. Renderizado por HomeV2 cuando step === 4.
@@ -46,8 +46,10 @@ export const InterestsStep: React.FC<InterestsStepProps> = ({
   onContinue,
   onSkip,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const taxonomy = useTaxonomy();
+  const locale = taxonomyLocale(i18n.language);
   const [activeSheet, setActiveSheet] = useState<StepOption | null>(null);
 
   const handleChipPress = (opt: StepOption) => {
@@ -56,7 +58,7 @@ export const InterestsStep: React.FC<InterestsStepProps> = ({
     // Si estamos AGREGANDO esta interest y tiene subcategorías disponibles,
     // abrir el sheet automáticamente para que el usuario pueda refinar.
     // Si la estamos quitando, no hacemos nada.
-    const hasSubs = !!SUBCATEGORIES_BY_INTEREST[opt.id]?.length;
+    const hasSubs = getInterestSubcategories(opt.id, taxonomy, locale).length > 0;
     if (!wasSelected && hasSubs) {
       setActiveSheet(opt);
     }
@@ -77,7 +79,9 @@ export const InterestsStep: React.FC<InterestsStepProps> = ({
     setActiveSheet(null);
   };
 
-  const subsForActive = activeSheet ? SUBCATEGORIES_BY_INTEREST[activeSheet.id] ?? [] : [];
+  const subsForActive = activeSheet
+    ? getInterestSubcategories(activeSheet.id, taxonomy, locale)
+    : [];
   const initialSelectedForActive = activeSheet ? subcategoryPicks[activeSheet.id] ?? [] : [];
 
   return (
@@ -138,7 +142,7 @@ export const InterestsStep: React.FC<InterestsStepProps> = ({
                   onPress={() => handleEditSubs(opt)}
                   style={styles.editIcon}
                   accessibilityRole="button"
-                  accessibilityLabel="Edit subcategories"
+                  accessibilityLabel={t('a11y.editSubcategories')}
                 >
                   <Ionicons name="ellipsis-horizontal" size={14} color="#FFFFFF" />
                 </TouchableOpacity>

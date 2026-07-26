@@ -348,7 +348,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
               style={[styles.row, isActive && styles.rowActive]}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
-              accessibilityLabel={stop.place?.name ?? 'Stop'}
+              accessibilityLabel={stop.place?.name ?? t('a11y.stopFallback')}
             >
               {/* Time-block icon + connector */}
               <View style={styles.timeCol}>

@@ -69,7 +69,7 @@ export function DaySection({
         style={s.addBtn}
         onPress={onAddPress}
         activeOpacity={0.7}
-        accessibilityLabel={`Add a stop to day ${dayNumber}`}
+        accessibilityLabel={t('a11y.addStopToDay', { day: dayNumber })}
         accessibilityRole="button"
       >
         <Ionicons name="add-circle-outline" size={18} color={colors.sunsetOrange} />

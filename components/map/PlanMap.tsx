@@ -8,6 +8,7 @@ import Animated, {
   withRepeat,
   withSpring,
 } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import type { RouteSegment } from '../../lib/types';
 import { buildRouteGeoJSON } from './route-geojson';
 
@@ -51,6 +52,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
   activeDayNumber,
   interactive = true,
 }) => {
+  const { t } = useTranslation();
   const mapRef = useRef<MapViewRef>(null);
   const cameraRef = useRef<CameraRef>(null);
   const scaleAnim = useSharedValue(1);
@@ -186,7 +188,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
         style={styles.attribution}
         hitSlop={6}
         accessibilityRole="link"
-        accessibilityLabel="OpenStreetMap copyright"
+        accessibilityLabel={t('a11y.openStreetMapCopyright')}
       >
         <Text style={styles.attributionText}>© OpenStreetMap</Text>
       </Pressable>
