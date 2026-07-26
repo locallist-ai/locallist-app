@@ -46,8 +46,8 @@ describe('CityRequestInline', () => {
   });
 
   it('(a) uses the provided promptLabel over the default', () => {
-    render(<CityRequestInline source="onboarding" variant="light" promptLabel="onboarding.cityNotListed" />);
-    expect(screen.getByText('onboarding.cityNotListed')).toBeTruthy();
+    render(<CityRequestInline source="onboarding" variant="light" promptLabel="custom.prompt" />);
+    expect(screen.getByText('custom.prompt')).toBeTruthy();
   });
 
   it('(b) empty input keeps submit disabled and never calls the API', () => {
@@ -98,11 +98,11 @@ describe('CityRequestInline', () => {
 
   it('(c) tracks source=onboarding on the onboarding surface', async () => {
     mockRequestCity.mockResolvedValueOnce(ok(201));
-    render(<CityRequestInline source="onboarding" variant="light" ackLabel="onboarding.cityNotifyThanks" />);
+    render(<CityRequestInline source="onboarding" variant="light" ackLabel="custom.thanks" />);
     fireEvent.press(screen.getByText('cityRequest.prompt'));
     fireEvent.changeText(screen.getByPlaceholderText('cityRequest.placeholder'), 'Oslo');
     fireEvent.press(screen.getByText('cityRequest.submit'));
-    await waitFor(() => expect(screen.getByText('onboarding.cityNotifyThanks')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('custom.thanks')).toBeTruthy());
     expect(mockTrack).toHaveBeenCalledWith({ event: 'city_request_submitted', source: 'onboarding' });
   });
 
