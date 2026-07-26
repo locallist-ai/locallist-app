@@ -134,6 +134,14 @@ export type CityDto = {
   source: 'seed' | 'user';
 };
 
+// ─── Favorites ───────────────────────────────────────────────────────────────
+
+/** `GET /favorites` — favorite places (proxy photos) newest-first + total count. */
+export type FavoritesResponse = { places: Place[]; total: number };
+
+/** `GET /favorites/ids` — just the ids, to paint hearts across the app. */
+export type FavoriteIdsResponse = { ids: string[] };
+
 // ─── Chat ────────────────────────────────────────────────────────────────────
 
 export type ChatSlots = {

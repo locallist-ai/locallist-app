@@ -59,6 +59,23 @@ describe('useGateHandler.presentGate', () => {
     expect(mockPush).toHaveBeenCalledWith('/login');
   });
 
+  it('signup_required con onDismiss: "quizás más tarde" lo dispara; el CTA de login NO', () => {
+    const { result } = renderHook(() => useGateHandler());
+    const onDismiss = jest.fn();
+    result.current.presentGate({ type: 'signup_required' }, { onDismiss });
+
+    // Descartar el gate sin ir a login → onDismiss (el caller limpia su pending).
+    pressCta('gate.maybeLater');
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+
+    // El CTA a login no descarta: el pending debe sobrevivir al flujo de signup.
+    onDismiss.mockClear();
+    result.current.presentGate({ type: 'signup_required' }, { onDismiss });
+    pressCta('gate.signupCta');
+    expect(mockPush).toHaveBeenCalledWith('/login');
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
   it('upsell plan_limit_reached (con reset) → Alert con cuerpo de reset + CTA a Account', () => {
     const { result } = renderHook(() => useGateHandler());
     const action: GateAction = {
@@ -104,6 +121,17 @@ describe('useGateHandler.presentGate', () => {
       used: 5, limit: 5, resetsAt: null, requestedDays: null, maxDays: null, plusMaxDays: null,
     });
     expect(lastAlert().title).toBe('gate.savedPlansTitle');
+  });
+
+  it('upsell favorites_limit_reached → título de favoritos + CTA a /paywall', () => {
+    const { result } = renderHook(() => useGateHandler());
+    result.current.presentGate({
+      type: 'upsell', code: 'favorites_limit_reached',
+      used: 50, limit: 50, resetsAt: null, requestedDays: null, maxDays: null, plusMaxDays: null,
+    });
+    expect(lastAlert().title).toBe('gate.favoritesLimitTitle');
+    pressCta('gate.upgradeCta');
+    expect(mockPush).toHaveBeenCalledWith('/paywall');
   });
 
   it('soft_throttle → Alert de daily cap SIN CTA de upgrade', () => {

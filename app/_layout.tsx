@@ -235,6 +235,13 @@ function AppStack() {
         }}
       />
       <Stack.Screen
+        name="favorites"
+        options={{
+          title: t('favorites.title'),
+          headerBackTitle: 'Back',
+        }}
+      />
+      <Stack.Screen
         name="login"
         options={{
           title: t('nav.signIn'),

@@ -8,17 +8,24 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 type Props = {
   currentLangLabel: string;
   onOpenLanguage: () => void;
+  onFavorites: () => void;
   onLogout: () => void;
   onDelete: () => void;
 };
 
-export function SettingsSection({ currentLangLabel, onOpenLanguage, onLogout, onDelete }: Props) {
+export function SettingsSection({ currentLangLabel, onOpenLanguage, onFavorites, onLogout, onDelete }: Props) {
   const { t } = useTranslation();
 
   return (
     <>
       {/* Settings */}
       <View style={s.section}>
+        <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={onFavorites}>
+          <Ionicons name="heart-outline" size={22} color={colors.textMain} />
+          <Text style={s.rowText}>{t('favorites.title')}</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={s.row}
           activeOpacity={0.7}

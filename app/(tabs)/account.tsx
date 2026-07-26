@@ -65,6 +65,7 @@ export default function AccountScreen() {
         <SettingsSection
           currentLangLabel={currentLangLabel}
           onOpenLanguage={() => setLangPickerVisible(true)}
+          onFavorites={() => router.push('/favorites')}
           onLogout={() => setLogoutVisible(true)}
           onDelete={() => setDeleteVisible(true)}
         />

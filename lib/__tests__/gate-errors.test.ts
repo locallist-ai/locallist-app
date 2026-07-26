@@ -69,6 +69,11 @@ describe('mapGateError', () => {
     expect(action).toMatchObject({ type: 'upsell', code: 'saved_plans_limit_reached', used: 5, limit: 5 });
   });
 
+  it('403 favorites_limit_reached → upsell con used/limit', () => {
+    const action = mapGateError(403, { error: 'favorites_limit_reached', used: 50, limit: 50 });
+    expect(action).toMatchObject({ type: 'upsell', code: 'favorites_limit_reached', used: 50, limit: 50 });
+  });
+
   it('429 daily_cap_reached → soft_throttle (Plus, sin upsell)', () => {
     expect(mapGateError(429, { error: 'daily_cap_reached' })).toEqual({ type: 'soft_throttle' });
   });

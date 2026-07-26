@@ -156,6 +156,9 @@ interface PurchaseProps {
  */
 export type OnboardingStepName = 'value' | 'interests' | 'preview' | 'paywall';
 
+/** Where a favorite was toggled from, for funnel attribution (no PII). */
+export type FavoriteSource = 'place_detail' | 'card' | 'list';
+
 export type AppEvent =
   // Auth
   | { event: 'sign_up'; provider: 'apple' | 'google' | 'email' }
@@ -197,6 +200,11 @@ export type AppEvent =
   // Profile
   | { event: 'profile_saved'; fields: string[] }
   | { event: 'profile_reset' }
+  // Favorites — a place saved/unsaved (source = surface it was toggled from).
+  | { event: 'favorite_added'; source: FavoriteSource }
+  | { event: 'favorite_removed'; source: FavoriteSource }
+  // 403 favorites_limit_reached: the free save cap was hit (funnel → upsell).
+  | { event: 'favorites_limit_hit' }
   // Monetization (paywall / IAP)
   // SOLO cuando las offerings renderizan con precios visibles (denominador de
   // la señal 1 de pricing ES/US); la pantalla de error emite paywall_unavailable.
