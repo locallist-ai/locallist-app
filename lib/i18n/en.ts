@@ -81,6 +81,22 @@ export default {
     companyCouple: 'Couple',
     companyFamily: 'Family',
     companyFriends: 'Friends',
+    // Company refinement sub-tags (COMPANY_SUBCATEGORIES). Only the visible
+    // label is localized; the ids matching Place.suitableFor never change.
+    companySubBackpacker: 'Backpacker',
+    companySubDigitalNomad: 'Digital nomad',
+    companySubBusiness: 'Business',
+    companySubSocial: 'Social',
+    companySubHoneymoon: 'Honeymoon',
+    companySubDating: 'Dating',
+    companySubAnniversary: 'Anniversary',
+    companySubWithKids: 'With kids',
+    companySubWithTeens: 'With teens',
+    companySubMultiGen: 'Multi-gen',
+    companySubBachelor: 'Bachelor',
+    companySubBachelorette: 'Bachelorette',
+    companySubGroupTrip: 'Group trip',
+    companySubBirthday: 'Birthday',
     budgetBudget: 'Budget',
     budgetModerate: 'Moderate',
     budgetPremium: 'Premium',
@@ -499,5 +515,33 @@ export default {
     visitDurationLong: 'Stay ~{{h}}h',
     travelFromPrev: '{{min}}m from prev',
     arrival: 'Arrival {{time}}',
+  },
+  // Accessibility labels (screen-reader only, never visible on screen).
+  a11y: {
+    stepProgress: 'Step {{current}} of {{total}}',
+    editRefinement: 'Edit refinement',
+    loading: 'Loading',
+    editSubcategories: 'Edit subcategories',
+    cityTapToChange: 'City: {{city}}, tap to change',
+    photoIndex: 'Photo {{index}}',
+    replaceThisStop: 'Replace this stop',
+    backToPlansMenu: 'Back to plans menu',
+    deleteThisPlan: 'Delete this plan',
+    dragToReorder: 'Drag to reorder',
+    viewStopDetails: 'View {{name}} details',
+    replaceStop: 'Replace stop',
+    moveToAnotherDay: 'Move to another day',
+    moveToDay: 'Move to day {{day}}',
+    addStopToDay: 'Add a stop to day {{day}}',
+    toggleSheetExpansion: 'Toggle sheet expansion',
+    next: 'Next',
+    stopFallback: 'Stop',
+    openStreetMapCopyright: 'OpenStreetMap copyright',
+  },
+  brand: {
+    // INTENCIONAL: el lema de marca se mantiene en inglés en TODOS los idiomas
+    // (como el nombre "LocalList"). El valor DEBE ser idéntico en en.ts y es.ts;
+    // vive aquí solo para que el barrido de paridad i18n lo gobierne.
+    tagline: 'Stop Researching. Start Traveling.',
   },
 } as const;

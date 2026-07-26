@@ -81,6 +81,22 @@ export default {
     companyCouple: 'Pareja',
     companyFamily: 'Familia',
     companyFriends: 'Amigos',
+    // Sub-tags de refinamiento de compañía (COMPANY_SUBCATEGORIES). Solo se
+    // localiza el label visible; los ids que matchean Place.suitableFor no cambian.
+    companySubBackpacker: 'Mochilero',
+    companySubDigitalNomad: 'Nómada digital',
+    companySubBusiness: 'Negocios',
+    companySubSocial: 'Social',
+    companySubHoneymoon: 'Luna de miel',
+    companySubDating: 'Cita romántica',
+    companySubAnniversary: 'Aniversario',
+    companySubWithKids: 'Con niños',
+    companySubWithTeens: 'Con adolescentes',
+    companySubMultiGen: 'Multigeneracional',
+    companySubBachelor: 'Despedida de soltero',
+    companySubBachelorette: 'Despedida de soltera',
+    companySubGroupTrip: 'Viaje en grupo',
+    companySubBirthday: 'Cumpleaños',
     budgetBudget: 'Económico',
     budgetModerate: 'Moderado',
     budgetPremium: 'Premium',
@@ -491,5 +507,33 @@ export default {
     visitDurationLong: 'Visita ~{{h}}h',
     travelFromPrev: '{{min}} min desde el anterior',
     arrival: 'Llegada {{time}}',
+  },
+  // Etiquetas de accesibilidad (solo lector de pantalla, nunca visibles).
+  a11y: {
+    stepProgress: 'Paso {{current}} de {{total}}',
+    editRefinement: 'Editar refinamiento',
+    loading: 'Cargando',
+    editSubcategories: 'Editar subcategorías',
+    cityTapToChange: 'Ciudad: {{city}}, toca para cambiar',
+    photoIndex: 'Foto {{index}}',
+    replaceThisStop: 'Reemplazar esta parada',
+    backToPlansMenu: 'Volver al menú de planes',
+    deleteThisPlan: 'Eliminar este plan',
+    dragToReorder: 'Arrastra para reordenar',
+    viewStopDetails: 'Ver detalles de {{name}}',
+    replaceStop: 'Reemplazar parada',
+    moveToAnotherDay: 'Mover a otro día',
+    moveToDay: 'Mover al día {{day}}',
+    addStopToDay: 'Añadir una parada al día {{day}}',
+    toggleSheetExpansion: 'Expandir o contraer el panel',
+    next: 'Siguiente',
+    stopFallback: 'Parada',
+    openStreetMapCopyright: 'Derechos de autor de OpenStreetMap',
+  },
+  brand: {
+    // INTENCIONAL: el lema de marca se mantiene en inglés en TODOS los idiomas
+    // (como el nombre "LocalList"). El valor DEBE ser idéntico en en.ts y es.ts;
+    // vive aquí solo para que el barrido de paridad i18n lo gobierne.
+    tagline: 'Stop Researching. Start Traveling.',
   },
 } as const;

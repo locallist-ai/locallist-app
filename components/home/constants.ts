@@ -73,8 +73,23 @@ export interface SubcategoryOption {
   id: string;
   label: string;
   emoji: string;
+  /**
+   * Key i18n para el label visible (COMPANY_SUBCATEGORIES). Cuando está
+   * presente, SubcategorySheet renderiza `t(labelKey)` en vez de `label`
+   * (que queda como fallback EN). Las subcategorías de interés NO la usan:
+   * llegan ya localizadas vía taxonomía (getInterestSubcategories).
+   */
+  labelKey?: TKeys;
   /** Branded MCI glyph para el chip (paperWhite bubble + sunsetOrange icon). */
   iconName?: keyof typeof MaterialCommunityIcons.glyphMap;
+  /**
+   * Clave de la taxonomía backend (`labels[locale]['Category.key']`) usada para
+   * localizar el `label` visible vía `getInterestSubcategories`. Solo se declara
+   * cuando difiere de `id` (p.ej. id `latin` → key `latin-american`). El `id`
+   * es el contrato que viaja al backend y NUNCA cambia; `taxonomyKey` solo sirve
+   * para resolver el label traducido. Si se omite, se usa `id` como key.
+   */
+  taxonomyKey?: string;
 }
 
 // Sub-categorías por interest top-level. Los `id` son tags lowercase que el
@@ -90,33 +105,33 @@ export const SUBCATEGORIES_BY_INTEREST: Record<string, SubcategoryOption[]> = {
     { id: 'mexican', label: 'Mexican', emoji: '\u{1F32E}', iconName: 'taco' },
     { id: 'tacos', label: 'Tacos', emoji: '\u{1F32E}', iconName: 'taco' },
     { id: 'cuban', label: 'Cuban', emoji: '\u{1F1E8}\u{1F1FA}', iconName: 'food-variant' },
-    { id: 'latin', label: 'Latin American', emoji: '\u{1F30D}', iconName: 'food-variant' },
+    { id: 'latin', label: 'Latin American', emoji: '\u{1F30D}', iconName: 'food-variant', taxonomyKey: 'latin-american' },
     { id: 'american', label: 'American', emoji: '\u{1F354}', iconName: 'hamburger' },
     { id: 'steakhouse', label: 'Steakhouse', emoji: '\u{1F969}', iconName: 'food-steak' },
     { id: 'seafood', label: 'Seafood', emoji: '\u{1F990}', iconName: 'fish' },
     { id: 'mediterranean', label: 'Mediterranean', emoji: '\u{1FAD2}', iconName: 'food-variant' },
-    { id: 'asian', label: 'Asian Fusion', emoji: '\u{1F961}', iconName: 'bowl-mix-outline' },
+    { id: 'asian', label: 'Asian Fusion', emoji: '\u{1F961}', iconName: 'bowl-mix-outline', taxonomyKey: 'asian-fusion' },
     { id: 'brunch', label: 'Brunch', emoji: '\u{1F95E}', iconName: 'egg-fried' },
     { id: 'bakery', label: 'Bakery', emoji: '\u{1F950}', iconName: 'baguette' },
     { id: 'vegan', label: 'Vegan', emoji: '\u{1F96C}', iconName: 'leaf' },
   ],
   nightlife: [
     { id: 'pub', label: 'Pub', emoji: '\u{1F37A}', iconName: 'beer' },
-    { id: 'cocktail', label: 'Cocktail Bar', emoji: '\u{1F378}', iconName: 'glass-cocktail' },
+    { id: 'cocktail', label: 'Cocktail Bar', emoji: '\u{1F378}', iconName: 'glass-cocktail', taxonomyKey: 'cocktail-bar' },
     { id: 'speakeasy', label: 'Speakeasy', emoji: '\u{1F943}', iconName: 'glass-tulip' },
-    { id: 'rooftop', label: 'Rooftop Bar', emoji: '\u{1F306}', iconName: 'city-variant-outline' },
-    { id: 'wine', label: 'Wine Bar', emoji: '\u{1F377}', iconName: 'glass-wine' },
-    { id: 'sports', label: 'Sports Bar', emoji: '\u{1F3C6}', iconName: 'trophy-outline' },
-    { id: 'beer', label: 'Beer Bar', emoji: '\u{1F37A}', iconName: 'beer-outline' },
+    { id: 'rooftop', label: 'Rooftop Bar', emoji: '\u{1F306}', iconName: 'city-variant-outline', taxonomyKey: 'rooftop-bar' },
+    { id: 'wine', label: 'Wine Bar', emoji: '\u{1F377}', iconName: 'glass-wine', taxonomyKey: 'wine-bar' },
+    { id: 'sports', label: 'Sports Bar', emoji: '\u{1F3C6}', iconName: 'trophy-outline', taxonomyKey: 'sports-bar' },
+    { id: 'beer', label: 'Beer Bar', emoji: '\u{1F37A}', iconName: 'beer-outline', taxonomyKey: 'beer-bar' },
     { id: 'nightclub', label: 'Nightclub', emoji: '\u{1FA70}', iconName: 'music-note' },
-    { id: 'live music', label: 'Live Music', emoji: '\u{1F3B6}', iconName: 'music' },
+    { id: 'live music', label: 'Live Music', emoji: '\u{1F3B6}', iconName: 'music', taxonomyKey: 'live-music' },
   ],
   coffee: [
-    { id: 'specialty', label: 'Specialty Coffee', emoji: '☕', iconName: 'coffee-outline' },
-    { id: 'espresso', label: 'Espresso Bar', emoji: '\u{2615}', iconName: 'coffee' },
-    { id: 'bakery', label: 'Bakery Café', emoji: '\u{1F950}', iconName: 'baguette' },
-    { id: 'tea', label: 'Tea House', emoji: '\u{1F375}', iconName: 'tea-outline' },
-    { id: 'juice', label: 'Juice Bar', emoji: '\u{1F9C3}', iconName: 'cup-water' },
+    { id: 'specialty', label: 'Specialty Coffee', emoji: '☕', iconName: 'coffee-outline', taxonomyKey: 'specialty-coffee' },
+    { id: 'espresso', label: 'Espresso Bar', emoji: '\u{2615}', iconName: 'coffee', taxonomyKey: 'espresso-bar' },
+    { id: 'bakery', label: 'Bakery Café', emoji: '\u{1F950}', iconName: 'baguette', taxonomyKey: 'bakery-cafe' },
+    { id: 'tea', label: 'Tea House', emoji: '\u{1F375}', iconName: 'tea-outline', taxonomyKey: 'tea-house' },
+    { id: 'juice', label: 'Juice Bar', emoji: '\u{1F9C3}', iconName: 'cup-water', taxonomyKey: 'juice-bar' },
     { id: 'dessert', label: 'Dessert', emoji: '\u{1F370}', iconName: 'cupcake' },
   ],
   outdoors: [
@@ -127,7 +142,7 @@ export const SUBCATEGORIES_BY_INTEREST: Record<string, SubcategoryOption[]> = {
     { id: 'marina', label: 'Marina', emoji: '\u{2693}', iconName: 'anchor' },
     { id: 'pier', label: 'Pier', emoji: '\u{1F30A}', iconName: 'waves' },
     { id: 'waterfront', label: 'Waterfront', emoji: '\u{1F305}', iconName: 'water' },
-    { id: 'dog', label: 'Dog Park', emoji: '\u{1F415}', iconName: 'dog' },
+    { id: 'dog', label: 'Dog Park', emoji: '\u{1F415}', iconName: 'dog', taxonomyKey: 'dog-park' },
   ],
   wellness: [
     { id: 'spa', label: 'Spa', emoji: '\u{1F9D6}', iconName: 'spa-outline' },
@@ -135,26 +150,26 @@ export const SUBCATEGORIES_BY_INTEREST: Record<string, SubcategoryOption[]> = {
     { id: 'yoga', label: 'Yoga', emoji: '\u{1F9D8}', iconName: 'human-handsdown' },
     { id: 'gym', label: 'Gym', emoji: '\u{1F4AA}', iconName: 'dumbbell' },
     { id: 'sauna', label: 'Sauna', emoji: '\u{1F9FC}', iconName: 'heat-wave' },
-    { id: 'iv', label: 'IV Therapy', emoji: '\u{1F489}', iconName: 'needle' },
+    { id: 'iv', label: 'IV Therapy', emoji: '\u{1F489}', iconName: 'needle', taxonomyKey: 'iv-therapy' },
     { id: 'massage', label: 'Massage', emoji: '\u{1F485}', iconName: 'hand-heart-outline' },
-    { id: 'salt', label: 'Salt Cave', emoji: '\u{1F9C2}', iconName: 'diamond-outline' },
+    { id: 'salt', label: 'Salt Cave', emoji: '\u{1F9C2}', iconName: 'diamond-outline', taxonomyKey: 'salt-cave' },
   ],
   culture: [
     { id: 'museum', label: 'Museum', emoji: '\u{1F3DB}️', iconName: 'bank-outline' },
     { id: 'gallery', label: 'Gallery', emoji: '\u{1F5BC}️', iconName: 'image-frame' },
     { id: 'theater', label: 'Theater', emoji: '\u{1F3AD}', iconName: 'theater' },
-    { id: 'music', label: 'Music Venue', emoji: '\u{1F3B5}', iconName: 'music' },
-    { id: 'festival', label: 'Festival Site', emoji: '\u{1F3AA}', iconName: 'party-popper' },
-    { id: 'historic', label: 'Historic Site', emoji: '\u{1F3F0}', iconName: 'castle' },
-    { id: 'art', label: 'Public Art', emoji: '\u{1F3A8}', iconName: 'palette-outline' },
-    { id: 'cultural', label: 'Cultural Center', emoji: '\u{1F30F}', iconName: 'earth' },
+    { id: 'music', label: 'Music Venue', emoji: '\u{1F3B5}', iconName: 'music', taxonomyKey: 'music-venue' },
+    { id: 'festival', label: 'Festival Site', emoji: '\u{1F3AA}', iconName: 'party-popper', taxonomyKey: 'festival-site' },
+    { id: 'historic', label: 'Historic Site', emoji: '\u{1F3F0}', iconName: 'castle', taxonomyKey: 'historic-site' },
+    { id: 'art', label: 'Public Art', emoji: '\u{1F3A8}', iconName: 'palette-outline', taxonomyKey: 'public-art' },
+    { id: 'cultural', label: 'Cultural Center', emoji: '\u{1F30F}', iconName: 'earth', taxonomyKey: 'cultural-center' },
   ],
   shopping: [
     { id: 'boutique', label: 'Boutique', emoji: '\u{1F457}', iconName: 'hanger' },
     { id: 'vintage', label: 'Vintage', emoji: '\u{1F570}️', iconName: 'clock-time-eight-outline' },
     { id: 'bookstore', label: 'Bookstore', emoji: '\u{1F4DA}', iconName: 'bookshelf' },
-    { id: 'record', label: 'Record Store', emoji: '\u{1F4BF}', iconName: 'disc' },
-    { id: 'concept', label: 'Concept Store', emoji: '\u{1F6CD}️', iconName: 'shopping-outline' },
+    { id: 'record', label: 'Record Store', emoji: '\u{1F4BF}', iconName: 'disc', taxonomyKey: 'record-store' },
+    { id: 'concept', label: 'Concept Store', emoji: '\u{1F6CD}️', iconName: 'shopping-outline', taxonomyKey: 'concept-store' },
     { id: 'market', label: 'Market', emoji: '\u{1F6D2}', iconName: 'cart-outline' },
     { id: 'florist', label: 'Florist', emoji: '\u{1F490}', iconName: 'flower-tulip-outline' },
     { id: 'designer', label: 'Designer', emoji: '\u{1F45C}', iconName: 'bag-personal-outline' },
@@ -202,26 +217,26 @@ export const INTERESTS_STEP_INDEX_IN_STEPS = 2;
 // Place.suitableFor / bestFor en el catálogo.
 export const COMPANY_SUBCATEGORIES: Record<string, SubcategoryOption[]> = {
   solo: [
-    { id: 'backpacker', label: 'Backpacker', emoji: '\u{1F392}', iconName: 'bag-personal-outline' },
-    { id: 'digital-nomad', label: 'Digital nomad', emoji: '\u{1F4BB}', iconName: 'laptop' },
-    { id: 'business', label: 'Business', emoji: '\u{1F454}', iconName: 'briefcase-outline' },
-    { id: 'social', label: 'Social', emoji: '\u{1F4AC}', iconName: 'message-text-outline' },
+    { id: 'backpacker', label: 'Backpacker', labelKey: 'wizard.companySubBackpacker', emoji: '\u{1F392}', iconName: 'bag-personal-outline' },
+    { id: 'digital-nomad', label: 'Digital nomad', labelKey: 'wizard.companySubDigitalNomad', emoji: '\u{1F4BB}', iconName: 'laptop' },
+    { id: 'business', label: 'Business', labelKey: 'wizard.companySubBusiness', emoji: '\u{1F454}', iconName: 'briefcase-outline' },
+    { id: 'social', label: 'Social', labelKey: 'wizard.companySubSocial', emoji: '\u{1F4AC}', iconName: 'message-text-outline' },
   ],
   couple: [
-    { id: 'honeymoon', label: 'Honeymoon', emoji: '\u{1F48D}', iconName: 'ring' },
-    { id: 'dating', label: 'Dating', emoji: '\u{1F378}', iconName: 'heart-outline' },
-    { id: 'anniversary', label: 'Anniversary', emoji: '\u{1F381}', iconName: 'gift-outline' },
+    { id: 'honeymoon', label: 'Honeymoon', labelKey: 'wizard.companySubHoneymoon', emoji: '\u{1F48D}', iconName: 'ring' },
+    { id: 'dating', label: 'Dating', labelKey: 'wizard.companySubDating', emoji: '\u{1F378}', iconName: 'heart-outline' },
+    { id: 'anniversary', label: 'Anniversary', labelKey: 'wizard.companySubAnniversary', emoji: '\u{1F381}', iconName: 'gift-outline' },
   ],
   family: [
-    { id: 'with-kids', label: 'With kids', emoji: '\u{1F9D2}', iconName: 'human-child' },
-    { id: 'with-teens', label: 'With teens', emoji: '\u{1F3AE}', iconName: 'gamepad-variant-outline' },
-    { id: 'multi-gen', label: 'Multi-gen', emoji: '\u{1F46A}', iconName: 'account-group-outline' },
+    { id: 'with-kids', label: 'With kids', labelKey: 'wizard.companySubWithKids', emoji: '\u{1F9D2}', iconName: 'human-child' },
+    { id: 'with-teens', label: 'With teens', labelKey: 'wizard.companySubWithTeens', emoji: '\u{1F3AE}', iconName: 'gamepad-variant-outline' },
+    { id: 'multi-gen', label: 'Multi-gen', labelKey: 'wizard.companySubMultiGen', emoji: '\u{1F46A}', iconName: 'account-group-outline' },
   ],
   friends: [
-    { id: 'bachelor', label: 'Bachelor', emoji: '\u{1F37A}', iconName: 'beer-outline' },
-    { id: 'bachelorette', label: 'Bachelorette', emoji: '\u{1F478}', iconName: 'crown-outline' },
-    { id: 'group-trip', label: 'Group trip', emoji: '\u{1F46B}', iconName: 'account-multiple-outline' },
-    { id: 'birthday', label: 'Birthday', emoji: '\u{1F389}', iconName: 'cake-variant-outline' },
+    { id: 'bachelor', label: 'Bachelor', labelKey: 'wizard.companySubBachelor', emoji: '\u{1F37A}', iconName: 'beer-outline' },
+    { id: 'bachelorette', label: 'Bachelorette', labelKey: 'wizard.companySubBachelorette', emoji: '\u{1F478}', iconName: 'crown-outline' },
+    { id: 'group-trip', label: 'Group trip', labelKey: 'wizard.companySubGroupTrip', emoji: '\u{1F46B}', iconName: 'account-multiple-outline' },
+    { id: 'birthday', label: 'Birthday', labelKey: 'wizard.companySubBirthday', emoji: '\u{1F389}', iconName: 'cake-variant-outline' },
   ],
 };
 

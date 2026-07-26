@@ -155,7 +155,7 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
             onPress={toggleExpanded}
             style={styles.handleBar}
             accessibilityRole="button"
-            accessibilityLabel="Toggle sheet expansion"
+            accessibilityLabel={t('a11y.toggleSheetExpansion')}
           >
             <View style={styles.handle} />
           </TouchableOpacity>
@@ -196,7 +196,7 @@ export const BottomSheetStop: React.FC<BottomSheetStopProps> = ({
               onPress={handleNext}
               style={{ flex: 1.2 }}
               accessibilityRole="button"
-              accessibilityLabel="Next"
+              accessibilityLabel={t('a11y.next')}
             >
               <LinearGradient
                 colors={[colors.electricBlue, '#2563eb']}

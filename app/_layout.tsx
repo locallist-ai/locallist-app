@@ -30,6 +30,7 @@ SplashScreen.preventAutoHideAsync();
 // Shows logo + tagline, waits for auth to load, then fades out.
 
 function AppSplash({ onFinish }: { onFinish: () => void }) {
+  const { t } = useTranslation();
   const { isLoading: authLoading } = useAuth();
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
   const scaleAnim = useRef(new RNAnimated.Value(0.85)).current;
@@ -84,7 +85,7 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
           style={splashStyles.logo}
           resizeMode="contain"
         />
-        <Text style={splashStyles.tagline}>Stop Researching. Start Traveling.</Text>
+        <Text style={splashStyles.tagline}>{t('brand.tagline')}</Text>
       </RNAnimated.View>
     </View>
   );

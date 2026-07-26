@@ -47,7 +47,7 @@ export function EditableStopCard({ stop, onMovePress, onReplacePress, drag, isAc
         onLongPress={drag}
         delayLongPress={150}
         style={s.dragHandle}
-        accessibilityLabel="Drag to reorder"
+        accessibilityLabel={t('a11y.dragToReorder')}
         accessibilityRole="button"
       >
         <Ionicons name="reorder-three" size={22} color={colors.textSecondary} />
@@ -73,10 +73,10 @@ export function EditableStopCard({ stop, onMovePress, onReplacePress, drag, isAc
         onPress={onPress}
         activeOpacity={onPress ? 0.7 : 1}
         accessibilityRole={onPress ? 'button' : 'none'}
-        accessibilityLabel={onPress ? `View ${place?.name ?? 'stop'} details` : undefined}
+        accessibilityLabel={onPress ? t('a11y.viewStopDetails', { name: place?.name ?? t('a11y.stopFallback') }) : undefined}
       >
         <Text style={s.name} numberOfLines={1} ellipsizeMode="tail">
-          {place?.name ?? 'Unknown place'}
+          {place?.name ?? t('plan.unknownPlace')}
         </Text>
 
         <View style={s.bottomRow}>
@@ -109,7 +109,7 @@ export function EditableStopCard({ stop, onMovePress, onReplacePress, drag, isAc
               <TouchableOpacity
                 onPress={onReplacePress}
                 style={s.actionBtn}
-                accessibilityLabel="Replace stop"
+                accessibilityLabel={t('a11y.replaceStop')}
                 accessibilityRole="button"
               >
                 <Ionicons name="swap-horizontal-outline" size={17} color={colors.textSecondary} />
@@ -119,7 +119,7 @@ export function EditableStopCard({ stop, onMovePress, onReplacePress, drag, isAc
               <TouchableOpacity
                 onPress={onMovePress}
                 style={s.actionBtn}
-                accessibilityLabel="Move to another day"
+                accessibilityLabel={t('a11y.moveToAnotherDay')}
                 accessibilityRole="button"
               >
                 <View style={s.dayNumBadge}>

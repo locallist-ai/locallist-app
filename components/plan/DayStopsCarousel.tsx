@@ -115,7 +115,7 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total, isOw
                 onPress={() => setPhotoIdx(i)}
                 hitSlop={10}
                 accessibilityRole="button"
-                accessibilityLabel={`Photo ${i + 1}`}
+                accessibilityLabel={t('a11y.photoIndex', { index: i + 1 })}
                 style={[styles.photoDot, i === photoIdx && styles.photoDotActive]}
               />
             ))}
@@ -204,7 +204,7 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total, isOw
             onPress={() => onRequestReplace(dayNumber!, stopIndex!)}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Replace this stop"
+            accessibilityLabel={t('a11y.replaceThisStop')}
           >
             <Ionicons name="swap-horizontal-outline" size={15} color={colors.sunsetOrange} />
             <Text style={styles.replaceBtnText}>{t('plan.replaceStop')}</Text>

@@ -45,10 +45,10 @@ export function MoveToDay({ visible, currentDay, totalDays, onSelect, onClose }:
                     style={s.dayBtn}
                     onPress={() => onSelect(day)}
                     activeOpacity={0.7}
-                    accessibilityLabel={`Move to day ${day}`}
+                    accessibilityLabel={t('a11y.moveToDay', { day })}
                     accessibilityRole="button"
                   >
-                    <Text style={s.dayBtnText}>Day {day}</Text>
+                    <Text style={s.dayBtnText}>{t('plan.dayLabel', { day })}</Text>
                   </TouchableOpacity>
                 ))}
               </View>

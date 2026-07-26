@@ -96,6 +96,9 @@ export const SubcategorySheet: React.FC<SubcategorySheetProps> = ({
               >
                 {options.map((opt) => {
                   const isSelected = selected.includes(opt.id);
+                  // Company subs traen labelKey (catálogo i18n); las de interés
+                  // llegan ya localizadas en `label` vía taxonomía.
+                  const label = opt.labelKey ? t(opt.labelKey) : opt.label;
                   return (
                     <TouchableOpacity
                       key={opt.id}
@@ -104,7 +107,7 @@ export const SubcategorySheet: React.FC<SubcategorySheetProps> = ({
                       style={[styles.chip, isSelected && styles.chipSelected]}
                       accessibilityRole="button"
                       accessibilityState={{ selected: isSelected }}
-                      accessibilityLabel={opt.label}
+                      accessibilityLabel={label}
                     >
                       {opt.iconName ? (
                         <View style={[styles.chipIconBubble, isSelected && styles.chipIconBubbleSelected]}>
@@ -118,7 +121,7 @@ export const SubcategorySheet: React.FC<SubcategorySheetProps> = ({
                         <Text style={styles.chipEmoji}>{opt.emoji}</Text>
                       )}
                       <Text style={[styles.chipLabel, isSelected && styles.chipLabelSelected]}>
-                        {opt.label}
+                        {label}
                       </Text>
                       {isSelected && (
                         <Ionicons

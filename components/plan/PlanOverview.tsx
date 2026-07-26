@@ -215,7 +215,7 @@ export const PlanOverview: React.FC<PlanOverviewProps> = React.memo(({
               onPress={onDelete}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Delete this plan"
+              accessibilityLabel={t('a11y.deleteThisPlan')}
             >
               <Ionicons name="trash-outline" size={16} color={colors.error} />
               <Text style={styles.deleteBtnText}>{t('common.delete')}</Text>

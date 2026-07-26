@@ -90,7 +90,7 @@ export const HomeScreen: React.FC = () => {
             onPress={wizard.handleBack}
             activeOpacity={0.7}
             style={styles.backButton}
-            accessibilityLabel="Back"
+            accessibilityLabel={t('common.back')}
             accessibilityRole="button"
           >
             <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
@@ -103,7 +103,7 @@ export const HomeScreen: React.FC = () => {
             activeOpacity={0.75}
             style={styles.cityPill}
             accessibilityRole="button"
-            accessibilityLabel={`City: ${tripCity ?? ''}, tap to change`}
+            accessibilityLabel={t('a11y.cityTapToChange', { city: tripCity ?? '' })}
           >
             <Text style={styles.cityPillText} numberOfLines={1}>
               {'\u{1F4CD}'} {tripCity}

@@ -8,10 +8,12 @@ import Animated, {
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
 // ── Component ──
 
 export const TypingDots: React.FC = () => {
+  const { t } = useTranslation();
   const dot0 = useSharedValue(0);
   const dot1 = useSharedValue(0);
   const dot2 = useSharedValue(0);
@@ -36,7 +38,7 @@ export const TypingDots: React.FC = () => {
   const s2 = useAnimatedStyle(() => ({ transform: [{ translateY: dot2.value }] }));
 
   return (
-    <View style={styles.container} accessibilityLabel="Loading" accessibilityRole="progressbar">
+    <View style={styles.container} accessibilityLabel={t('a11y.loading')} accessibilityRole="progressbar">
       <Animated.View style={[styles.dot, s0]} />
       <Animated.View style={[styles.dot, s1]} />
       <Animated.View style={[styles.dot, s2]} />
