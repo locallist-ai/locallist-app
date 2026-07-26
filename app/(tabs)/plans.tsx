@@ -9,6 +9,8 @@ import { api } from '../../lib/api';
 import { useApiState } from '../../lib/use-api-state';
 import { runBulkWithConcurrency } from '../../lib/plan/bulk-ops';
 import { useAuth } from '../../lib/auth';
+import { useFavorites } from '../../lib/favorites-store';
+import { useGateHandler } from '../../lib/useGateHandler';
 import { getCached, setCache, isFresh } from '../../lib/api-cache';
 import { HeroSkiaBg } from '../../components/home/HeroSkiaBg';
 import { SkeletonCard } from '../../components/ui/SkeletonCard';
@@ -33,6 +35,8 @@ type PlansMode = 'chooser' | 'curated' | 'mine';
 export default function PlansScreen() {
   const { t } = useTranslation();
   const { isAuthenticated } = useAuth();
+  const { ids: favoriteIds } = useFavorites();
+  const { presentGate } = useGateHandler();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -201,6 +205,7 @@ export default function PlansScreen() {
           insets={insets}
           isAuthenticated={isAuthenticated}
           myPlansCount={myPlans.length}
+          favoritesCount={favoriteIds.size}
           onExploreCurated={() => {
             setMode('curated');
             if (!cached) onRefresh();
@@ -208,6 +213,11 @@ export default function PlansScreen() {
           onBuildOwn={() => router.push('/builder/custom')}
           onImportVideo={() => router.push('/builder/import-video')}
           onMyPlans={() => setMode('mine')}
+          onFavorites={() =>
+            isAuthenticated
+              ? router.push('/favorites')
+              : presentGate({ type: 'signup_required' })
+          }
         />
       )}
 

@@ -12,20 +12,24 @@ type Props = {
   insets: EdgeInsets;
   isAuthenticated: boolean;
   myPlansCount: number;
+  favoritesCount: number;
   onExploreCurated: () => void;
   onBuildOwn: () => void;
   onImportVideo: () => void;
   onMyPlans: () => void;
+  onFavorites: () => void;
 };
 
 export function ChooserMode({
   insets,
   isAuthenticated,
   myPlansCount,
+  favoritesCount,
   onExploreCurated,
   onBuildOwn,
   onImportVideo,
   onMyPlans,
+  onFavorites,
 }: Props) {
   const { t } = useTranslation();
 
@@ -67,6 +71,16 @@ export function ChooserMode({
           },
         ]
       : []),
+    // Favorites — always shown (a guest tap is gated to signup by the parent).
+    {
+      icon: 'heart-outline' as keyof typeof MaterialCommunityIcons.glyphMap,
+      title: t('favorites.title'),
+      sub:
+        isAuthenticated && favoritesCount > 0
+          ? t('favorites.savedCount', { count: favoritesCount })
+          : t('favorites.chooserSub'),
+      onPress: onFavorites,
+    },
   ];
 
   return (

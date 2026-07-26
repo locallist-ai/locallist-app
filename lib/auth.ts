@@ -7,6 +7,7 @@ import { parseAiPlansQuota, type AiPlansQuota } from './gate-errors';
 import { cancelTrialReminder } from './trial-reminder';
 import { completeOnboarding } from './onboarding-store';
 import { syncOnboardingPrefsToProfile } from './onboarding-sync';
+import { loadFavoriteIds, clearFavorites, applyPendingFavorite } from './favorites-store';
 
 interface User {
   id: string;
@@ -120,6 +121,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // auto-login effect only fires on cold start, so without this a freshly
     // registered free user never sees their "X of N plans" line (g3).
     await refreshAiPlansQuota();
+    // Favorites: replay any pending guest heart-tap, then hydrate the id set for
+    // the session. Both best-effort — a failure never breaks login.
+    try {
+      await applyPendingFavorite();
+      await loadFavoriteIds();
+    } catch (error) {
+      logger.warn('favorites hydration during login failed', error);
+    }
   }, [refreshAiPlansQuota]);
 
   const logout = useCallback(async () => {
@@ -146,6 +155,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       cancelTrialReminder('logout');
     } catch (error) {
       logger.warn('cancelTrialReminder failed during logout', error);
+    }
+    // Favorites belong to the session: drop the cached id set on logout.
+    try {
+      clearFavorites();
+    } catch (error) {
+      logger.warn('clearFavorites failed during logout', error);
     }
     await clearTokens();
   }, []);
@@ -189,6 +204,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch (error) {
             logger.warn('completeOnboarding during auto-login failed', error);
           }
+          // Returning user: hydrate the favorite id set (best-effort).
+          loadFavoriteIds().catch((error) =>
+            logger.warn('loadFavoriteIds during auto-login failed', error),
+          );
         }
       } catch (error) {
         logger.warn('Auto-login failed, starting fresh', error);

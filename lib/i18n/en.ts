@@ -154,6 +154,18 @@ export default {
     defaultMessage: 'Plan a great trip for me',
     photoAttributionA11y: 'Photo by Google',
   },
+  favorites: {
+    title: 'Favorites',
+    add: 'Add to favorites',
+    remove: 'Remove from favorites',
+    savedCount_one: '{{count}} saved',
+    savedCount_other: '{{count}} saved',
+    chooserSub: 'Places you saved',
+    emptyTitle: 'No favorites yet',
+    emptyBody: 'Tap the heart on any place to save it here.',
+    exploreCta: 'Explore places',
+    loadError: 'Failed to load favorites',
+  },
   account: {
     header: 'Account',
     guestTitle: 'Sign in to save your plans',
@@ -381,6 +393,8 @@ export default {
     multicityBody: 'Go Plus to plan trips across multiple cities.',
     savedPlansTitle: 'Saved plans limit reached',
     savedPlansBody: 'Free accounts can save up to {{limit}} plans. Go Plus to save unlimited plans.',
+    favoritesLimitTitle: 'Favorites limit reached',
+    favoritesLimitBody: 'Free accounts can save up to {{limit}} favorites. Go Plus to save unlimited favorites.',
     // 429 daily cap — the user is ALREADY Plus, so this is a soft throttle, not an upsell.
     dailyCapTitle: 'Taking a quick breather',
     dailyCapBody: "You've generated a lot of plans today. Please try again in a little while.",

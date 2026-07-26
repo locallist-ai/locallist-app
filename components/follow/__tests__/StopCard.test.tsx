@@ -37,6 +37,9 @@ jest.mock('@expo/vector-icons', () => ({
   Ionicons: () => null,
 }));
 
+// El corazón de favoritos tira de auth/gate/router; se aísla del foco de fotos.
+jest.mock('../../ui/FavoriteButton', () => ({ FavoriteButton: () => null }));
+
 const HTTPS_PHOTO = 'https://cdn.example.com/photo.jpg';
 
 const makePlace = (overrides: Partial<Place> = {}): Place => ({

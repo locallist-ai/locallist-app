@@ -23,7 +23,9 @@ import { api } from '../../lib/api';
 import { useApiState } from '../../lib/use-api-state';
 import { track } from '../../lib/analytics';
 import { PhotoHero, type Category } from '../../components/ui/PhotoHero';
+import { FavoriteButton } from '../../components/ui/FavoriteButton';
 import { PlanMap } from '../../components/map/PlanMap';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getOpenState } from '../../lib/openingHours';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import type { Place } from '../../lib/types';
@@ -54,6 +56,7 @@ export default function PlaceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
   const { short } = useResponsive();
+  const insets = useSafeAreaInsets();
   const HERO_MAX = short ? 220 : 280;
 
   const { data: place, loading, error } = useApiState<Place>(
@@ -142,6 +145,13 @@ export default function PlaceDetailScreen() {
           withSafeArea
         />
       </Animated.View>
+
+      {/* Favorite heart — floats over the hero, top-right */}
+      <FavoriteButton
+        placeId={place.id}
+        source="place_detail"
+        style={[s.favoriteBtn, { top: insets.top + 8 }]}
+      />
 
       <Animated.ScrollView
         contentContainerStyle={[s.scroll, { paddingTop: HERO_MAX + spacing.md }]}
@@ -361,6 +371,11 @@ const s = StyleSheet.create({
     right: 0,
     zIndex: 10,
     overflow: 'hidden',
+  },
+  favoriteBtn: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 11,
   },
 
   // Badges

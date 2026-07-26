@@ -59,7 +59,8 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `builder/import-video.tsx` | Stub — import-from-video, not yet built |
 | `plan/[id].tsx` | Plan detail + editor: PlanCardPager, inline editing via `usePlanEditor`, handles `/plan/new` and builder preview handoff, Follow button |
 | `follow/[id].tsx` | Follow Mode: PlanMap fullscreen, BottomSheetStop, progress bar, day completion, resume via `lib/follow/resume-store` |
-| `place/[id].tsx` | Place detail: parallax hero, ratings, Google Maps link |
+| `place/[id].tsx` | Place detail: parallax hero, ratings, Google Maps link, favorite heart over the hero |
+| `favorites.tsx` | Favorites screen: paginated list (infinite scroll via `total`) of favorited PlaceDto (PhotoHero cards + heart to remove, optimista), pull-to-refresh, empty state, tap → place detail. Filters the fetched page by the live `useFavorites` id set so a removal (and its revert) reflects instantly |
 
 ## Key Components (`components/`)
 
@@ -70,6 +71,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `ui/PhotoAttribution.tsx` | Discreet "Google" label overlay for photos with `photoSource === 'google'`; v1 = brand name only, per-photo author (`authorAttributions`) is v1.1 |
 | `ui/SkeletonCard.tsx` | Shimmer skeleton loader |
 | `ui/CategoryBadge.tsx` | Category pill with per-category color |
+| `ui/FavoriteButton.tsx` | Favorite affordance: filled (sunsetOrange) / outline heart (Ionicons, brand contract = icon never emoji). Optimistic toggle via `useFavorites`; a guest tap routes to the signup gate. `overlay` variant (dark bubble over a photo hero) / `plain` variant (light surface). Used on `place/[id]`, `StopCard`, and the favorites list |
 | `ui/ConfirmModal.tsx` | Reusable confirm/cancel modal |
 | `ui/design-system/` | ChoiceChip, EditorialTitle, StepSubtitle, ProgressDots — wizard design system |
 | `chat/` | Chat UI: MessageBubble, AiDisclaimerBanner (aviso fijo "es una IA, puede cometer errores"), CityNoticeBubble (aviso de ciudad no cubierta + CTA), ChatErrorBubble (error de infra `ai_unavailable` + reintento), QuickReplyChips, SlotBadges, SaveProfileSheet |
@@ -119,6 +121,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `trip-context-store.ts` | Selected city store (module-level + SafeStore persistence, `useTripContext`) |
 | `onboarding-store.ts` | First-run onboarding state (`onboarding_completed` + `onboarding_prefs`), SafeStore-persisted (muere con la desinstalación, NO Keychain); `useOnboarding`, `completeOnboarding`, getters sync. Mismo patrón que `trip-context-store` |
 | `entry-state.ts` | Pure decision del EntryGate (`resolveEntryState` → loading/onboarding/app + `isGuestSession`) — invitado O autenticado entran a la app, onboarding solo primera ejecución |
+| `favorites-store.ts` | Favorites: cache module-level del Set de ids (mismo patrón que `trip-context-store`). `loadFavoriteIds`/`clearFavorites`/`applyPendingFavorite` wired desde `lib/auth` (hidrata en login+auto-login, limpia en logout, replay del pending guest tras login). `useFavorites()` hook = ids + `loading`/`loaded` + `toggle(placeId, source)` OPTIMISTA con revert. Invitado: no toca la API — guarda `pendingFavoritePlaceId` (no persistente, last-wins) + gate de signup. 403 `favorites_limit_reached` → `favorites_limit_hit` + upsell vía useGateHandler. In-memory only (el backend es la verdad) |
 | `onboarding-sync.ts` | Sync diferido de `onboarding_prefs` → `PUT /me/profile` (mapea budget/pace/dietary/city) en el primer `login()`/registro, luego limpia. `mapPrefsToProfile` pura (null si nada mapea, salta la red); best-effort (un fallo conserva las prefs para el siguiente intento) |
 | `use-profile.ts` | Hook: user profile CRUD (pace/budget/dietary) via API |
 | `trial-reminder/` | Recordatorio local del día 5 del trial (promesa "aviso el día 5, cobro el día 8"). Se programa SOLO con trial REAL (`entitlementPeriodType 'TRIAL'` del outcome de compra — elegibilidad del usuario, no el introPrice del producto); una compra efectiva sin trial cancela el pendiente obsoleto (cambio de plan). `native-module.ts`: require perezoso+guardado de expo-notifications — sin el módulo nativo (binario pre-rebuild) TODO el API degrada a no-op, jamás crash de arranque. `logic.ts` pura e inyectable (trigger compra+5d a las 10:00 locales — margen al cobro [37h,62h] con DST, siempre >24h; idempotencia por identificador; gracia de 24h para `pending_backend`; sesgo a conservar ante ambigüedad); `index.ts` wiring — SOLO locales, config plugin NO registrado a propósito (añadiría el entitlement push `aps-environment`) — con permiso pedido EN la compra con trial (nunca en arranque; denegado = log, la compra sigue), contenido i18n congelado al programar y `purchasedAt` persistido en el payload; `useTrialReminder` (AppStack): handler foreground, tap → `trial_reminder_shown {day:5}` + deep link a cuenta (el tap es la única señal observable con la app matada), reconciliación por `isPro` (pro→free o free fuera de gracia ⇒ cancel). Logout cancela vía `lib/auth` |

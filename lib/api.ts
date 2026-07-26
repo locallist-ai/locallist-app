@@ -9,6 +9,7 @@ import type {
   UserProfile, UpsertProfileRequest,
   LiveCity,
   Plan, PlanDetailResponse,
+  FavoritesResponse, FavoriteIdsResponse,
 } from './types';
 
 function getApiUrl(): string {
@@ -272,4 +273,28 @@ export async function upsertProfile(req: UpsertProfileRequest) {
 
 export async function deleteProfile() {
   return api<void>('/me/profile', { method: 'DELETE' });
+}
+
+// ─── Favorites API ─────────────────────────────────────────────────────────────
+// Contract (backend already on main):
+//   PUT    /favorites/{placeId}  → 200 · 401 (guest) · 403 { error:'favorites_limit_reached', used, limit } · 404 (place not published)
+//   DELETE /favorites/{placeId}  → 204 (idempotent)
+//   GET    /favorites?limit&offset → { places: PlaceDto[] (proxy photos), total } (created_at DESC)
+//   GET    /favorites/ids        → { ids: string[] } to paint hearts
+// The guest (401) case never reaches the network — callers gate signup first.
+
+export async function putFavorite(placeId: string) {
+  return api<void>(`/favorites/${placeId}`, { method: 'PUT' });
+}
+
+export async function deleteFavorite(placeId: string) {
+  return api<void>(`/favorites/${placeId}`, { method: 'DELETE' });
+}
+
+export async function getFavorites(limit: number, offset: number, signal?: AbortSignal) {
+  return api<FavoritesResponse>(`/favorites?limit=${limit}&offset=${offset}`, { signal });
+}
+
+export async function getFavoriteIds(signal?: AbortSignal) {
+  return api<FavoriteIdsResponse>('/favorites/ids', { signal });
 }

@@ -6,6 +6,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { PhotoHero, type Category } from '../ui/PhotoHero';
+import { FavoriteButton } from '../ui/FavoriteButton';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
@@ -56,13 +57,19 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
       nestedScrollEnabled
       showsVerticalScrollIndicator={false}
     >
-      <PhotoHero
-        imageUrl={photoUrl}
-        photoSource={photoSource}
-        fallbackCategory={(place?.category as Category) || 'Culture'}
-        height={180}
-        blurBackdrop
-      />
+      <View>
+        <PhotoHero
+          imageUrl={photoUrl}
+          photoSource={photoSource}
+          fallbackCategory={(place?.category as Category) || 'Culture'}
+          height={180}
+          blurBackdrop
+        />
+        {/* Favorite heart — canonical place card (Follow Mode + plan detail). */}
+        {place?.id && (
+          <FavoriteButton placeId={place.id} source="card" style={styles.favoriteBtn} />
+        )}
+      </View>
 
       <View style={styles.content}>
         {(timeIcon || stop.suggestedArrival) && (
@@ -159,6 +166,11 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+  },
+  favoriteBtn: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
   },
   topMetaRow: {
     flexDirection: 'row',

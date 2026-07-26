@@ -50,6 +50,11 @@ function upsellCopy(
         title: t('gate.savedPlansTitle'),
         body: t('gate.savedPlansBody', { limit: action.limit ?? 3 }),
       };
+    case 'favorites_limit_reached':
+      return {
+        title: t('gate.favoritesLimitTitle'),
+        body: t('gate.favoritesLimitBody', { limit: action.limit ?? 50 }),
+      };
   }
 }
 

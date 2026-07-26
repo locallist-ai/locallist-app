@@ -106,6 +106,17 @@ describe('useGateHandler.presentGate', () => {
     expect(lastAlert().title).toBe('gate.savedPlansTitle');
   });
 
+  it('upsell favorites_limit_reached → título de favoritos + CTA a /paywall', () => {
+    const { result } = renderHook(() => useGateHandler());
+    result.current.presentGate({
+      type: 'upsell', code: 'favorites_limit_reached',
+      used: 50, limit: 50, resetsAt: null, requestedDays: null, maxDays: null, plusMaxDays: null,
+    });
+    expect(lastAlert().title).toBe('gate.favoritesLimitTitle');
+    pressCta('gate.upgradeCta');
+    expect(mockPush).toHaveBeenCalledWith('/paywall');
+  });
+
   it('soft_throttle → Alert de daily cap SIN CTA de upgrade', () => {
     const { result } = renderHook(() => useGateHandler());
     const msg = result.current.presentGate({ type: 'soft_throttle' });
