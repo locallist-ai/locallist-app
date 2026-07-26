@@ -10,9 +10,11 @@
  *    logout, alongside the rest of the auth-owned state.
  *  - `useFavorites()` is the UI hook: it exposes the id set, a `loading`/`loaded`
  *    flag, and an OPTIMISTIC `toggle(placeId, source)` that reverts if the API
- *    fails. It owns the guest/gate policy (a guest never calls the API — the
+ *    fails, with a per-place in-flight guard (a double-tap never races PUT vs
+ *    DELETE). It owns the guest/gate policy (a guest never calls the API — the
  *    heart records a single pending intent and presents the signup gate; the
- *    intent is replayed by `applyPendingFavorite` after login).
+ *    intent is replayed by `applyPendingFavorite` after login, and DISCARDED if
+ *    the guest dismisses the gate without going to login).
  *
  * The id set is in-memory only (never persisted): it is re-fetched on every
  * authenticated start, mirroring how the backend is the source of truth.
@@ -33,6 +35,10 @@ let _loading = false;
 // Single pending intent (last-wins), non-persistent: a guest tapped a heart and
 // must sign up first; replayed once after login, then dropped.
 let _pendingFavoritePlaceId: string | null = null;
+// Per-place in-flight guard: a second tap on the same heart while its PUT/DELETE
+// is still pending is IGNORED, so PUT and DELETE for one place can never race
+// out of order (spurious events / backend-local divergence on double-tap).
+const _inFlight = new Set<string>();
 const _subs = new Set<() => void>();
 
 function _notify(): void {
@@ -106,6 +112,7 @@ export function clearFavorites(): void {
   _loaded = false;
   _loading = false;
   _pendingFavoritePlaceId = null;
+  _inFlight.clear();
   _notify();
 }
 
@@ -163,42 +170,52 @@ export function useFavorites(): UseFavorites {
     async (placeId: string, source: FavoriteSource) => {
       // Guest: never hit the API. Record a single pending intent and present the
       // signup gate; it is replayed after login by `applyPendingFavorite`.
+      // Dismissing the gate WITHOUT going to login clears the pending: otherwise
+      // a user who registers days later through another path would get a
+      // phantom favorite applied they no longer remember.
       if (!isAuthenticated) {
         setPendingFavorite(placeId);
-        presentGate({ type: 'signup_required' });
+        presentGate({ type: 'signup_required' }, { onDismiss: clearPendingFavorite });
         return;
       }
 
-      const wasFavorited = _ids.has(placeId);
-      // Optimistic flip.
-      _applyLocal(placeId, !wasFavorited);
+      // In-flight guard: ignore a tap on a place whose op is still pending.
+      if (_inFlight.has(placeId)) return;
+      _inFlight.add(placeId);
+      try {
+        const wasFavorited = _ids.has(placeId);
+        // Optimistic flip.
+        _applyLocal(placeId, !wasFavorited);
 
-      const res = wasFavorited
-        ? await deleteFavorite(placeId)
-        : await putFavorite(placeId);
-      const ok = res.status >= 200 && res.status < 300;
+        const res = wasFavorited
+          ? await deleteFavorite(placeId)
+          : await putFavorite(placeId);
+        const ok = res.status >= 200 && res.status < 300;
 
-      if (ok) {
-        track({ event: wasFavorited ? 'favorite_removed' : 'favorite_added', source });
-        return;
+        if (ok) {
+          track({ event: wasFavorited ? 'favorite_removed' : 'favorite_added', source });
+          return;
+        }
+
+        // Failure — revert the optimistic flip.
+        _applyLocal(placeId, wasFavorited);
+
+        const action = mapGateError(res.status, res.errorBody);
+        if (action.type === 'upsell' && action.code === 'favorites_limit_reached') {
+          track({ event: 'favorites_limit_hit' });
+          presentGate(action);
+          return;
+        }
+        if (action.type === 'signup_required') {
+          // A stale token expired mid-flight; steer to signup rather than fail silently.
+          presentGate(action);
+          return;
+        }
+        // 404 (place unpublished) / network: revert already happened, stay quiet.
+        logger.warn('favorite toggle failed', { status: res.status });
+      } finally {
+        _inFlight.delete(placeId);
       }
-
-      // Failure — revert the optimistic flip.
-      _applyLocal(placeId, wasFavorited);
-
-      const action = mapGateError(res.status, res.errorBody);
-      if (action.type === 'upsell' && action.code === 'favorites_limit_reached') {
-        track({ event: 'favorites_limit_hit' });
-        presentGate(action);
-        return;
-      }
-      if (action.type === 'signup_required') {
-        // A stale token expired mid-flight; steer to signup rather than fail silently.
-        presentGate(action);
-        return;
-      }
-      // 404 (place unpublished) / network: revert already happened, stay quiet.
-      logger.warn('favorite toggle failed', { status: res.status });
     },
     [isAuthenticated, presentGate],
   );

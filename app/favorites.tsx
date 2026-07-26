@@ -20,6 +20,24 @@ import type { Place } from '../lib/types';
 
 const PAGE_SIZE = 20;
 
+/**
+ * Pagination model — the offset FOLLOWS THE BACKEND, never the raw local array:
+ *
+ * A local removal (heart tap) optimistically DELETEs server-side, so the
+ * backend list shrinks by exactly the rows filtered out locally. `visible`
+ * (loaded rows still in the id set) is therefore congruent with the backend's
+ * prefix, and `visible.length` is the correct offset for the next page. Using
+ * `places.length` (the raw array, removed rows included) would over-shoot the
+ * shrunken backend list and permanently skip rows (adversarial review MAJOR 1).
+ *
+ * On every appended fetch, locally-removed rows are PURGED from `places`: the
+ * fresh response's `total` already excludes them server-side, so keeping them
+ * would double-count removals in `effectiveTotal`. Between fetches,
+ * `effectiveTotal` (last backend total minus removals since that fetch) keeps
+ * the empty state and `hasMore` honest: empty shows ONLY when the user truly
+ * has no favorites left, and clearing out a whole loaded page auto-loads the
+ * next one instead of dead-ending on a false "no favorites" (MAJOR 2).
+ */
 export default function FavoritesScreen() {
   const { t } = useTranslation();
   // `loaded` gates the id-based filter so a slow id fetch never flashes the list
@@ -32,6 +50,14 @@ export default function FavoritesScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Optimistic removal: a heart-tap drops the id from the store; filtering by the
+  // live set makes the row vanish instantly and reappear on API revert.
+  const visible = loaded ? places.filter((p) => ids.has(p.id)) : places;
+  // Rows removed locally AFTER the last fetch (each fetch purge resets this to 0).
+  const removedSinceFetch = places.length - visible.length;
+  const effectiveTotal = Math.max(0, total - removedSinceFetch);
+  const hasMore = visible.length < effectiveTotal;
 
   const fetchPage = useCallback(async (offset: number): Promise<Place[] | null> => {
     const res = await getFavorites(PAGE_SIZE, offset);
@@ -52,7 +78,11 @@ export default function FavoritesScreen() {
 
   useEffect(() => {
     loadFirstPage();
-  }, [loadFirstPage]);
+    // Mount-only on purpose: `fetchPage` depends on `t`, whose identity is not
+    // guaranteed stable across renders — the initial load must never refire and
+    // clobber the paginated list with page 0.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -62,22 +92,30 @@ export default function FavoritesScreen() {
   }, [fetchPage]);
 
   const onEndReached = useCallback(async () => {
-    if (loadingMore || places.length >= total) return;
+    if (loadingMore || !hasMore) return;
     setLoadingMore(true);
-    const page = await fetchPage(places.length);
-    if (page && page.length > 0) {
-      // Dedupe defensively against overlapping offsets after removals.
+    // Offset = visible rows: congruent with the backend prefix (see header note).
+    const page = await fetchPage(visible.length);
+    if (page) {
       setPlaces((prev) => {
-        const seen = new Set(prev.map((p) => p.id));
-        return [...prev, ...page.filter((p) => !seen.has(p.id))];
+        // Purge locally-removed rows: the response's `total` already excludes
+        // them, so leaving them in the raw array would double-count removals.
+        const kept = loaded ? prev.filter((p) => ids.has(p.id)) : prev;
+        // Dedupe defensively against overlapping offsets.
+        const seen = new Set(kept.map((p) => p.id));
+        return [...kept, ...page.filter((p) => !seen.has(p.id))];
       });
     }
     setLoadingMore(false);
-  }, [loadingMore, places.length, total, fetchPage]);
+  }, [loadingMore, hasMore, visible.length, fetchPage, ids, loaded]);
 
-  // Optimistic removal: a heart-tap drops the id from the store; filtering by the
-  // live set makes the row vanish instantly and reappear on API revert.
-  const visible = loaded ? places.filter((p) => ids.has(p.id)) : places;
+  // MAJOR 2 guard: if the user cleared every loaded row but the backend still
+  // has more favorites, fetch the next page instead of painting a false empty
+  // state (which would unmount the FlatList and dead-end the screen).
+  useEffect(() => {
+    if (initialLoading || refreshing || loadingMore || error) return;
+    if (visible.length === 0 && hasMore) onEndReached();
+  }, [initialLoading, refreshing, loadingMore, error, visible.length, hasMore, onEndReached]);
 
   const renderItem = useCallback(
     ({ item }: { item: Place }) => {
@@ -124,7 +162,9 @@ export default function FavoritesScreen() {
     );
   }
 
-  if (visible.length === 0) {
+  // Empty ONLY when the user truly has nothing left (backend total minus local
+  // removals) — never just because the loaded page was cleared out (MAJOR 2).
+  if (effectiveTotal === 0) {
     return (
       <View style={s.center}>
         <Ionicons name="heart-outline" size={56} color={colors.sunsetOrange} />
@@ -138,6 +178,15 @@ export default function FavoritesScreen() {
         >
           <Text style={s.exploreBtnText}>{t('favorites.exploreCta')}</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (visible.length === 0) {
+    // More favorites exist server-side; the auto-load effect is fetching them.
+    return (
+      <View style={s.center}>
+        <ActivityIndicator size="large" color={colors.electricBlue} />
       </View>
     );
   }

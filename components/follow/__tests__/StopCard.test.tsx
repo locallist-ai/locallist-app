@@ -37,8 +37,16 @@ jest.mock('@expo/vector-icons', () => ({
   Ionicons: () => null,
 }));
 
-// El corazón de favoritos tira de auth/gate/router; se aísla del foco de fotos.
-jest.mock('../../ui/FavoriteButton', () => ({ FavoriteButton: () => null }));
+// El corazón de favoritos tira de auth/gate/router; se aísla con un stub
+// OBSERVABLE (expone placeId/source) para poder asertar que StopCard lo monta.
+jest.mock('../../ui/FavoriteButton', () => {
+  const ReactActual = jest.requireActual('react');
+  const { Text } = jest.requireActual('react-native');
+  return {
+    FavoriteButton: ({ placeId, source }: { placeId: string; source: string }) =>
+      ReactActual.createElement(Text, { testID: 'favorite-button' }, `fav:${placeId}:${source}`),
+  };
+});
 
 const HTTPS_PHOTO = 'https://cdn.example.com/photo.jpg';
 
@@ -101,5 +109,15 @@ describe('StopCard', () => {
   it('renderiza el nombre del place desde stop.place (no una forma plana)', () => {
     render(<StopCard stop={makeStop(makePlace({ name: 'Café Central' }))} />);
     expect(screen.getByText('Café Central')).toBeTruthy();
+  });
+
+  it('monta el corazón de favoritos sobre la foto con el placeId y source "card"', () => {
+    render(<StopCard stop={makeStop(makePlace({ id: 'p1' }))} />);
+    expect(screen.getByText('fav:p1:card')).toBeTruthy();
+  });
+
+  it('sin place (stop huérfano) NO monta el corazón', () => {
+    render(<StopCard stop={makeStop(null)} />);
+    expect(screen.queryByTestId('favorite-button')).toBeNull();
   });
 });

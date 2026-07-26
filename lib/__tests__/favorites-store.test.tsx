@@ -5,9 +5,12 @@
  * Cubre:
  *  (a) toggle optimista + revert cuando la API falla.
  *  (b) invitado: NO llama a la API, presenta el gate de signup y guarda un
- *      pending intent que se aplica tras login (`applyPendingFavorite`).
+ *      pending intent que se aplica tras login (`applyPendingFavorite`);
+ *      descartar el gate limpia el pending (MINOR 2 — pending fantasma).
  *  (c) 403 favorites_limit_reached: revert + `favorites_limit_hit` + upsell.
  *  (d) loadFavoriteIds hidrata el set; clearFavorites lo vacía (logout).
+ *  (e) doble-tap: guard de op en vuelo por placeId — UNA llamada API, UN
+ *      evento, estado final coherente (MINOR 1).
  *
  * `../auth` y `../useGateHandler` se mockean (evita el ciclo de import y el
  * wiring de router/native); `gate-errors` queda REAL (mapeo puro).
@@ -122,6 +125,43 @@ describe('useFavorites.toggle (autenticado)', () => {
     expect(mockTrack).toHaveBeenCalledWith({ event: 'favorite_removed', source: 'list' });
   });
 
+  it('(e) doble-tap rápido: UNA llamada API, UN evento, estado final coherente', async () => {
+    const d = deferred<ApiRes>();
+    mockPut.mockReturnValue(d.promise);
+    const { result } = renderHook(() => useFavorites());
+
+    let first: Promise<void>;
+    let second: Promise<void>;
+    act(() => {
+      first = result.current.toggle('p9', 'card');
+      // Segundo tap sobre el MISMO place con el PUT aún en vuelo → ignorado.
+      // Sin el guard, el flip optimista lo convertiría en un DELETE concurrente.
+      second = result.current.toggle('p9', 'card');
+    });
+
+    expect(result.current.ids.has('p9')).toBe(true);
+
+    await act(async () => {
+      d.resolve(ok(200));
+      await Promise.all([first, second]);
+    });
+
+    // Exactamente una llamada (el PUT) y ningún DELETE espurio.
+    expect(mockPut).toHaveBeenCalledTimes(1);
+    expect(mockDelete).not.toHaveBeenCalled();
+    // Un solo evento y coherente con la operación real.
+    expect(mockTrack).toHaveBeenCalledTimes(1);
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'favorite_added', source: 'card' });
+    // Estado final: favorito puesto.
+    expect(result.current.ids.has('p9')).toBe(true);
+
+    // Tras resolverse, el guard se libera: un nuevo tap sí opera (DELETE).
+    mockDelete.mockResolvedValue(ok(204));
+    await act(async () => { await result.current.toggle('p9', 'card'); });
+    expect(mockDelete).toHaveBeenCalledTimes(1);
+    expect(result.current.ids.has('p9')).toBe(false);
+  });
+
   it('(c) 403 favorites_limit_reached: revert + favorites_limit_hit + upsell', async () => {
     mockPut.mockResolvedValue(
       fail(403, { error: 'favorites_limit_reached', used: 50, limit: 50 }),
@@ -150,8 +190,11 @@ describe('useFavorites.toggle (invitado) + pending intent', () => {
     // Sin llamada a la API.
     expect(mockPut).not.toHaveBeenCalled();
     expect(mockDelete).not.toHaveBeenCalled();
-    // Gate de signup presentado.
-    expect(mockPresentGate).toHaveBeenCalledWith({ type: 'signup_required' });
+    // Gate de signup presentado, con hook de descarte para limpiar el pending.
+    expect(mockPresentGate).toHaveBeenCalledWith(
+      { type: 'signup_required' },
+      { onDismiss: expect.any(Function) },
+    );
     // Pending intent registrado (el último gana).
     expect(getPendingFavorite()).toBe('p5');
 
@@ -162,6 +205,23 @@ describe('useFavorites.toggle (invitado) + pending intent', () => {
     expect(mockPut).toHaveBeenCalledWith('p5');
     expect(isFavoriteSync('p5')).toBe(true);
     expect(getPendingFavorite()).toBeNull();
+  });
+
+  it('descartar el gate de signup limpia el pending (MINOR 2 — pending fantasma)', async () => {
+    mockUseAuth.mockReturnValue({ isAuthenticated: false });
+    const { result } = renderHook(() => useFavorites());
+
+    await act(async () => { await result.current.toggle('p7', 'card'); });
+    expect(getPendingFavorite()).toBe('p7');
+
+    // El usuario cierra el gate sin ir a login ("quizás más tarde").
+    const opts = mockPresentGate.mock.calls[0][1] as { onDismiss: () => void };
+    act(() => { opts.onDismiss(); });
+
+    expect(getPendingFavorite()).toBeNull();
+    // Un registro días después por otra vía ya no aplica ningún fantasma.
+    await act(async () => { await applyPendingFavorite(); });
+    expect(mockPut).not.toHaveBeenCalled();
   });
 
   it('applyPendingFavorite es no-op sin pending', async () => {

@@ -73,14 +73,19 @@ export function useGateHandler() {
    * suitable for inline display (e.g. the wizard's error overlay), or `null`
    * for actions this hook does not own (`rate_limit`, `generic`) — the caller
    * keeps its existing inline handling for those.
+   *
+   * `opts.onDismiss` (signup gate only) fires when the user closes the prompt
+   * WITHOUT taking the CTA ("maybe later") — the hook-point for callers that
+   * staged a pending intent behind the gate (e.g. a guest heart tap) to discard
+   * it, so an abandoned gate never leaves a phantom intent behind.
    */
   const presentGate = useCallback(
-    (action: GateAction): string | null => {
+    (action: GateAction, opts?: { onDismiss?: () => void }): string | null => {
       switch (action.type) {
         case 'signup_required': {
           const body = t('gate.signupRequiredBody');
           Alert.alert(t('gate.signupRequiredTitle'), body, [
-            { text: t('gate.maybeLater'), style: 'cancel' },
+            { text: t('gate.maybeLater'), style: 'cancel', onPress: () => opts?.onDismiss?.() },
             { text: t('gate.signupCta'), onPress: () => router.push('/login') },
           ]);
           return body;

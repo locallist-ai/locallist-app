@@ -59,6 +59,23 @@ describe('useGateHandler.presentGate', () => {
     expect(mockPush).toHaveBeenCalledWith('/login');
   });
 
+  it('signup_required con onDismiss: "quizás más tarde" lo dispara; el CTA de login NO', () => {
+    const { result } = renderHook(() => useGateHandler());
+    const onDismiss = jest.fn();
+    result.current.presentGate({ type: 'signup_required' }, { onDismiss });
+
+    // Descartar el gate sin ir a login → onDismiss (el caller limpia su pending).
+    pressCta('gate.maybeLater');
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+
+    // El CTA a login no descarta: el pending debe sobrevivir al flujo de signup.
+    onDismiss.mockClear();
+    result.current.presentGate({ type: 'signup_required' }, { onDismiss });
+    pressCta('gate.signupCta');
+    expect(mockPush).toHaveBeenCalledWith('/login');
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
   it('upsell plan_limit_reached (con reset) → Alert con cuerpo de reset + CTA a Account', () => {
     const { result } = renderHook(() => useGateHandler());
     const action: GateAction = {

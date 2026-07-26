@@ -10,26 +10,20 @@ type Props = {
   placeId: string;
   source: FavoriteSource;
   size?: number;
-  /**
-   * `overlay` — a translucent dark bubble for use on top of a photo hero (white
-   * outline heart). `plain` — no bubble, for use on a light surface/row.
-   */
-  variant?: 'overlay' | 'plain';
   style?: StyleProp<ViewStyle>;
 };
 
 /**
  * Favorite affordance: a heart that fills (sunsetOrange) when the place is
- * favorited and reverts to an outline otherwise. The heart is ALWAYS an icon
- * (Ionicons), never an emoji, per the brand contract. Toggling is optimistic and
- * owned by `useFavorites`; a guest tap routes to the signup gate instead.
+ * favorited and reverts to a white outline otherwise, inside a translucent dark
+ * bubble for use on top of a photo hero. The heart is ALWAYS an icon (Ionicons),
+ * never an emoji, per the brand contract. Toggling is optimistic and owned by
+ * `useFavorites`; a guest tap routes to the signup gate instead.
  */
-export function FavoriteButton({ placeId, source, size = 24, variant = 'overlay', style }: Props) {
+export function FavoriteButton({ placeId, source, size = 24, style }: Props) {
   const { t } = useTranslation();
   const { ids, toggle } = useFavorites();
   const favorited = ids.has(placeId);
-
-  const outlineColor = variant === 'overlay' ? '#FFFFFF' : colors.textSecondary;
 
   return (
     <TouchableOpacity
@@ -41,11 +35,11 @@ export function FavoriteButton({ placeId, source, size = 24, variant = 'overlay'
       accessibilityLabel={favorited ? t('favorites.remove') : t('favorites.add')}
       style={style}
     >
-      <View style={variant === 'overlay' ? s.overlayBubble : undefined}>
+      <View style={s.overlayBubble}>
         <Ionicons
           name={favorited ? 'heart' : 'heart-outline'}
           size={size}
-          color={favorited ? colors.sunsetOrange : outlineColor}
+          color={favorited ? colors.sunsetOrange : '#FFFFFF'}
         />
       </View>
     </TouchableOpacity>
