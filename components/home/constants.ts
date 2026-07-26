@@ -73,6 +73,13 @@ export interface SubcategoryOption {
   id: string;
   label: string;
   emoji: string;
+  /**
+   * Key i18n para el label visible (COMPANY_SUBCATEGORIES). Cuando está
+   * presente, SubcategorySheet renderiza `t(labelKey)` en vez de `label`
+   * (que queda como fallback EN). Las subcategorías de interés NO la usan:
+   * llegan ya localizadas vía taxonomía (getInterestSubcategories).
+   */
+  labelKey?: TKeys;
   /** Branded MCI glyph para el chip (paperWhite bubble + sunsetOrange icon). */
   iconName?: keyof typeof MaterialCommunityIcons.glyphMap;
   /**
@@ -210,26 +217,26 @@ export const INTERESTS_STEP_INDEX_IN_STEPS = 2;
 // Place.suitableFor / bestFor en el catálogo.
 export const COMPANY_SUBCATEGORIES: Record<string, SubcategoryOption[]> = {
   solo: [
-    { id: 'backpacker', label: 'Backpacker', emoji: '\u{1F392}', iconName: 'bag-personal-outline' },
-    { id: 'digital-nomad', label: 'Digital nomad', emoji: '\u{1F4BB}', iconName: 'laptop' },
-    { id: 'business', label: 'Business', emoji: '\u{1F454}', iconName: 'briefcase-outline' },
-    { id: 'social', label: 'Social', emoji: '\u{1F4AC}', iconName: 'message-text-outline' },
+    { id: 'backpacker', label: 'Backpacker', labelKey: 'wizard.companySubBackpacker', emoji: '\u{1F392}', iconName: 'bag-personal-outline' },
+    { id: 'digital-nomad', label: 'Digital nomad', labelKey: 'wizard.companySubDigitalNomad', emoji: '\u{1F4BB}', iconName: 'laptop' },
+    { id: 'business', label: 'Business', labelKey: 'wizard.companySubBusiness', emoji: '\u{1F454}', iconName: 'briefcase-outline' },
+    { id: 'social', label: 'Social', labelKey: 'wizard.companySubSocial', emoji: '\u{1F4AC}', iconName: 'message-text-outline' },
   ],
   couple: [
-    { id: 'honeymoon', label: 'Honeymoon', emoji: '\u{1F48D}', iconName: 'ring' },
-    { id: 'dating', label: 'Dating', emoji: '\u{1F378}', iconName: 'heart-outline' },
-    { id: 'anniversary', label: 'Anniversary', emoji: '\u{1F381}', iconName: 'gift-outline' },
+    { id: 'honeymoon', label: 'Honeymoon', labelKey: 'wizard.companySubHoneymoon', emoji: '\u{1F48D}', iconName: 'ring' },
+    { id: 'dating', label: 'Dating', labelKey: 'wizard.companySubDating', emoji: '\u{1F378}', iconName: 'heart-outline' },
+    { id: 'anniversary', label: 'Anniversary', labelKey: 'wizard.companySubAnniversary', emoji: '\u{1F381}', iconName: 'gift-outline' },
   ],
   family: [
-    { id: 'with-kids', label: 'With kids', emoji: '\u{1F9D2}', iconName: 'human-child' },
-    { id: 'with-teens', label: 'With teens', emoji: '\u{1F3AE}', iconName: 'gamepad-variant-outline' },
-    { id: 'multi-gen', label: 'Multi-gen', emoji: '\u{1F46A}', iconName: 'account-group-outline' },
+    { id: 'with-kids', label: 'With kids', labelKey: 'wizard.companySubWithKids', emoji: '\u{1F9D2}', iconName: 'human-child' },
+    { id: 'with-teens', label: 'With teens', labelKey: 'wizard.companySubWithTeens', emoji: '\u{1F3AE}', iconName: 'gamepad-variant-outline' },
+    { id: 'multi-gen', label: 'Multi-gen', labelKey: 'wizard.companySubMultiGen', emoji: '\u{1F46A}', iconName: 'account-group-outline' },
   ],
   friends: [
-    { id: 'bachelor', label: 'Bachelor', emoji: '\u{1F37A}', iconName: 'beer-outline' },
-    { id: 'bachelorette', label: 'Bachelorette', emoji: '\u{1F478}', iconName: 'crown-outline' },
-    { id: 'group-trip', label: 'Group trip', emoji: '\u{1F46B}', iconName: 'account-multiple-outline' },
-    { id: 'birthday', label: 'Birthday', emoji: '\u{1F389}', iconName: 'cake-variant-outline' },
+    { id: 'bachelor', label: 'Bachelor', labelKey: 'wizard.companySubBachelor', emoji: '\u{1F37A}', iconName: 'beer-outline' },
+    { id: 'bachelorette', label: 'Bachelorette', labelKey: 'wizard.companySubBachelorette', emoji: '\u{1F478}', iconName: 'crown-outline' },
+    { id: 'group-trip', label: 'Group trip', labelKey: 'wizard.companySubGroupTrip', emoji: '\u{1F46B}', iconName: 'account-multiple-outline' },
+    { id: 'birthday', label: 'Birthday', labelKey: 'wizard.companySubBirthday', emoji: '\u{1F389}', iconName: 'cake-variant-outline' },
   ],
 };
 
