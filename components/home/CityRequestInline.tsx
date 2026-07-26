@@ -75,12 +75,6 @@ interface CityRequestInlineProps {
   promptLabel?: string;
   /** Success acknowledgement. Defaults to the shared `cityRequest.thanks`. */
   ackLabel?: string;
-  /**
-   * Fired once when the link is tapped and the input is revealed. Onboarding
-   * uses it to emit the `onboarding_city_selected {covered:false}` demand
-   * signal (the sole producer of that event); home has no reveal event.
-   */
-  onReveal?: () => void;
 }
 
 export function CityRequestInline({
@@ -88,7 +82,6 @@ export function CityRequestInline({
   variant,
   promptLabel,
   ackLabel,
-  onReveal,
 }: CityRequestInlineProps) {
   const { t } = useTranslation();
   const [revealed, setRevealed] = useState(false);
@@ -106,7 +99,6 @@ export function CityRequestInline({
 
   const handleReveal = () => {
     setRevealed(true);
-    onReveal?.();
     // autoFocus prop inside an animated tree crashes on iOS (CLAUDE.md); focus
     // via ref after the reveal instead.
     setTimeout(() => inputRef.current?.focus(), 50);

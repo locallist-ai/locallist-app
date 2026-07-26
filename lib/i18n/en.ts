@@ -404,16 +404,11 @@ export default {
     valueBullet1: 'We pick for you: one plan, not a hundred options',
     valueBullet2: 'Ready to follow, step by step',
     valueBullet3: 'Start free. Cancel anytime.',
-    // Screen 2 — city
-    cityTitle: 'Where are you headed next?',
-    citySubtitle: 'Pick a city we cover and see a real plan.',
-    cityNotListed: "Don't see your city?",
-    cityNotifyThanks: "Thanks. We'll let you know when we cover it.",
-    // Screen 3 — tastes
+    // Screen 2: tastes
     tasteTitle: 'What are you into?',
     tasteSubtitle: "Optional. Pick a few and we'll tailor your plan.",
     tasteBudgetTitle: "What's your budget?",
-    // Screen 4 — value preview
+    // Screen 3: value preview
     previewEyebrow: 'This is what you get',
     previewLoading: 'Building your preview...',
     previewYourCity: 'your city',

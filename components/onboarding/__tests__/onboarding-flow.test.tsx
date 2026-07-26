@@ -1,11 +1,13 @@
 /**
- * Onboarding orchestrator (`app/onboarding/index.tsx`): the four-step machine,
- * its analytics, prefs/trip-context writes, completion, and — critically — the
- * fix for the W1 dead-end (the inline login can be dismissed back to the flow).
+ * Onboarding orchestrator (`app/onboarding/index.tsx`): the three-step value
+ * machine (value, tastes, preview) plus the W5 paywall, its analytics,
+ * prefs writes, completion, and, critically, the fix for the W1 dead-end (the
+ * inline login can be dismissed back to the flow).
  *
- * The four screens, the background chrome and the login are mocked to expose
- * their callbacks as buttons; this test is about navigation + side effects, not
- * their visuals (covered by each screen's own test).
+ * The screens, the background chrome and the login are mocked to expose their
+ * callbacks as buttons; this test is about navigation + side effects, not their
+ * visuals (covered by each screen's own test). City selection is intentionally
+ * NOT part of onboarding (builder-first home, #91), so there is no city screen.
  */
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
@@ -13,15 +15,11 @@ import { Platform, BackHandler } from 'react-native';
 import OnboardingScreen from '../../../app/onboarding';
 import { track } from '../../../lib/analytics';
 import { completeOnboarding, setOnboardingPrefs } from '../../../lib/onboarding-store';
-import { setSelectedCity } from '../../../lib/trip-context-store';
 
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../lib/onboarding-store', () => ({
   completeOnboarding: jest.fn(() => Promise.resolve()),
   setOnboardingPrefs: jest.fn(() => Promise.resolve()),
-}));
-jest.mock('../../../lib/trip-context-store', () => ({
-  setSelectedCity: jest.fn(() => Promise.resolve()),
 }));
 jest.mock('../../../lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -61,27 +59,6 @@ jest.mock('../OnboardingValueScreen', () => {
         </TouchableOpacity>
         <TouchableOpacity testID="value-signin" onPress={onSignIn}>
           <Text>signin</Text>
-        </TouchableOpacity>
-      </>
-    ),
-  };
-});
-jest.mock('../OnboardingCityScreen', () => {
-  const { TouchableOpacity, Text } = jest.requireActual('react-native');
-  return {
-    OnboardingCityScreen: ({
-      onSelectCity,
-      onNotifyUncovered,
-    }: {
-      onSelectCity: (c: string, covered: boolean) => void;
-      onNotifyUncovered: () => void;
-    }) => (
-      <>
-        <TouchableOpacity testID="city-select" onPress={() => onSelectCity('Miami', true)}>
-          <Text>select Miami</Text>
-        </TouchableOpacity>
-        <TouchableOpacity testID="city-notify" onPress={onNotifyUncovered}>
-          <Text>notify me</Text>
         </TouchableOpacity>
       </>
     ),
@@ -154,11 +131,11 @@ jest.mock('../OnboardingPaywallStep', () => {
     ),
   };
 });
-// The login is mocked, but it MODELS its internal `choose` → `credentials`
+// The login is mocked, but it MODELS its internal `choose` to `credentials`
 // sub-step and publishes the same `onRegisterInnerBack` handler the real screen
 // does. Without modelling the sub-step, a flat `LOGIN` node cannot reveal the
 // over-dismiss bug (physical back tearing the whole login down instead of
-// stepping credentials → choose).
+// stepping credentials to choose).
 jest.mock('../../../app/login', () => {
   const { useState, useEffect } = jest.requireActual('react');
   const { TouchableOpacity, Text } = jest.requireActual('react-native');
@@ -242,27 +219,20 @@ describe('onboarding orchestrator — navigation + side effects', () => {
     expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_step_viewed', step: 'value' });
   });
 
-  it('walks value → city → interests → preview → paywall → complete with the right side effects', async () => {
+  it('walks value → interests → preview → paywall → complete with the right side effects', async () => {
     render(<OnboardingScreen />);
 
-    // value → city
+    // value → interests
     fireEvent.press(screen.getByTestId('value-start'));
     expect(screen.getByText('step:1')).toBeTruthy();
-    expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_step_viewed', step: 'city' });
-
-    // city → interests (persists city + trip context, fires city_selected)
-    fireEvent.press(screen.getByTestId('city-select'));
-    expect(setSelectedCity).toHaveBeenCalledWith('Miami');
-    expect(setOnboardingPrefs).toHaveBeenCalledWith({ city: 'Miami' });
-    expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_city_selected', city: 'Miami', covered: true });
-    expect(screen.getByText('step:2')).toBeTruthy();
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_step_viewed', step: 'interests' });
 
     // interests → preview (persists taste prefs)
     fireEvent.press(screen.getByTestId('taste-continue'));
     expect(setOnboardingPrefs).toHaveBeenCalledWith({ interests: ['food'], budget: 'moderate' });
-    expect(screen.getByText('step:3')).toBeTruthy();
-    // Preview receives the preselected city.
-    expect(screen.getByText('create for Miami')).toBeTruthy();
+    expect(screen.getByText('step:2')).toBeTruthy();
+    // Preview no longer receives a city (chosen in the home now).
+    expect(screen.getByText('create for null')).toBeTruthy();
 
     // preview → paywall step (W5). "Create my plan" no longer completes: it
     // advances to the paywall, which fires its step_viewed and completion later.
@@ -282,7 +252,6 @@ describe('onboarding orchestrator — navigation + side effects', () => {
   it('paywall step: a purchase completes onboarding with skippedPaywall:false', async () => {
     render(<OnboardingScreen />);
     fireEvent.press(screen.getByTestId('value-start'));
-    fireEvent.press(screen.getByTestId('city-select'));
     fireEvent.press(screen.getByTestId('taste-continue'));
     fireEvent.press(screen.getByTestId('preview-create'));
     expect(screen.getByTestId('paywall-step')).toBeTruthy();
@@ -297,14 +266,13 @@ describe('onboarding orchestrator — navigation + side effects', () => {
   it('paywall step: back returns to the preview without completing', () => {
     render(<OnboardingScreen />);
     fireEvent.press(screen.getByTestId('value-start'));
-    fireEvent.press(screen.getByTestId('city-select'));
     fireEvent.press(screen.getByTestId('taste-continue'));
     fireEvent.press(screen.getByTestId('preview-create'));
     expect(screen.getByTestId('paywall-step')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('paywall-step-back'));
-    // Back on the preview (step 3), paywall dismissed, nothing completed.
-    expect(screen.getByText('create for Miami')).toBeTruthy();
+    // Back on the preview (step 2), paywall dismissed, nothing completed.
+    expect(screen.getByText('create for null')).toBeTruthy();
     expect(screen.queryByTestId('paywall-step')).toBeNull();
     expect(completeOnboarding).not.toHaveBeenCalled();
   });
@@ -314,7 +282,6 @@ describe('onboarding orchestrator — navigation + side effects', () => {
   it('paywall step: step_viewed(paywall) is not re-fired on back-and-forward', () => {
     render(<OnboardingScreen />);
     fireEvent.press(screen.getByTestId('value-start'));
-    fireEvent.press(screen.getByTestId('city-select'));
     fireEvent.press(screen.getByTestId('taste-continue'));
     fireEvent.press(screen.getByTestId('preview-create')); // → paywall (viewed once)
     fireEvent.press(screen.getByTestId('paywall-step-back')); // → preview (already seen)
@@ -333,18 +300,16 @@ describe('onboarding orchestrator — navigation + side effects', () => {
   it('persists a deselected budget as null (unconditional write, symmetric with interests)', () => {
     render(<OnboardingScreen />);
     fireEvent.press(screen.getByTestId('value-start'));
-    fireEvent.press(screen.getByTestId('city-select'));
     fireEvent.press(screen.getByTestId('taste-continue-nobudget'));
     expect(setOnboardingPrefs).toHaveBeenCalledWith({ interests: ['food'], budget: null });
-    expect(screen.getByText('step:3')).toBeTruthy();
+    expect(screen.getByText('step:2')).toBeTruthy();
   });
 
   it('Skip on tastes still advances to preview', () => {
     render(<OnboardingScreen />);
     fireEvent.press(screen.getByTestId('value-start'));
-    fireEvent.press(screen.getByTestId('city-select'));
     fireEvent.press(screen.getByTestId('taste-skip'));
-    expect(screen.getByText('step:3')).toBeTruthy();
+    expect(screen.getByText('step:2')).toBeTruthy();
   });
 
   it('back navigation steps the flow backwards', () => {
@@ -371,39 +336,21 @@ describe('onboarding orchestrator — navigation + side effects', () => {
     expect(completeOnboarding).not.toHaveBeenCalled();
   });
 
-  // MINOR: analytics can never see demand for uncovered cities because the grid
-  // only lists covered ones. Notify-me is the sole `covered:false` producer.
-  it('notify-me for an uncovered city fires city_selected {covered:false} without advancing', () => {
-    render(<OnboardingScreen />);
-    fireEvent.press(screen.getByTestId('value-start')); // → city step
-    expect(screen.getByText('step:1')).toBeTruthy();
-
-    fireEvent.press(screen.getByTestId('city-notify'));
-    expect(mockTrack).toHaveBeenCalledWith({
-      event: 'onboarding_city_selected',
-      city: '',
-      covered: false,
-    });
-    // Uncovered selection must NOT advance or write a city.
-    expect(screen.getByText('step:1')).toBeTruthy();
-    expect(setSelectedCity).not.toHaveBeenCalled();
-  });
-
   // MINOR: back-navigation must not re-emit `step_viewed` for steps already seen,
   // or the funnel view counts inflate.
   it('does not re-fire step_viewed when navigating back to an already-seen step', () => {
     render(<OnboardingScreen />);
-    fireEvent.press(screen.getByTestId('value-start')); // value → city (city viewed)
-    fireEvent.press(screen.getByTestId('bg-back')); // city → value (already seen)
-    fireEvent.press(screen.getByTestId('value-start')); // value → city again (already seen)
+    fireEvent.press(screen.getByTestId('value-start')); // value → interests (interests viewed)
+    fireEvent.press(screen.getByTestId('bg-back')); // interests → value (already seen)
+    fireEvent.press(screen.getByTestId('value-start')); // value → interests again (already seen)
 
     const stepViews = mockTrack.mock.calls
       .map((c) => c[0])
       .filter((e) => e.event === 'onboarding_step_viewed');
     const valueViews = stepViews.filter((e) => e.step === 'value');
-    const cityViews = stepViews.filter((e) => e.step === 'city');
+    const interestsViews = stepViews.filter((e) => e.step === 'interests');
     expect(valueViews).toHaveLength(1);
-    expect(cityViews).toHaveLength(1);
+    expect(interestsViews).toHaveLength(1);
   });
 });
 
@@ -464,8 +411,8 @@ describe('onboarding orchestrator — Android hardware back', () => {
 
   it('back on a non-first step steps the flow backwards (step 2 → step 1)', () => {
     render(<OnboardingScreen />);
-    fireEvent.press(screen.getByTestId('value-start')); // step 1
-    fireEvent.press(screen.getByTestId('city-select')); // covered → step 2
+    fireEvent.press(screen.getByTestId('value-start')); // step 1 (interests)
+    fireEvent.press(screen.getByTestId('taste-continue')); // → step 2 (preview)
     expect(screen.getByText('step:2')).toBeTruthy();
 
     expect(pressHardwareBack()).toBe(true); // consumed
@@ -485,13 +432,12 @@ describe('onboarding orchestrator — Android hardware back', () => {
   it('back on the paywall step retreats to the preview (not a dead-end)', () => {
     render(<OnboardingScreen />);
     fireEvent.press(screen.getByTestId('value-start'));
-    fireEvent.press(screen.getByTestId('city-select'));
     fireEvent.press(screen.getByTestId('taste-continue'));
     fireEvent.press(screen.getByTestId('preview-create'));
     expect(screen.getByTestId('paywall-step')).toBeTruthy();
 
     expect(pressHardwareBack()).toBe(true); // consumed
-    expect(screen.getByText('create for Miami')).toBeTruthy();
+    expect(screen.getByText('create for null')).toBeTruthy();
     expect(screen.queryByTestId('paywall-step')).toBeNull();
     expect(completeOnboarding).not.toHaveBeenCalled();
   });

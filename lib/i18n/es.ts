@@ -396,16 +396,11 @@ export default {
     valueBullet1: 'Elegimos por ti: un plan, no mil opciones',
     valueBullet2: 'Listo para seguir, paso a paso',
     valueBullet3: 'Empieza gratis. Cancela cuando quieras.',
-    // Pantalla 2 — ciudad
-    cityTitle: '¿A dónde vas a ir?',
-    citySubtitle: 'Elige una ciudad que cubrimos y mira un plan real.',
-    cityNotListed: '¿No ves tu ciudad?',
-    cityNotifyThanks: 'Gracias. Te avisaremos cuando la cubramos.',
-    // Pantalla 3 — gustos
+    // Pantalla 2: gustos
     tasteTitle: '¿Qué te gusta?',
     tasteSubtitle: 'Opcional. Elige algunos y adaptamos tu plan.',
     tasteBudgetTitle: '¿Cuál es tu presupuesto?',
-    // Pantalla 4 — vista previa de valor
+    // Pantalla 3: vista previa de valor
     previewEyebrow: 'Esto es lo que te llevas',
     previewLoading: 'Preparando tu vista previa...',
     previewYourCity: 'tu ciudad',

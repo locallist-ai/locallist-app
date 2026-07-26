@@ -21,26 +21,28 @@ const PREFS_KEY = 'onboarding_prefs';
 
 /**
  * Preferences captured during the onboarding flow (W2). Persisted as JSON under
- * `onboarding_prefs`. While the user is a guest these pre-fill the wizard/chat
- * (city is also mirrored to `trip-context-store` for preselection); on the first
- * successful login they are pushed to `/me/profile` and cleared (see
- * `lib/onboarding-sync.ts`). All fields optional — the flow is skippable.
+ * `onboarding_prefs`. While the user is a guest these pre-fill the wizard/chat;
+ * on the first successful login they are pushed to `/me/profile` and cleared
+ * (see `lib/onboarding-sync.ts`). All fields optional, the flow is skippable.
+ *
+ * NOTE: there is no `city` field. City is chosen in the home (builder-first,
+ * #91), never in onboarding, so nothing captures it here; the wizard reads the
+ * selected city from `trip-context-store`, not from these prefs.
  */
 export interface OnboardingPrefs {
-  /** City picked on screen 2 (also mirrored to trip-context for preselection). */
-  city?: string;
-  /** Interest ids picked on screen 3 (e.g. 'food', 'outdoors'). */
+  /** Interest ids picked on the tastes screen (e.g. 'food', 'outdoors'). */
   interests?: string[];
   /**
-   * Budget tier from screen 3 ('budget' | 'moderate' | 'premium'). `null` is a
-   * meaningful value: it records that the user actively deselected a tier ("no
-   * preference"), distinct from `undefined` ("never touched the control"). The
-   * orchestrator persists it unconditionally so a deselection survives a remount.
+   * Budget tier from the tastes screen ('budget' | 'moderate' | 'premium').
+   * `null` is a meaningful value: it records that the user actively deselected a
+   * tier ("no preference"), distinct from `undefined` ("never touched the
+   * control"). The orchestrator persists it unconditionally so a deselection
+   * survives a remount.
    */
   budget?: string | null;
-  /** Pace preference — reserved for an alternate screen-3 control. */
+  /** Pace preference, reserved for an alternate tastes-screen control. */
   pace?: string;
-  /** Dietary restriction ids — reserved. */
+  /** Dietary restriction ids, reserved. */
   dietary?: string[];
 }
 

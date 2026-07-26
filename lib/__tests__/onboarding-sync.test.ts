@@ -26,20 +26,18 @@ const mockClear = clearOnboardingPrefs as jest.Mock;
 beforeEach(() => jest.clearAllMocks());
 
 describe('mapPrefsToProfile', () => {
-  it('maps budget/pace/dietary/city to the profile upsert shape', () => {
+  it('maps budget/pace/dietary to the profile upsert shape', () => {
     expect(
       mapPrefsToProfile({
         budget: 'moderate',
         pace: 'relaxed',
         dietary: ['vegan'],
-        city: 'Miami',
         interests: ['food'],
       }),
     ).toEqual({
       defaultBudgetTier: 'moderate',
       pacePreference: 'relaxed',
       dietaryRestrictions: ['vegan'],
-      favoriteCity: 'Miami',
     });
   });
 
@@ -52,14 +50,14 @@ describe('mapPrefsToProfile', () => {
     expect(mapPrefsToProfile({})).toBeNull();
   });
 
-  it('maps a partial pref (city only)', () => {
-    expect(mapPrefsToProfile({ city: 'Lisboa' })).toEqual({ favoriteCity: 'Lisboa' });
+  it('maps a partial pref (budget only)', () => {
+    expect(mapPrefsToProfile({ budget: 'premium' })).toEqual({ defaultBudgetTier: 'premium' });
   });
 
   // MINOR-1: a deselected budget is persisted as `null`. The deferred sync must
-  // treat it like an unset field — never send a phantom `defaultBudgetTier`.
+  // treat it like an unset field, never send a phantom `defaultBudgetTier`.
   it('does not send defaultBudgetTier when budget is null', () => {
-    expect(mapPrefsToProfile({ budget: null, city: 'Miami' })).toEqual({ favoriteCity: 'Miami' });
+    expect(mapPrefsToProfile({ budget: null, pace: 'relaxed' })).toEqual({ pacePreference: 'relaxed' });
     expect(mapPrefsToProfile({ budget: null })).toBeNull();
   });
 });
@@ -73,17 +71,17 @@ describe('syncOnboardingPrefsToProfile', () => {
   });
 
   it('PUTs the mapped profile then clears prefs on success', async () => {
-    mockGetPrefs.mockReturnValue({ budget: 'premium', city: 'Miami' });
-    mockUpsert.mockResolvedValue({ data: { favoriteCity: 'Miami' }, error: null, status: 200 });
+    mockGetPrefs.mockReturnValue({ budget: 'premium', dietary: ['vegan'] });
+    mockUpsert.mockResolvedValue({ data: { defaultBudgetTier: 'premium' }, error: null, status: 200 });
 
     await syncOnboardingPrefsToProfile();
 
-    expect(mockUpsert).toHaveBeenCalledWith({ defaultBudgetTier: 'premium', favoriteCity: 'Miami' });
+    expect(mockUpsert).toHaveBeenCalledWith({ defaultBudgetTier: 'premium', dietaryRestrictions: ['vegan'] });
     expect(mockClear).toHaveBeenCalledTimes(1);
   });
 
   it('keeps prefs (no clear) when the PUT fails', async () => {
-    mockGetPrefs.mockReturnValue({ city: 'Miami' });
+    mockGetPrefs.mockReturnValue({ budget: 'premium' });
     mockUpsert.mockResolvedValue({ data: null, error: 'HTTP 500', status: 500 });
 
     await syncOnboardingPrefsToProfile();

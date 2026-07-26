@@ -150,11 +150,11 @@ interface PurchaseProps {
 }
 
 /**
- * The onboarding screens, in order: the four W2 value screens plus the W5
- * timeline paywall as the final step (value → city → interests → preview →
- * paywall).
+ * The onboarding screens, in order: the three W2 value screens plus the W5
+ * timeline paywall as the final step (value, interests, preview, paywall).
+ * City is chosen in the home (builder-first), never in onboarding.
  */
-export type OnboardingStepName = 'value' | 'city' | 'interests' | 'preview' | 'paywall';
+export type OnboardingStepName = 'value' | 'interests' | 'preview' | 'paywall';
 
 export type AppEvent =
   // Auth
@@ -163,12 +163,9 @@ export type AppEvent =
   // Onboarding / guest mode (first-run funnel)
   | { event: 'guest_mode_entered' }
   | { event: 'onboarding_started' }
-  // Each value/city/interests/preview/paywall screen becoming visible (once per
+  // Each value/interests/preview/paywall screen becoming visible (once per
   // step, deduped by the orchestrator's seenSteps so back-nav never re-emits).
   | { event: 'onboarding_step_viewed'; step: OnboardingStepName }
-  // City chosen on screen 2. `covered` is false for the "my city isn't here"
-  // notify-me path (the live grid only lists covered cities).
-  | { event: 'onboarding_city_selected'; city: string; covered: boolean }
   // Demanda de una ciudad no cubierta enviada al backend (`POST /cities/request`).
   // Solo en éxito (201/200). SIN PII: nunca se manda el texto de la ciudad (ya
   // vive en BBDD); `source` = superficie desde la que se pidió.
