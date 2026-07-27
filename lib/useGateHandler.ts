@@ -53,7 +53,7 @@ function upsellCopy(
     case 'favorites_limit_reached':
       return {
         title: t('gate.favoritesLimitTitle'),
-        body: t('gate.favoritesLimitBody', { limit: action.limit ?? 50 }),
+        body: t('gate.favoritesLimitBody', { limit: action.limit ?? 20 }),
       };
     case 'import_requires_plus':
       return { title: t('gate.importTitle'), body: t('gate.importBody') };

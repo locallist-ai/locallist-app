@@ -127,7 +127,7 @@ describe('useGateHandler.presentGate', () => {
     const { result } = renderHook(() => useGateHandler());
     result.current.presentGate({
       type: 'upsell', code: 'favorites_limit_reached',
-      used: 50, limit: 50, resetsAt: null, requestedDays: null, maxDays: null, plusMaxDays: null,
+      used: 20, limit: 20, resetsAt: null, requestedDays: null, maxDays: null, plusMaxDays: null,
     });
     expect(lastAlert().title).toBe('gate.favoritesLimitTitle');
     pressCta('gate.upgradeCta');

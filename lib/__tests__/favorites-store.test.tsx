@@ -164,7 +164,7 @@ describe('useFavorites.toggle (autenticado)', () => {
 
   it('(c) 403 favorites_limit_reached: revert + favorites_limit_hit + upsell', async () => {
     mockPut.mockResolvedValue(
-      fail(403, { error: 'favorites_limit_reached', used: 50, limit: 50 }),
+      fail(403, { error: 'favorites_limit_reached', used: 20, limit: 20 }),
     );
     const { result } = renderHook(() => useFavorites());
 
@@ -175,7 +175,7 @@ describe('useFavorites.toggle (autenticado)', () => {
     expect(mockTrack).toHaveBeenCalledWith({ event: 'favorites_limit_hit' });
     // El gate recibe la acción de upsell mapeada por gate-errors (real).
     expect(mockPresentGate).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'upsell', code: 'favorites_limit_reached', limit: 50 }),
+      expect.objectContaining({ type: 'upsell', code: 'favorites_limit_reached', limit: 20 }),
     );
   });
 });
