@@ -475,7 +475,6 @@ export default {
     updateNeededBody: 'Importar desde un vídeo necesita una versión más reciente de la app. Actualiza para usarlo.',
     permissionDeniedTitle: 'Falta acceso a fotos',
     permissionDeniedBody: 'Permite el acceso a la fototeca en Ajustes para elegir un vídeo o una imagen.',
-    uploading: 'Subiendo tu vídeo',
     uploadingPercent: 'Subiendo {{percent}}%',
     analyzing: 'Buscando sitios en tu vídeo',
     // Títulos editoriales por fase + los dos pasos honestos de la pantalla de progreso.

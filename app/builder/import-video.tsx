@@ -54,7 +54,7 @@ export default function ImportVideoScreen() {
       ) : null}
 
       {phase === 'uploading' || phase === 'analyzing' ? (
-        <ImportProgress phase={phase} progress={progress} paddingTop={insets.top} />
+        <ImportProgress phase={phase} progress={progress} />
       ) : phase === 'results' ? (
         <ImportResults
           candidates={candidates}

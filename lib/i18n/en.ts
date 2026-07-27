@@ -487,7 +487,6 @@ export default {
     permissionDeniedTitle: 'Photo access needed',
     permissionDeniedBody: 'Allow photo library access in Settings to pick a video or photo.',
     // Upload / analysis progress.
-    uploading: 'Uploading your video',
     uploadingPercent: 'Uploading {{percent}}%',
     analyzing: 'Finding places in your video',
     // Editorial phase titles + the two honest steps of the progress screen.
