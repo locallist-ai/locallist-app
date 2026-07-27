@@ -235,6 +235,12 @@ export default {
     nextStop: 'Next stop',
     expandSheet: 'Show stops',
     collapseSheet: 'Show map',
+    toThisStop: 'to this stop',
+    getDirections: 'Directions',
+    directionsTitle: 'Get directions',
+    directionsBody: 'Open turn-by-turn walking directions in your maps app.',
+    openAppleMaps: 'Apple Maps',
+    openGoogleMaps: 'Google Maps',
   },
   builder: {
     title: 'Build Your Plan',
@@ -625,6 +631,14 @@ export default {
     next: 'Next',
     stopFallback: 'Stop',
     openStreetMapCopyright: 'OpenStreetMap copyright',
+    recenterMap: 'Recenter map',
+  },
+  units: {
+    distanceKm: '{{value}} km',
+    distanceMeters: '{{value}} m',
+    durationMin: '{{value}} min',
+    durationHour: '{{value}} h',
+    durationHourMin: '{{h}} h {{min}} min',
   },
   brand: {
     // INTENCIONAL: el lema de marca se mantiene en inglés en TODOS los idiomas
