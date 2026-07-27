@@ -56,36 +56,6 @@ interface FollowDaySheetProps {
   onComplete?: () => void;
 }
 
-// Own component so each row's photo-load failure state is independent (and
-// follows the Rules of Hooks — this is called from inside a `.map()`).
-const DayStopThumb: React.FC<{
-  photoUrl?: string;
-  photoSource?: 'google' | 'external' | null;
-  gradient: [string, string];
-}> = ({ photoUrl, photoSource, gradient }) => {
-  const resolved = resolvePhotoUrl(photoUrl);
-  // Keyed by URL (not a boolean): if this row is reused for a different photo,
-  // the previous failure must not keep suppressing the new one.
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const isValid = isPhotoDisplayable(resolved, failedUrl);
-
-  return (
-    <View style={styles.thumbContainer}>
-      <LinearGradient colors={gradient} style={styles.thumb} />
-      {isValid && (
-        <Image
-          source={{ uri: resolved }}
-          style={[styles.thumb, StyleSheet.absoluteFill]}
-          contentFit="cover"
-          transition={200}
-          onError={() => setFailedUrl(resolved)}
-        />
-      )}
-      {isValid && photoSource === 'google' && <PhotoAttribution variant="compact" />}
-    </View>
-  );
-};
-
 export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
   allStops,
   currentIndex,
@@ -195,6 +165,70 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
     ? TIME_BLOCK_ICON[currentStop.timeBlock] ?? DEFAULT_STOP_ICON
     : DEFAULT_STOP_ICON;
 
+  // --- Stop pagination (within the current day) ---
+  // The sheet always mirrors `currentIndex`, so the stop shown here is also the
+  // one the map centers on. The arrows just move `currentIndex` by ±1 within the
+  // day via the existing `onSelect(linearIndex)` contract — no separate "viewing
+  // vs following" state exists (changing day/stop moves the session too).
+  const dayPosition = dayItems.findIndex((it) => it.linearIndex === currentIndex);
+  const safeDayPos = dayPosition >= 0 ? dayPosition : 0;
+  const dayStopCount = dayItems.length;
+  const hasPrevStop = safeDayPos > 0;
+  const hasNextStop = safeDayPos < dayStopCount - 1;
+
+  const goToStop = useCallback(
+    (pos: number) => {
+      const target = dayItems[pos];
+      if (!target) return;
+      Haptics.selectionAsync();
+      onSelect(target.linearIndex);
+    },
+    [dayItems, onSelect],
+  );
+
+  const handleStopPrev = useCallback(() => {
+    if (safeDayPos > 0) goToStop(safeDayPos - 1);
+  }, [safeDayPos, goToStop]);
+
+  const handleStopNext = useCallback(() => {
+    if (safeDayPos < dayStopCount - 1) goToStop(safeDayPos + 1);
+  }, [safeDayPos, dayStopCount, goToStop]);
+
+  // Horizontal swipe to page between stops (arrows are the requirement; this is
+  // the cheap natural gesture on top). Fails to the vertical axis so the sheet's
+  // collapse pan is never stolen.
+  const stopSwipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-24, 24])
+        .failOffsetY([-18, 18])
+        .onEnd((e) => {
+          'worklet';
+          if (e.translationX <= -48) {
+            runOnJS(handleStopNext)();
+          } else if (e.translationX >= 48) {
+            runOnJS(handleStopPrev)();
+          }
+        }),
+    [handleStopNext, handleStopPrev],
+  );
+
+  // --- Day stepper ---
+  const dayPos = allDays.indexOf(currentDay);
+  const multiDay = allDays.length > 1;
+  const hasPrevDay = dayPos > 0;
+  const hasNextDay = dayPos >= 0 && dayPos < allDays.length - 1;
+
+  const goToDay = useCallback(
+    (targetPos: number) => {
+      const day = allDays[targetPos];
+      if (day == null || !onChangeDay) return;
+      Haptics.selectionAsync();
+      onChangeDay(day);
+    },
+    [allDays, onChangeDay],
+  );
+
   return (
     <Animated.View
       style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }, animatedSheetStyle]}
@@ -211,11 +245,57 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
         </View>
       </GestureDetector>
 
-      {/* Featured card — current stop with photo, name, rating, why */}
-      {place && (
-        <View style={styles.featuredCard}>
-          {/* Photo / gradient backdrop */}
-          <View style={styles.featuredPhoto}>
+      {/* Day stepper — one centered control: ‹ Day 2 of 3 › */}
+      <View style={styles.dayStepperRow}>
+        {multiDay && (
+          <TouchableOpacity
+            onPress={() => goToDay(dayPos - 1)}
+            disabled={!hasPrevDay}
+            style={[styles.stepperArrow, !hasPrevDay && styles.navArrowDisabled]}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !hasPrevDay }}
+            accessibilityLabel={t('follow.prevDay')}
+            testID="follow-day-prev"
+          >
+            <MaterialCommunityIcons
+              name="chevron-left"
+              size={26}
+              color={hasPrevDay ? colors.deepOcean : colors.borderColor}
+            />
+          </TouchableOpacity>
+        )}
+        <Text style={styles.dayStepperLabel} testID="follow-day-stepper-label">
+          {t('follow.dayStepper', { current: dayPos >= 0 ? dayPos + 1 : 1, total: allDays.length })}
+        </Text>
+        {multiDay && (
+          <TouchableOpacity
+            onPress={() => goToDay(dayPos + 1)}
+            disabled={!hasNextDay}
+            style={[styles.stepperArrow, !hasNextDay && styles.navArrowDisabled]}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !hasNextDay }}
+            accessibilityLabel={t('follow.nextDay')}
+            testID="follow-day-next"
+          >
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={26}
+              color={hasNextDay ? colors.deepOcean : colors.borderColor}
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Paginated stop card — one stop at a time, large, with arrows + swipe */}
+      {place ? (
+        <GestureDetector gesture={stopSwipeGesture}>
+          <View style={styles.featuredCard}>
+            {/* Photo / gradient backdrop */}
+            <View style={styles.featuredPhoto}>
             <LinearGradient colors={categoryGradient} style={StyleSheet.absoluteFill} />
             {isValidPhoto && (
               <Image
@@ -253,146 +333,104 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
                 </View>
               )}
             </View>
-          </View>
-
-          {/* Metadata strip */}
-          <View style={styles.featuredMeta}>
-            {typeof place.googleRating === 'number' && place.googleRating > 0 && (
-              <View style={styles.metaPill}>
-                <MaterialCommunityIcons name="star" size={13} color="#b45309" />
-                <Text style={styles.metaPillText}>
-                  {place.googleRating.toFixed(1)}
-                  {typeof place.googleReviewCount === 'number' && place.googleReviewCount > 0
-                    ? ` · ${place.googleReviewCount}`
-                    : ''}
-                </Text>
-              </View>
-            )}
-            {currentStop?.suggestedDurationMin && (
-              <View style={styles.metaPill}>
-                <MaterialCommunityIcons name="clock-outline" size={13} color={colors.deepOcean} />
-                <Text style={styles.metaPillText}>
-                  {currentStop.suggestedDurationMin >= 60
-                    ? t('stop.visitDurationLong', { h: Math.floor(currentStop.suggestedDurationMin / 60) })
-                    : t('stop.visitDuration', { min: currentStop.suggestedDurationMin })}
-                </Text>
-              </View>
-            )}
-            {place.priceRange && (
-              <View style={[styles.metaPill, styles.pricePill]}>
-                <Text style={styles.pricePillText}>
-                  {formatPriceLabel(place.priceRange, t)}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Why this place */}
-          {place.whyThisPlace?.length > 0 && (
-            <View style={styles.featuredWhy}>
-              <Text style={styles.featuredWhyText}>{place.whyThisPlace}</Text>
             </View>
-          )}
-        </View>
-      )}
 
-      {/* Day switcher */}
-      <View style={styles.daySwitcherRow}>
-        <Text style={styles.dayTitle}>{t('follow.dayLabel', { day: currentDay })}</Text>
-        {allDays.length > 1 && (
-          <View style={styles.daySwitcher}>
-            {allDays.map((d) => {
-              const active = d === currentDay;
-              return (
-                <TouchableOpacity
-                  key={d}
-                  onPress={() => {
-                    if (active || !onChangeDay) return;
-                    Haptics.selectionAsync();
-                    onChangeDay(d);
-                  }}
-                  style={[styles.dayChip, active && styles.dayChipActive]}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('follow.dayLabel', { day: d })}
-                >
-                  <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{d}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-      </View>
+            {/* Stop pager — arrows + position indicator (‹ 2 / 4 ›) */}
+            <View style={styles.stopPagerRow}>
+              <TouchableOpacity
+                onPress={handleStopPrev}
+                disabled={!hasPrevStop}
+                style={[styles.stopArrow, !hasPrevStop && styles.navArrowDisabled]}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !hasPrevStop }}
+                accessibilityLabel={t('follow.prevStop')}
+                testID="follow-stop-prev"
+              >
+                <MaterialCommunityIcons
+                  name="chevron-left"
+                  size={22}
+                  color={hasPrevStop ? colors.sunsetOrange : colors.borderColor}
+                />
+              </TouchableOpacity>
+              <Text style={styles.stopPosition} testID="follow-stop-position">
+                {t('follow.stopPosition', {
+                  current: safeDayPos + 1,
+                  total: Math.max(dayStopCount, 1),
+                })}
+              </Text>
+              <TouchableOpacity
+                onPress={handleStopNext}
+                disabled={!hasNextStop}
+                style={[styles.stopArrow, !hasNextStop && styles.navArrowDisabled]}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !hasNextStop }}
+                accessibilityLabel={t('follow.nextStop')}
+                testID="follow-stop-next"
+              >
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={22}
+                  color={hasNextStop ? colors.sunsetOrange : colors.borderColor}
+                />
+              </TouchableOpacity>
+            </View>
 
-      {/* Stop navigation list */}
-      <ScrollView
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {dayItems.map(({ stop, linearIndex }, idx) => {
-          const isActive = linearIndex === currentIndex;
-          const stopIcon = stop.timeBlock
-            ? TIME_BLOCK_ICON[stop.timeBlock] ?? DEFAULT_STOP_ICON
-            : DEFAULT_STOP_ICON;
-          const stopPhoto = stop.place?.photos?.[0];
-          const stopCategoryGradient: [string, string] =
-            CATEGORY_GRADIENT[stop.place?.category ?? 'Culture'] ?? ['#0f172a', '#1e293b'];
-          const isLast = idx === dayItems.length - 1;
-
-          return (
-            <TouchableOpacity
-              key={`${stop.placeId}-${idx}`}
-              onPress={() => onSelect(linearIndex)}
-              activeOpacity={0.85}
-              style={[styles.row, isActive && styles.rowActive]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
-              accessibilityLabel={stop.place?.name ?? t('a11y.stopFallback')}
+            {/* Metadata + why — scrollable so long content stays reachable in the large card */}
+            <ScrollView
+              style={styles.cardBody}
+              contentContainerStyle={styles.cardBodyContent}
+              showsVerticalScrollIndicator={false}
             >
-              {/* Time-block icon + connector */}
-              <View style={styles.timeCol}>
-                <View style={[styles.emojiBubble, isActive && styles.emojiBubbleActive]}>
-                  <MaterialCommunityIcons
-                    name={stopIcon}
-                    size={15}
-                    color={isActive ? '#FFFFFF' : colors.sunsetOrange}
-                  />
-                </View>
-                {!isLast && <View style={styles.connector} />}
-              </View>
-
-              {/* Name + neighborhood */}
-              <View style={styles.contentCol}>
-                <Text
-                  style={[styles.nameText, isActive && styles.nameTextActive]}
-                  numberOfLines={1}
-                >
-                  {stop.place?.name ?? 'Unknown place'}
-                </Text>
-                {stop.place?.neighborhood && (
-                  <Text style={styles.neighborhoodText} numberOfLines={1}>
-                    {stop.place.neighborhood}
-                  </Text>
+              {/* Metadata strip */}
+              <View style={styles.featuredMeta}>
+                {typeof place.googleRating === 'number' && place.googleRating > 0 && (
+                  <View style={styles.metaPill}>
+                    <MaterialCommunityIcons name="star" size={13} color="#b45309" />
+                    <Text style={styles.metaPillText}>
+                      {place.googleRating.toFixed(1)}
+                      {typeof place.googleReviewCount === 'number' && place.googleReviewCount > 0
+                        ? ` · ${place.googleReviewCount}`
+                        : ''}
+                    </Text>
+                  </View>
+                )}
+                {currentStop?.suggestedDurationMin && (
+                  <View style={styles.metaPill}>
+                    <MaterialCommunityIcons name="clock-outline" size={13} color={colors.deepOcean} />
+                    <Text style={styles.metaPillText}>
+                      {currentStop.suggestedDurationMin >= 60
+                        ? t('stop.visitDurationLong', { h: Math.floor(currentStop.suggestedDurationMin / 60) })
+                        : t('stop.visitDuration', { min: currentStop.suggestedDurationMin })}
+                    </Text>
+                  </View>
+                )}
+                {place.priceRange && (
+                  <View style={[styles.metaPill, styles.pricePill]}>
+                    <Text style={styles.pricePillText}>
+                      {formatPriceLabel(place.priceRange, t)}
+                    </Text>
+                  </View>
                 )}
               </View>
 
-              {/* Thumbnail */}
-              <DayStopThumb
-                photoUrl={stopPhoto}
-                photoSource={stop.place?.photoSource}
-                gradient={stopCategoryGradient}
-              />
-            </TouchableOpacity>
-          );
-        })}
-
-        {dayItems.length === 0 && (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>{t('follow.noStopsToday')}</Text>
+              {/* Why this place */}
+              {place.whyThisPlace?.length > 0 && (
+                <View style={styles.featuredWhy}>
+                  <Text style={styles.featuredWhyText}>{place.whyThisPlace}</Text>
+                </View>
+              )}
+            </ScrollView>
           </View>
-        )}
-      </ScrollView>
+        </GestureDetector>
+      ) : (
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>{t('follow.noStopsToday')}</Text>
+        </View>
+      )}
 
       <View style={styles.footer}>
         <TouchableOpacity
@@ -432,8 +470,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderColor,
   },
 
-  // --- Featured stop card ---
+  // --- Featured stop card (paginated: one stop at a time, large) ---
   featuredCard: {
+    flex: 1,
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
     borderRadius: 16,
@@ -441,9 +480,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgMain,
   },
   featuredPhoto: {
-    height: 140,
+    height: 200,
     position: 'relative',
     justifyContent: 'flex-end',
+  },
+  cardBody: {
+    flex: 1,
+  },
+  cardBodyContent: {
+    paddingBottom: spacing.sm,
   },
   featuredGradient: {
     ...StyleSheet.absoluteFillObject,
@@ -545,116 +590,60 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // --- Day switcher ---
-  daySwitcherRow: {
+  // --- Day stepper (centered ‹ Day 2 of 3 ›) ---
+  dayStepperRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: spacing.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
-  dayTitle: {
+  dayStepperLabel: {
     fontFamily: fonts.headingBold,
     fontSize: 18,
     color: colors.deepOcean,
+    textAlign: 'center',
+    minWidth: 120,
   },
-  daySwitcher: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  dayChip: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  stepperArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgMain,
     borderWidth: 1,
     borderColor: colors.borderColor,
   },
-  dayChipActive: {
-    backgroundColor: colors.sunsetOrange,
-    borderColor: colors.sunsetOrange,
-  },
-  dayChipText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
-    color: colors.deepOcean,
-  },
-  dayChipTextActive: {
-    color: '#FFFFFF',
-  },
 
-  // --- Stop navigation list ---
-  list: {
-    flex: 1,
-  },
-  listContent: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  row: {
+  // --- Stop pager (arrows + position indicator) ---
+  stopPagerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    gap: spacing.sm,
-    borderRadius: borderRadius.md,
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
   },
-  rowActive: {
-    backgroundColor: colors.sunsetOrange + '12',
-  },
-  timeCol: {
-    alignItems: 'center',
-    width: 36,
-  },
-  emojiBubble: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(242, 239, 233, 0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(249, 115, 22, 0.18)',
+  stopArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.sunsetOrangeLight,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.18)',
   },
-  emojiBubbleActive: {
-    backgroundColor: colors.sunsetOrange,
-    borderColor: colors.sunsetOrange,
-  },
-  connector: {
-    flex: 1,
-    width: 2,
-    backgroundColor: colors.borderColor,
-    marginTop: 2,
-    minHeight: 8,
-  },
-  contentCol: {
-    flex: 1,
-  },
-  nameText: {
-    fontFamily: fonts.headingSemiBold,
-    fontSize: 14,
-    color: colors.deepOcean,
-    lineHeight: 19,
-  },
-  nameTextActive: {
-    color: colors.sunsetOrange,
-  },
-  neighborhoodText: {
-    fontFamily: fonts.body,
-    fontSize: 12,
+  stopPosition: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
     color: colors.textSecondary,
-    marginTop: 1,
+    minWidth: 56,
+    textAlign: 'center',
   },
-  thumbContainer: {
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  thumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
+  navArrowDisabled: {
+    opacity: 0.4,
   },
 
   // --- Empty state ---
