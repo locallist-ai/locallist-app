@@ -91,6 +91,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `plan/PlanOverview.tsx` | Overview slide: owner variant (DraggableFlatList editor) + read-only variant, consumes both contexts |
 | `plan/DayStopsCarousel.tsx` | Per-stop slides for the current day inside the pager |
 | `plan/ChooserMode.tsx` + `plan/MineMode.tsx` + `plan/CuratedMode.tsx` + `plan/SelectionBar.tsx` | Plans tab modes: chooser cards, my-plans list + bulk-select, curated filter/list, bulk-delete bar (orchestrated by `app/(tabs)/plans.tsx`) |
+| `plan/ShareButton.tsx` | Owner share pill (Social S1): tap → `sharePlan` (POST idempotente) → Share sheet nativo con `https://locallist.ai/p/{shareToken}`; long-press tras compartir → ActionSheet re-compartir/revocar (`unsharePlan` + ConfirmModal, Alerts reintenables). Exporta `shouldShowShareButton` puro (nunca `id==='new'`; preview sí). Eventos `plan_share_opened`/`plan_share_revoked` sin ids. Montado por `app/plan/[id].tsx` |
 | `plan-editor/DaySection.tsx` | Editable day section with add-stop affordance |
 | `plan-editor/EditableStopCard.tsx` | Inline-editable stop row |
 | `plan-editor/SwipeableStopCard.tsx` | Swipe-to-delete stop row |
