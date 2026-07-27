@@ -342,7 +342,9 @@ export default function PlanDetailScreen() {
       </PlanEditorProvider>
 
       {/* Owner-only share affordance: floating pill top-right, mirroring the
-          back pill. Only for a persisted, owned plan (never new/preview). */}
+          back pill. Only for a persisted, owned plan: never id==='new'
+          (unpersisted draft); /plan/preview DOES qualify once effectivePlanId
+          resolves to the backend id (the preview plan is already persisted). */}
       {shouldShowShareButton({ isNew, isOwner, planId: effectivePlanId }) && (
         <ShareButton
           planId={effectivePlanId!}

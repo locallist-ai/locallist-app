@@ -7,7 +7,7 @@
  * (e) network error ⇒ retriable alert, no crash, no share sheet; (f) i18n parity.
  */
 import React from 'react';
-import { ActionSheetIOS, Alert, Share } from 'react-native';
+import { ActionSheetIOS, Alert, Share, TouchableOpacity } from 'react-native';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { ShareButton, shouldShowShareButton } from '../ShareButton';
 import { sharePlan, unsharePlan } from '../../../lib/api';
@@ -73,6 +73,12 @@ describe('shouldShowShareButton (visibility gate)', () => {
   it('(a) a brand-new draft is not shareable', () => {
     expect(shouldShowShareButton({ isNew: true, isOwner: true, planId: 'new' })).toBe(false);
   });
+  it('(a) the preview handoff IS shareable once its backend id resolves (already persisted)', () => {
+    // /plan/preview: isNew=false and planId=the resolved backend id.
+    expect(
+      shouldShowShareButton({ isNew: false, isOwner: true, planId: 'resolved-from-preview' }),
+    ).toBe(true);
+  });
   it('(a) no resolved plan id ⇒ hidden', () => {
     expect(shouldShowShareButton({ isNew: false, isOwner: true, planId: null })).toBe(false);
   });
@@ -116,8 +122,10 @@ describe('ShareButton', () => {
     expect(mockSharePlan).toHaveBeenCalledTimes(2);
   });
 
-  it('(c) two immediate taps fire a single POST (in-flight latch + disabled guard)', async () => {
-    // sharePlan stays pending across both taps.
+  it('(c) two immediate taps fire a single POST (disabled guard + latch combined)', async () => {
+    // NOT an isolated latch test: fireEvent.press flushes the setBusy re-render
+    // between taps, so `disabled` already blocks the second press. The isolated
+    // latch case is below.
     let resolve!: (v: unknown) => void;
     mockSharePlan.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
     render(<ShareButton planId="p1" />);
@@ -126,6 +134,23 @@ describe('ShareButton', () => {
     fireEvent.press(btn);
     expect(mockSharePlan).toHaveBeenCalledTimes(1);
     await act(async () => { resolve(shareOk('tok_abc')); });
+  });
+
+  it('(c) same-closure double invocation fires a single POST (in-flight latch isolated)', async () => {
+    // Two synchronous calls to the SAME render's onPress closure: no re-render
+    // between them, so `disabled` cannot intervene and only the inFlight ref
+    // latch stops the second POST (CityRequestInline pattern).
+    let resolve!: (v: unknown) => void;
+    mockSharePlan.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+    render(<ShareButton planId="p1" />);
+    const onPress = screen.UNSAFE_getByType(TouchableOpacity).props.onPress as () => void;
+    await act(async () => {
+      onPress();
+      onPress();
+    });
+    expect(mockSharePlan).toHaveBeenCalledTimes(1);
+    await act(async () => { resolve(shareOk('tok_abc')); });
+    expect(mockSharePlan).toHaveBeenCalledTimes(1);
   });
 
   it('(d) long-press once shared ⇒ ActionSheet ⇒ revoke ⇒ ConfirmModal ⇒ DELETE + feedback', async () => {
@@ -163,6 +188,33 @@ describe('ShareButton', () => {
     const cancel = await screen.findByText('common.cancel');
     fireEvent.press(cancel);
     expect(mockUnshare).not.toHaveBeenCalled();
+  });
+
+  it('(d) revoke network error shows a retriable alert (mirrors the POST path)', async () => {
+    mockSharePlan.mockResolvedValueOnce(shareOk('tok_abc'));
+    mockUnshare.mockResolvedValueOnce(netFail);
+    render(<ShareButton planId="p1" />);
+    fireEvent.press(getButton());
+    await waitFor(() => expect(shareSpy).toHaveBeenCalled());
+
+    actionSheetSpy.mockImplementationOnce((_opts, cb: (i: number) => void) => cb(1));
+    fireEvent(getButton(), 'longPress');
+    fireEvent.press(await screen.findByText('share.revokeConfirm'));
+
+    await waitFor(() => expect(mockUnshare).toHaveBeenCalledWith('p1'));
+    const errorCall = alertSpy.mock.calls.find((c) => c[0] === 'share.errorTitle');
+    expect(errorCall).toBeTruthy();
+    const buttons = errorCall![2] as Array<{ text: string; onPress?: () => void }>;
+    expect(buttons.some((b) => b.text === 'common.tryAgain')).toBe(true);
+    expect(mockTrack).not.toHaveBeenCalledWith({ event: 'plan_share_revoked' });
+
+    // The retry button actually re-fires the DELETE.
+    mockUnshare.mockResolvedValueOnce({ data: null, error: null, errorBody: null, status: 204 });
+    await act(async () => {
+      buttons.find((b) => b.text === 'common.tryAgain')!.onPress!();
+    });
+    expect(mockUnshare).toHaveBeenCalledTimes(2);
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'plan_share_revoked' });
   });
 
   it('(e) network error ⇒ retriable alert, no share sheet, no crash', async () => {

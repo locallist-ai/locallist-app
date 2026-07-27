@@ -23,8 +23,10 @@ const SHARE_LINK_BASE = 'https://locallist.ai/p';
 
 /**
  * Visibility rule for the owner share affordance: only a persisted, owned plan
- * (never a brand-new/preview draft) is shareable. A reader / non-owner never
- * sees it. Pure so it is testable without mounting the plan screen.
+ * is shareable. Never for id==='new' (nothing persisted yet); the /plan/preview
+ * handoff DOES qualify once its backend id resolves, because the preview plan
+ * is already persisted and owned by the caller (hub decision). A reader /
+ * non-owner never sees it. Pure so it is testable without mounting the screen.
  */
 export function shouldShowShareButton(params: {
   isNew: boolean;
@@ -35,8 +37,9 @@ export function shouldShowShareButton(params: {
 }
 
 interface ShareButtonProps {
-  /** Real plan id (never 'new'/'preview'; the caller only mounts this for a
-   *  persisted, owned plan). */
+  /** Real plan id, always persisted. Never the unpersisted 'new' draft; for
+   *  /plan/preview the caller passes the resolved backend id (the preview plan
+   *  is already persisted and owned, so sharing it is allowed). */
   planId: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -95,7 +98,11 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ planId, style }) => {
       track({ event: 'plan_share_revoked' });
       Alert.alert(t('share.revokedTitle'), t('share.revokedBody'));
     } else {
-      Alert.alert(t('share.errorTitle'), t('share.errorBody'));
+      // Retriable, mirroring the POST error path.
+      Alert.alert(t('share.errorTitle'), t('share.errorBody'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.tryAgain'), onPress: () => { void confirmRevoke(); } },
+      ]);
     }
   }, [planId, t]);
 
