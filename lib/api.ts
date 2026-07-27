@@ -261,6 +261,27 @@ export async function getPlanDetail(id: string, signal?: AbortSignal) {
   return api<PlanDetailResponse>(`/plans/${id}`, { signal });
 }
 
+// ─── Plan sharing (Social S1) ──────────────────────────────────────────────────
+// Contract (backend en despliegue):
+//   POST   /plans/{id}/share  → 200 { shareToken, visibility } · OWNER-only, idempotente
+//                               (private→unlisted; segunda llamada devuelve el mismo token) · 404 si no owner
+//   DELETE /plans/{id}/share  → revoca (unlisted→private); el enlace deja de resolver · 404 si no owner
+// El enlace canónico compartible: https://locallist.ai/p/{shareToken} (universal
+// links de Apple vendrán después; hoy el enlace es el artefacto compartible).
+
+export interface SharePlanResponse {
+  shareToken: string;
+  visibility: string;
+}
+
+export async function sharePlan(planId: string) {
+  return api<SharePlanResponse>(`/plans/${planId}/share`, { method: 'POST' });
+}
+
+export async function unsharePlan(planId: string) {
+  return api<void>(`/plans/${planId}/share`, { method: 'DELETE' });
+}
+
 // ─── Profile API ─────────────────────────────────────────────────────────────
 
 export async function getProfile() {

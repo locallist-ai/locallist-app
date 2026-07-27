@@ -180,6 +180,10 @@ export type AppEvent =
   // Content
   | { event: 'plan_viewed'; planId: string; source?: 'feed' | 'builder' | 'deep_link' }
   | { event: 'place_viewed'; placeId: string; planId?: string }
+  // Plan sharing (Social S1). SIN PII/ids: solo el flag del evento (abrir el share
+  // sheet nativo / revocar el enlace) para el funnel de sharing.
+  | { event: 'plan_share_opened' }
+  | { event: 'plan_share_revoked' }
   // Builder
   | { event: 'wizard_started'; city?: string }
   | { event: 'wizard_completed'; planId: string; city: string; days: number }
