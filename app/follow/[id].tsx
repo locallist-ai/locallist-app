@@ -24,10 +24,25 @@ import { FollowDaySheet } from '../../components/follow/FollowDaySheet';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { ProgressDots } from '../../components/ui/design-system';
 import { clearResume, getResume, setResume } from '../../lib/follow/resume-store';
+import { savePlan, loadPlan, removePlan } from '../../lib/follow/plan-store';
+import {
+  enqueueComplete,
+  flushQueue,
+  type QueuedMutation,
+} from '../../lib/follow/mutation-queue';
+import { prefetchDayPhotos } from '../../lib/follow/photo-prefetch';
 import type { PlanStop, PlanDetailResponse, RouteSegment } from '../../lib/types';
 import type { MapStop } from '../../components/map/PlanMap';
 
 type FollowSession = { id: string; planId: string; status: string };
+
+// Sender de la cola de mutaciones: reusa el cliente `api` (auto-refresh de JWT).
+// Vive a nivel de módulo porque no depende del render y lo comparten el flush de
+// arranque y el de `executeComplete`.
+const sendCompleteMutation = async (mutation: QueuedMutation): Promise<number> => {
+  const res = await api(`/follow/${mutation.sessionId}/complete`, { method: 'PATCH' });
+  return res.status;
+};
 
 const mapToMapStop = (planStop: PlanStop): MapStop | null => {
   const lat = planStop.place?.latitude;
@@ -57,6 +72,7 @@ export default function FollowModeScreen() {
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
   const [completeConfirmVisible, setCompleteConfirmVisible] = useState(false);
 
   const currentStopRef = allStops[currentIndex];
@@ -89,6 +105,13 @@ export default function FollowModeScreen() {
     void setResume(id, stop.dayNumber, stop.orderIndex);
   }, [id, currentIndex, allStops]);
 
+  // Prefetch de las fotos del día activo a la caché de disco de expo-image, para
+  // que se vean offline. Solo el día actual; silencioso y tolerante a fallos.
+  useEffect(() => {
+    if (dayStops.length === 0) return;
+    prefetchDayPhotos(dayStops);
+  }, [dayStops]);
+
   useEffect(() => {
     if (!isAuthenticated) {
       // A guest can deep-link straight into Follow Mode. Self-guard before any
@@ -101,34 +124,61 @@ export default function FollowModeScreen() {
     }
     let cancelled = false;
     const abortController = new AbortController();
+
+    // Vuelca cualquier `/complete` que quedara pendiente (p. ej. se completó un
+    // viaje sin red y la app se cerró) de forma oportunista al reabrir Follow
+    // Mode. No depende de netinfo: si sigue sin red, el flush conserva la cola.
+    void flushQueue(sendCompleteMutation);
+
+    // Pinta el plan en el estado y aplica la posición de reanudación. Devuelve
+    // los stops ordenados para poder resolver el resume-index.
+    const applyPlan = async (data: PlanDetailResponse, cached: boolean) => {
+      setFromCache(cached);
+      setPlanName(data.name);
+      setRouteSegments(data.routeSegments ?? []);
+      const stops = [...data.days]
+        .sort((a, b) => a.dayNumber - b.dayNumber)
+        .flatMap((d) => [...d.stops].sort((a, b) => a.orderIndex - b.orderIndex));
+      setAllStops(stops);
+
+      const resume = await getResume(id);
+      if (cancelled) return;
+      if (resume) {
+        const resumeIdx = stops.findIndex(
+          (s) => s.dayNumber === resume.dayNumber && s.orderIndex === resume.orderIndex,
+        );
+        if (resumeIdx >= 0) setCurrentIndex(resumeIdx);
+      }
+    };
+
     void (async () => {
       try {
         const planRes = await api<PlanDetailResponse>(`/plans/${id}`, {
           signal: abortController.signal,
         });
         if (cancelled) return;
-        if (!planRes.data) {
-          setError(planRes.error ?? t('follow.loadError'));
-          setLoading(false);
-          return;
+
+        if (planRes.data) {
+          // Red OK: pinta y persiste a disco para futuros arranques offline.
+          await applyPlan(planRes.data, false);
+          if (cancelled) return;
+          void savePlan(id, planRes.data);
+        } else {
+          // Sin datos (offline/timeout/404): intenta el plan persistido a disco.
+          const cached = await loadPlan(id);
+          if (cancelled) return;
+          if (cached) {
+            await applyPlan(cached, true);
+            if (cancelled) return;
+          } else {
+            setError(planRes.error ?? t('follow.loadError'));
+            setLoading(false);
+            return;
+          }
         }
 
-        setPlanName(planRes.data.name);
-        setRouteSegments(planRes.data.routeSegments ?? []);
-        const stops = [...planRes.data.days]
-          .sort((a, b) => a.dayNumber - b.dayNumber)
-          .flatMap((d) => [...d.stops].sort((a, b) => a.orderIndex - b.orderIndex));
-        setAllStops(stops);
-
-        const resume = await getResume(id);
-        if (cancelled) return;
-        if (resume) {
-          const resumeIdx = stops.findIndex(
-            (s) => s.dayNumber === resume.dayNumber && s.orderIndex === resume.orderIndex,
-          );
-          if (resumeIdx >= 0) setCurrentIndex(resumeIdx);
-        }
-
+        // `/follow/start` es best-effort: sin sesión (offline) el usuario sigue
+        // avanzando en local y `executeComplete` encola el complete igualmente.
         const sessionRes = await api<FollowSession>('/follow/start', {
           method: 'POST',
           body: { planId: id },
@@ -142,7 +192,15 @@ export default function FollowModeScreen() {
         setLoading(false);
       } catch (err) {
         logger.error('Follow Mode init failed', err);
-        if (!cancelled) {
+        if (cancelled) return;
+        // Último recurso: si algo lanzó, intenta el plan cacheado antes de rendirse.
+        const cached = await loadPlan(id).catch(() => null);
+        if (cancelled) return;
+        if (cached) {
+          await applyPlan(cached, true);
+          if (cancelled) return;
+          setLoading(false);
+        } else {
           setError(t('follow.loadError'));
           setLoading(false);
         }
@@ -169,9 +227,16 @@ export default function FollowModeScreen() {
     setCompleteConfirmVisible(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (session) {
-      await api(`/follow/${session.id}/complete`, { method: 'PATCH' });
+      // Encola durablemente el `/complete` ANTES de limpiar nada: si no hay red,
+      // la mutación sobrevive al cierre de la app y se reintenta al reabrir.
+      await enqueueComplete(session.id, id);
+      // Flush oportunista: con red, esto dispara el PATCH ahora mismo (mismo
+      // comportamiento observable en el servidor que la llamada directa previa).
+      void flushQueue(sendCompleteMutation);
     }
+    // Seguro ahora: la mutación está durablemente encolada (o no había sesión).
     void clearResume(id);
+    void removePlan(id);
     track({ event: 'follow_completed', planId: id, stopsCompleted: allStops.length });
     Alert.alert(t('follow.tripCompleteTitle'), t('follow.tripCompleteBody'), [
       { text: t('follow.done'), onPress: () => router.back() },
@@ -263,6 +328,13 @@ export default function FollowModeScreen() {
             colorPending="rgba(15, 23, 42, 0.18)"
           />
         </View>
+
+        {fromCache && (
+          <View style={s.cachedBadge}>
+            <Ionicons name="cloud-offline-outline" size={13} color={colors.textSecondary} />
+            <Text style={s.cachedBadgeText}>{t('follow.offlineCached')}</Text>
+          </View>
+        )}
       </BlurView>
 
       <View style={s.dayListWrap} pointerEvents="box-none">
@@ -374,6 +446,18 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 2,
+  },
+  cachedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: spacing.xs,
+  },
+  cachedBadgeText: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   dayListWrap: {
     position: 'absolute',

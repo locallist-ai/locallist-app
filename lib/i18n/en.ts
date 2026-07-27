@@ -213,6 +213,7 @@ export default {
   follow: {
     loading: 'Starting Follow Mode...',
     loadError: 'Failed to load plan',
+    offlineCached: 'Offline copy',
     tripCompleteTitle: 'Trip Complete!',
     tripCompleteBody: 'You finished the plan. Enjoy your trip!',
     done: 'Done',
