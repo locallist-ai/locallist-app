@@ -27,6 +27,11 @@ jest.mock('expo-file-system/legacy', () => {
     writeAsStringAsync: jest.fn(async (uri: string, contents: string) => {
       files.set(uri, contents);
     }),
+    moveAsync: jest.fn(async ({ from, to }: { from: string; to: string }) => {
+      if (!files.has(from)) throw new Error('ENOENT');
+      files.set(to, files.get(from)!);
+      files.delete(from);
+    }),
     deleteAsync: jest.fn(async (uri: string) => {
       files.delete(uri);
     }),
@@ -43,10 +48,12 @@ const fs = FileSystem as unknown as {
   getInfoAsync: jest.Mock;
   readAsStringAsync: jest.Mock;
   writeAsStringAsync: jest.Mock;
+  moveAsync: jest.Mock;
   deleteAsync: jest.Mock;
 };
 
 const URI = 'file:///doc/follow-plans/plan-1.json';
+const TMP = `${URI}.tmp`;
 
 const makePlan = (): PlanDetailResponse =>
   ({
@@ -77,9 +84,10 @@ describe('savePlan / loadPlan round-trip', () => {
     expect(await loadPlan('plan-1')).toEqual(plan);
   });
 
-  it('escribe en la ruta esperada bajo follow-plans/', async () => {
+  it('escribe atómicamente: tmp + rename sobre la ruta esperada (N3)', async () => {
     await savePlan('plan-1', makePlan());
-    expect(fs.writeAsStringAsync).toHaveBeenCalledWith(URI, expect.any(String));
+    expect(fs.writeAsStringAsync).toHaveBeenCalledWith(TMP, expect.any(String));
+    expect(fs.moveAsync).toHaveBeenCalledWith({ from: TMP, to: URI });
   });
 
   it('crea el directorio (intermediates) antes de escribir', async () => {
@@ -87,6 +95,19 @@ describe('savePlan / loadPlan round-trip', () => {
     expect(fs.makeDirectoryAsync).toHaveBeenCalledWith('file:///doc/follow-plans/', {
       intermediates: true,
     });
+  });
+
+  it('un fallo en el rename NO corrompe el plan bueno anterior (N3)', async () => {
+    await savePlan('plan-1', makePlan());
+    const goodBefore = fs.__files.get(URI);
+
+    const mutated = { ...makePlan(), name: 'Corrupted attempt' };
+    fs.moveAsync.mockRejectedValueOnce(new Error('crash durante rename'));
+    await savePlan('plan-1', mutated as never);
+
+    expect(fs.__files.get(URI)).toBe(goodBefore);
+    expect((await loadPlan('plan-1'))?.name).toBe('Weekend in Miami');
+    expect(fs.deleteAsync).toHaveBeenCalledWith(TMP, { idempotent: true });
   });
 });
 
@@ -102,6 +123,27 @@ describe('loadPlan tolerancia', () => {
 
   it('devuelve null si falta el array days (shape inválida)', async () => {
     fs.__files.set(URI, JSON.stringify({ id: 'plan-1', name: 'x' }));
+    expect(await loadPlan('plan-1')).toBeNull();
+  });
+
+  it('devuelve null si days está vacío (no renderizable, N4)', async () => {
+    fs.__files.set(URI, JSON.stringify({ name: 'x', days: [] }));
+    expect(await loadPlan('plan-1')).toBeNull();
+  });
+
+  it('devuelve null si ningún día tiene stops (N4)', async () => {
+    fs.__files.set(
+      URI,
+      JSON.stringify({ name: 'x', days: [{ dayNumber: 1, stops: [] }] }),
+    );
+    expect(await loadPlan('plan-1')).toBeNull();
+  });
+
+  it('devuelve null si falta el nombre (N4)', async () => {
+    fs.__files.set(
+      URI,
+      JSON.stringify({ days: [{ dayNumber: 1, stops: [{ placeId: 'p1' }] }] }),
+    );
     expect(await loadPlan('plan-1')).toBeNull();
   });
 

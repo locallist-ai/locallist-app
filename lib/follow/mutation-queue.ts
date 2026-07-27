@@ -27,6 +27,25 @@ export type MutationSender = (mutation: QueuedMutation) => Promise<number>;
 const FILE = FileSystem.documentDirectory
   ? `${FileSystem.documentDirectory}follow-mutations.json`
   : null;
+const TMP = FILE ? `${FILE}.tmp` : null;
+
+// Backstop de crecimiento (N2): un 5xx persistente (o un server que nunca
+// confirma) no debe engordar la cola sin límite. Podamos por edad y por tamaño
+// al leer/flushear — la poda se persiste en la siguiente escritura (enqueue/flush).
+const QUEUE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
+const QUEUE_MAX = 200;
+
+function prune(queue: QueuedMutation[]): QueuedMutation[] {
+  const cutoff = Date.now() - QUEUE_TTL_MS;
+  // `enqueuedAt` ausente/no numérico (payload viejo) → se trata como reciente,
+  // nunca se tira por edad (solo puede caer por el cap de tamaño).
+  const fresh = queue.filter(
+    (m) => typeof m.enqueuedAt !== 'number' || m.enqueuedAt >= cutoff,
+  );
+  // Orden de inserción = cronológico (push al final). Al capar, conservamos las
+  // MÁS RECIENTES (cola de más valor) y descartamos las más viejas.
+  return fresh.length > QUEUE_MAX ? fresh.slice(fresh.length - QUEUE_MAX) : fresh;
+}
 
 // ─── Mutex de proceso (serializa read-modify-write del fichero) ───────────────
 let opChain: Promise<unknown> = Promise.resolve();
@@ -48,19 +67,30 @@ async function readQueue(): Promise<QueuedMutation[]> {
     const raw = await FileSystem.readAsStringAsync(FILE);
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isMutation);
+    return prune(parsed.filter(isMutation));
   } catch (err) {
     logger.warn('mutation-queue: fallo al leer la cola', err);
     return [];
   }
 }
 
+// Escritura ATÓMICA (N3): escribe a un `.tmp` y renombra sobre el destino. Un
+// crash a media escritura deja el `.tmp` a medias pero NUNCA corrompe el fichero
+// bueno (el rename es atómico), evitando que un `readQueue` posterior devuelva
+// `[]` y pierda en silencio todas las mutaciones pendientes.
 async function writeQueue(queue: QueuedMutation[]): Promise<void> {
-  if (!FILE) return;
+  if (!FILE || !TMP) return;
   try {
-    await FileSystem.writeAsStringAsync(FILE, JSON.stringify(queue));
+    await FileSystem.writeAsStringAsync(TMP, JSON.stringify(queue));
+    await FileSystem.moveAsync({ from: TMP, to: FILE });
   } catch (err) {
     logger.warn('mutation-queue: fallo al escribir la cola', err);
+    // Deja el destino intacto; limpia el tmp a medias para no acumular basura.
+    try {
+      await FileSystem.deleteAsync(TMP, { idempotent: true });
+    } catch {
+      /* best-effort */
+    }
   }
 }
 
@@ -99,14 +129,27 @@ export async function enqueueComplete(sessionId: string, planId: string): Promis
   });
 }
 
+// 4xx TERMINALES: la mutación ya no aplica y reintentar no cambiaría el
+// resultado — 400 (petición inválida), 404 (sesión inexistente), 409 (conflicto:
+// típicamente "ya completada"), 410 (gone), 422 (no procesable).
+const TERMINAL_4XX = new Set([400, 404, 409, 410, 422]);
+
 /**
- * Una mutación se SACA de la cola (éxito idempotente) cuando alcanzamos el
- * servidor con una respuesta definitiva: 2xx (hecho) o 4xx (p. ej. sesión ya
- * completada / no encontrada — reintentar no cambiaría nada). Se CONSERVA para
- * reintentar en fallo de red (status 0) o error de servidor (5xx).
+ * ¿Sacar la mutación de la cola? SOLO ante un resultado definitivo:
+ *  - 2xx → éxito (incluye el 200 idempotente de un `/complete` ya aplicado).
+ *  - 4xx terminal (TERMINAL_4XX) → ya no aplica.
+ *
+ * Se CONSERVA (se reintenta en el próximo flush) todo lo RETRYABLE, para no
+ * perder nunca un `/complete`:
+ *  - 0        → fallo de red / abort.
+ *  - 408      → request timeout (transitorio).
+ *  - 429      → rate limit (transitorio; respeta el backoff hasta el siguiente flush).
+ *  - 401/403  → auth transitoria (el `api` ya reintenta el refresh; puede curarse al re-loguear).
+ *  - 5xx      → error de servidor.
  */
 function shouldDrop(status: number): boolean {
-  return status !== 0 && status < 500;
+  if (status >= 200 && status < 300) return true;
+  return TERMINAL_4XX.has(status);
 }
 
 let flushInFlight: Promise<void> | null = null;

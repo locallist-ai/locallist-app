@@ -21,6 +21,8 @@ const DIR = FileSystem.documentDirectory
 const fileUri = (planId: string): string | null =>
   DIR ? `${DIR}${encodeURIComponent(planId)}.json` : null;
 
+const tmpUri = (uri: string): string => `${uri}.tmp`;
+
 async function ensureDir(): Promise<boolean> {
   if (!DIR) return false;
   try {
@@ -42,19 +44,33 @@ export async function savePlan(planId: string, plan: PlanDetailResponse): Promis
   if (!planId || !plan) return;
   const uri = fileUri(planId);
   if (!uri) return;
+  const tmp = tmpUri(uri);
   try {
     if (!(await ensureDir())) return;
-    await FileSystem.writeAsStringAsync(uri, JSON.stringify(plan));
+    // Escritura ATÓMICA (N3): tmp + rename. Un crash a media escritura no deja el
+    // JSON del plan corrupto (loadPlan → null perdería el cold-start offline).
+    await FileSystem.writeAsStringAsync(tmp, JSON.stringify(plan));
+    await FileSystem.moveAsync({ from: tmp, to: uri });
   } catch (err) {
     logger.warn('plan-store: fallo al guardar el plan', err);
+    try {
+      await FileSystem.deleteAsync(tmp, { idempotent: true });
+    } catch {
+      /* best-effort */
+    }
   }
 }
 
+// Shape mínima RENDERIZABLE (N4): no basta con que exista `days`; exigimos al
+// menos un día con al menos un stop y campos mínimos, para no pintar una pantalla
+// de Follow Mode vacía a partir de un fichero técnicamente-JSON pero inservible.
 function isPlanShape(value: unknown): value is PlanDetailResponse {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    Array.isArray((value as PlanDetailResponse).days)
+  if (value === null || typeof value !== 'object') return false;
+  const plan = value as PlanDetailResponse;
+  if (typeof plan.name !== 'string') return false;
+  if (!Array.isArray(plan.days) || plan.days.length === 0) return false;
+  return plan.days.some(
+    (d) => d != null && Array.isArray(d.stops) && d.stops.length > 0,
   );
 }
 

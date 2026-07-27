@@ -22,6 +22,14 @@ jest.mock('expo-file-system/legacy', () => {
     writeAsStringAsync: jest.fn(async (uri: string, contents: string) => {
       files.set(uri, contents);
     }),
+    moveAsync: jest.fn(async ({ from, to }: { from: string; to: string }) => {
+      if (!files.has(from)) throw new Error('ENOENT');
+      files.set(to, files.get(from)!);
+      files.delete(from);
+    }),
+    deleteAsync: jest.fn(async (uri: string) => {
+      files.delete(uri);
+    }),
   };
 });
 
@@ -36,7 +44,21 @@ import {
 const fs = FileSystem as unknown as {
   __files: Map<string, string>;
   writeAsStringAsync: jest.Mock;
+  moveAsync: jest.Mock;
+  deleteAsync: jest.Mock;
 };
+
+const FILE = 'file:///doc/follow-mutations.json';
+const TMP = `${FILE}.tmp`;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const mutation = (sessionId: string, enqueuedAt: number) => ({
+  id: `complete:${sessionId}`,
+  type: 'complete' as const,
+  sessionId,
+  planId: `plan-${sessionId}`,
+  enqueuedAt,
+});
 
 beforeEach(() => {
   fs.__files.clear();
@@ -104,16 +126,32 @@ describe('flushQueue — reglas idempotentes de drop', () => {
     expect(await _peekQueue()).toHaveLength(0);
   });
 
-  it('trata 4xx (sesión ya completada / no encontrada) como éxito y drena', async () => {
-    await enqueueComplete('sess-1', 'plan-1');
-    await flushQueue(async () => 404);
-    expect(await _peekQueue()).toHaveLength(0);
-  });
+  it.each([200, 204, 400, 404, 409, 410, 422])(
+    'drena ante status terminal %i (éxito / ya-no-aplica)',
+    async (status) => {
+      await enqueueComplete('sess-1', 'plan-1');
+      await flushQueue(async () => status);
+      expect(await _peekQueue()).toHaveLength(0);
+    },
+  );
 
-  it('conserva la mutación ante 5xx (error de servidor)', async () => {
+  it.each([0, 408, 429, 401, 403, 500, 503])(
+    'CONSERVA ante status retryable %i (no pierde el /complete)',
+    async (status) => {
+      await enqueueComplete('sess-1', 'plan-1');
+      await flushQueue(async () => status);
+      expect(await _peekQueue()).toHaveLength(1);
+    },
+  );
+
+  it('429/408 se conservan y drenan cuando el server responde 200', async () => {
     await enqueueComplete('sess-1', 'plan-1');
-    await flushQueue(async () => 503);
+    await flushQueue(async () => 429); // rate limit
     expect(await _peekQueue()).toHaveLength(1);
+    await flushQueue(async () => 408); // timeout
+    expect(await _peekQueue()).toHaveLength(1);
+    await flushQueue(async () => 200); // por fin
+    expect(await _peekQueue()).toHaveLength(0);
   });
 
   it('conserva la mutación si el sender lanza', async () => {
@@ -164,5 +202,69 @@ describe('flushQueue — concurrencia', () => {
     const q = await _peekQueue();
     expect(q).toHaveLength(1);
     expect(q[0].sessionId).toBe('sess-2');
+  });
+});
+
+describe('backstop de crecimiento (N2)', () => {
+  it('poda entradas más viejas que el TTL (30 días) al leer', async () => {
+    const now = Date.now();
+    fs.__files.set(
+      FILE,
+      JSON.stringify([
+        mutation('old', now - 31 * DAY_MS), // caducada
+        mutation('fresh', now - 2 * DAY_MS), // vigente
+      ]),
+    );
+    const q = await _peekQueue();
+    expect(q.map((m) => m.sessionId)).toEqual(['fresh']);
+  });
+
+  it('conserva entradas sin enqueuedAt (payload viejo) por edad', async () => {
+    fs.__files.set(FILE, JSON.stringify([{ id: 'complete:x', type: 'complete', sessionId: 'x', planId: 'p' }]));
+    expect(await _peekQueue()).toHaveLength(1);
+  });
+
+  it('capa el tamaño a las 200 más recientes', async () => {
+    const now = Date.now();
+    // Orden de inserción cronológico (como el enqueue real: push al final):
+    // s0 el más viejo, s204 el más nuevo.
+    const many = Array.from({ length: 205 }, (_, i) => mutation(`s${i}`, now - (205 - i) * 1000));
+    fs.__files.set(FILE, JSON.stringify(many));
+    const q = await _peekQueue();
+    expect(q).toHaveLength(200);
+    // Se descartan las 5 más viejas (s0..s4); sobreviven las más recientes.
+    expect(q.some((m) => m.sessionId === 's0')).toBe(false);
+    expect(q.some((m) => m.sessionId === 's204')).toBe(true);
+  });
+});
+
+describe('escritura atómica (N3)', () => {
+  it('escribe al .tmp y luego renombra sobre el destino', async () => {
+    await enqueueComplete('sess-1', 'plan-1');
+    expect(fs.writeAsStringAsync).toHaveBeenCalledWith(TMP, expect.any(String));
+    expect(fs.moveAsync).toHaveBeenCalledWith({ from: TMP, to: FILE });
+  });
+
+  it('un fallo a media escritura NO corrompe el fichero bueno existente', async () => {
+    // Cola sana ya en disco.
+    await enqueueComplete('sess-1', 'plan-1');
+    const goodBefore = fs.__files.get(FILE);
+    expect(goodBefore).toBeDefined();
+
+    // La siguiente escritura falla tras dejar un tmp a medias (move nunca corre).
+    fs.moveAsync.mockRejectedValueOnce(new Error('crash durante rename'));
+    await enqueueComplete('sess-2', 'plan-2');
+
+    // El destino sigue siendo la versión buena anterior (no corrupto, no vacío).
+    expect(fs.__files.get(FILE)).toBe(goodBefore);
+    const q = await _peekQueue();
+    expect(q).toHaveLength(1);
+    expect(q[0].sessionId).toBe('sess-1');
+  });
+
+  it('limpia el .tmp a medias cuando la escritura falla', async () => {
+    fs.moveAsync.mockRejectedValueOnce(new Error('crash'));
+    await enqueueComplete('sess-1', 'plan-1');
+    expect(fs.deleteAsync).toHaveBeenCalledWith(TMP, { idempotent: true });
   });
 });
