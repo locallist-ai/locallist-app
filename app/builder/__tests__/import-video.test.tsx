@@ -212,7 +212,7 @@ describe('import-video — resultados y creación', () => {
     expect(mockTrack).toHaveBeenCalledWith({ event: 'import_plan_created', places: 1 });
   });
 
-  it('(e2) deseleccionar el único match deshabilita crear', async () => {
+  it('(e2) deseleccionar el único match deshabilita crear y explica por qué', async () => {
     mockPickVideo.mockResolvedValue(validAsset);
     mockImportVideo.mockResolvedValue(okUpload);
     render(<ImportVideoScreen />);
@@ -224,6 +224,51 @@ describe('import-video — resultados y creación', () => {
     await waitFor(() =>
       expect(screen.getByTestId('import-create').props.accessibilityState.disabled).toBe(true),
     );
+    // Hint under the button: the grey button never goes unexplained.
+    expect(screen.getByText('import.selectAtLeastOne')).toBeTruthy();
+  });
+});
+
+describe('import-video — abort y reintento de red', () => {
+  it('aborta la subida al desmontar (swipe-back iOS durante uploading)', async () => {
+    mockPickVideo.mockResolvedValue(validAsset);
+    let capturedSignal: AbortSignal | undefined;
+    // Upload never settles: the screen dies mid-transfer.
+    mockImportVideo.mockImplementation((opts: { signal?: AbortSignal }) => {
+      capturedSignal = opts.signal;
+      return new Promise(() => {});
+    });
+    const { unmount } = render(<ImportVideoScreen />);
+
+    fireEvent.press(screen.getByTestId('import-choose'));
+    await waitFor(() => expect(mockImportVideo).toHaveBeenCalled());
+    expect(capturedSignal).toBeDefined();
+    expect(capturedSignal?.aborted).toBe(false);
+
+    unmount();
+
+    // The screen's unmount cleanup aborts the in-flight upload.
+    expect(capturedSignal?.aborted).toBe(true);
+  });
+
+  it('red caída (status 0) → mensaje CON reintentar que reutiliza el vídeo sin re-elegir', async () => {
+    mockPickVideo.mockResolvedValue(validAsset);
+    mockImportVideo
+      .mockResolvedValueOnce({ data: null, error: 'Network error', errorBody: null, status: 0 })
+      .mockResolvedValueOnce(okUpload);
+    render(<ImportVideoScreen />);
+
+    fireEvent.press(screen.getByTestId('import-choose'));
+    await waitFor(() => expect(screen.getByText('import.errorGeneric')).toBeTruthy());
+
+    // Retry offered even though it's a generic network failure...
+    fireEvent.press(screen.getByTestId('import-retry'));
+
+    // ...and it re-uploads the SAME asset without reopening the picker.
+    await waitFor(() => expect(screen.getByText('Place A')).toBeTruthy());
+    expect(mockPickVideo).toHaveBeenCalledTimes(1);
+    expect(mockImportVideo).toHaveBeenCalledTimes(2);
+    expect(mockImportVideo.mock.calls[1][0].fileUri).toBe('file:///v.mp4');
   });
 });
 

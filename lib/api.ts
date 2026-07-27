@@ -307,8 +307,12 @@ export async function getFavoriteIds(signal?: AbortSignal) {
 // progress — RN's fetch has no progress events. `/import/plan` is plain JSON and
 // goes through `api()` unchanged.
 
-/** A generous timeout for a 150 MB upload + server-side extraction. */
-const UPLOAD_TIMEOUT_MS = 120_000;
+/**
+ * One budget for upload + server-side extraction. 240s: a 150 MB video on a
+ * slow mobile uplink can easily spend >120s in transfer alone before the
+ * backend even starts analysing.
+ */
+const UPLOAD_TIMEOUT_MS = 240_000;
 
 export interface ImportVideoUpload {
   fileUri: string;
@@ -319,6 +323,12 @@ export interface ImportVideoUpload {
   creatorHandle?: string;
   /** Upload progress as a 0..1 fraction. */
   onProgress?: (fraction: number) => void;
+  /**
+   * Caller-side cancellation (e.g. the screen unmounting mid-upload): aborting
+   * kills the XHR so a 150 MB transfer never keeps burning data for a screen
+   * nobody is looking at. Resolves `{ status: 0, error: 'Request aborted' }`.
+   */
+  signal?: AbortSignal;
   _retryCount?: number;
 }
 
@@ -339,10 +349,15 @@ export async function importVideo(opts: ImportVideoUpload): Promise<ApiResult<Im
   const {
     fileUri, fileName, mimeType,
     platform = 'self', creatorHandle,
-    onProgress, _retryCount = 0,
+    onProgress, signal, _retryCount = 0,
   } = opts;
 
   const token = await getAccessToken();
+
+  // Aborted while we awaited the token: never open the XHR at all.
+  if (signal?.aborted) {
+    return { data: null, error: 'Request aborted', errorBody: null, status: 0 };
+  }
 
   let query = `platform=${encodeURIComponent(platform)}`;
   if (creatorHandle) query += `&creatorHandle=${encodeURIComponent(creatorHandle)}`;
@@ -354,6 +369,18 @@ export async function importVideo(opts: ImportVideoUpload): Promise<ApiResult<Im
 
   const result = await new Promise<ApiResult<ImportVideoResponse>>((resolve) => {
     const xhr = new XMLHttpRequest();
+
+    // Settle exactly once: after an abort, any late onload/onerror/ontimeout
+    // from the dying request must be ignored, and the signal listener removed.
+    let settled = false;
+    const onExternalAbort = () => xhr.abort();
+    const finish = (r: ApiResult<ImportVideoResponse>) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener('abort', onExternalAbort);
+      resolve(r);
+    };
+
     xhr.open('POST', `${API_URL}/import/video?${query}`);
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('Accept-Language', i18n.language || 'en');
@@ -362,6 +389,7 @@ export async function importVideo(opts: ImportVideoUpload): Promise<ApiResult<Im
 
     if (xhr.upload && onProgress) {
       xhr.upload.onprogress = (e: ProgressEvent) => {
+        if (settled) return;
         if (e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total);
       };
     }
@@ -370,25 +398,28 @@ export async function importVideo(opts: ImportVideoUpload): Promise<ApiResult<Im
       const json = parseJsonSafe(xhr.responseText);
       if (xhr.status < 200 || xhr.status >= 300) {
         trackPlanLimitIfGate403(xhr.status, json);
-        resolve({
+        finish({
           data: null,
           error: (json as { error?: string } | null)?.error ?? `HTTP ${xhr.status}`,
           errorBody: json,
           status: xhr.status,
         });
       } else {
-        resolve({ data: json as ImportVideoResponse, error: null, errorBody: null, status: xhr.status });
+        finish({ data: json as ImportVideoResponse, error: null, errorBody: null, status: xhr.status });
       }
     };
-    xhr.onerror = () => resolve({ data: null, error: 'Network error', errorBody: null, status: 0 });
-    xhr.ontimeout = () => resolve({ data: null, error: 'Request timed out', errorBody: null, status: 0 });
+    xhr.onabort = () => finish({ data: null, error: 'Request aborted', errorBody: null, status: 0 });
+    xhr.onerror = () => finish({ data: null, error: 'Network error', errorBody: null, status: 0 });
+    xhr.ontimeout = () => finish({ data: null, error: 'Request timed out', errorBody: null, status: 0 });
 
+    signal?.addEventListener('abort', onExternalAbort);
     xhr.send(form);
   });
 
   // Auto-refresh on 401 once, mirroring `api()`: an expired access token gets a
-  // fresh pair via the refresh token and the upload retries exactly once.
-  if (result.status === 401 && token && _retryCount < 1) {
+  // fresh pair via the refresh token and the upload retries exactly once. Never
+  // retry an aborted upload.
+  if (result.status === 401 && token && _retryCount < 1 && !signal?.aborted) {
     const refreshed = await tryRefreshToken();
     if (refreshed) return importVideo({ ...opts, _retryCount: _retryCount + 1 });
   }

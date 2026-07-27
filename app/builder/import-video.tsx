@@ -11,7 +11,7 @@
  * (`lib/import/native-picker`): on any binary without expo-image-picker the flow
  * degrades to an "update needed" notice, never a startup crash.
  */
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -102,20 +102,38 @@ export default function ImportVideoScreen() {
   const [selectedDays, setSelectedDays] = useState(1);
   const [planName, setPlanName] = useState('');
   const [creating, setCreating] = useState(false);
+  // The last upload failure is worth a retry (network drop / timeout / 503):
+  // gates and validation errors are not, re-firing them would just repeat.
+  const [uploadRetryable, setUploadRetryable] = useState(false);
 
   // Synchronous re-entrancy guard: the token read below yields, so two taps in
   // the same frame must not both open the picker / fire two uploads.
   const busyRef = useRef(false);
-  // Last picked asset, so a retryable failure (network / 503) can re-upload
-  // without making the user re-pick.
+  // Last picked asset, so a retryable failure (network / timeout / 503) can
+  // re-upload without making the user re-pick.
   const lastAssetRef = useRef<PickedVideo | null>(null);
+  // Abort the in-flight upload when the screen unmounts (iOS swipe-back during
+  // uploading): never keep pushing up to 150 MB for a dead screen, and never
+  // setState on an unmounted component.
+  const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const maxDays = maxDaysForTier(isPro);
 
   const doUpload = useCallback(
     async (asset: PickedVideo) => {
       lastAssetRef.current = asset;
+      const controller = new AbortController();
+      abortRef.current = controller;
       setErrorKey(null);
+      setUploadRetryable(false);
       setProgress(0);
       setPhase('uploading');
 
@@ -124,11 +142,16 @@ export default function ImportVideoScreen() {
         fileName: asset.fileName,
         mimeType: resolveUploadMime(asset),
         platform: 'self',
+        signal: controller.signal,
         onProgress: (fraction) => {
+          if (!mountedRef.current) return;
           setProgress(fraction);
           if (fraction >= 0.999) setPhase('analyzing');
         },
       });
+
+      // Aborted (unmount) or unmounted while awaiting: drop the result, no setState.
+      if (controller.signal.aborted || !mountedRef.current) return;
 
       if (res.data && res.data.candidates && res.data.candidates.length > 0) {
         const list = res.data.candidates;
@@ -164,6 +187,12 @@ export default function ImportVideoScreen() {
       }
       const key = res.data ? 'import.errorNoPlaces' : importErrorKey(res.status, code);
       setErrorKey(key);
+      // Network drop / timeout (status 0) and 503 are transient: offer a retry
+      // that reuses the picked asset. Everything else needs a different video
+      // or a different tier, retrying the same upload would just repeat it.
+      setUploadRetryable(
+        !res.data && (res.status === 0 || res.status === 503 || code === 'import_unavailable'),
+      );
       setPhase('idle');
     },
     [presentGate],
@@ -274,6 +303,7 @@ export default function ImportVideoScreen() {
       planName: planName.trim() ? planName.trim() : undefined,
       platform: 'self',
     });
+    if (!mountedRef.current) return;
     setCreating(false);
 
     if (res.data) {
@@ -464,13 +494,17 @@ export default function ImportVideoScreen() {
               <Text style={s.primaryButtonText}>{t('import.create')}</Text>
             )}
           </TouchableOpacity>
+          {/* Why the button is disabled when nothing (or nothing matched) is selected. */}
+          {selectedIds.size === 0 ? (
+            <Text style={s.footerHintText}>{t('import.selectAtLeastOne')}</Text>
+          ) : null}
         </View>
       </View>
     );
   }
 
   // ── Idle ──
-  const retryable = errorKey === 'import.errorUnavailable' && lastAssetRef.current !== null;
+  const retryable = uploadRetryable && lastAssetRef.current !== null;
   return (
     <View style={[s.container, { paddingTop: insets.top }]}>
       {renderClose()}
@@ -778,5 +812,12 @@ const s = StyleSheet.create({
     fontSize: 15,
     color: colors.sunsetOrange,
     textDecorationLine: 'underline',
+  },
+  footerHintText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
 });
