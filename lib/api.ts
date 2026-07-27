@@ -10,6 +10,7 @@ import type {
   LiveCity,
   Plan, PlanDetailResponse,
   FavoritesResponse, FavoriteIdsResponse,
+  ImportVideoResponse, ImportPlanRequest,
 } from './types';
 
 function getApiUrl(): string {
@@ -318,4 +319,136 @@ export async function getFavorites(limit: number, offset: number, signal?: Abort
 
 export async function getFavoriteIds(signal?: AbortSignal) {
   return api<FavoriteIdsResponse>('/favorites/ids', { signal });
+}
+
+// ─── Import from video ─────────────────────────────────────────────────────────
+// The multipart upload can't ride the JSON `api()` helper, but it MUST reuse its
+// auth: `getAccessToken` (in-memory token) + a single silent refresh on 401 via
+// `tryRefreshToken`. We use XMLHttpRequest (not fetch) purely to surface upload
+// progress — RN's fetch has no progress events. `/import/plan` is plain JSON and
+// goes through `api()` unchanged.
+
+/**
+ * One budget for upload + server-side extraction. 240s: a 150 MB video on a
+ * slow mobile uplink can easily spend >120s in transfer alone before the
+ * backend even starts analysing.
+ */
+const UPLOAD_TIMEOUT_MS = 240_000;
+
+export interface ImportVideoUpload {
+  fileUri: string;
+  fileName: string;
+  mimeType: string;
+  /** Always 'self' from the app (v1 = own content only). */
+  platform?: string;
+  creatorHandle?: string;
+  /** Upload progress as a 0..1 fraction. */
+  onProgress?: (fraction: number) => void;
+  /**
+   * Caller-side cancellation (e.g. the screen unmounting mid-upload): aborting
+   * kills the XHR so a 150 MB transfer never keeps burning data for a screen
+   * nobody is looking at. Resolves `{ status: 0, error: 'Request aborted' }`.
+   */
+  signal?: AbortSignal;
+  _retryCount?: number;
+}
+
+function parseJsonSafe(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Upload a video for place extraction. Returns the same `{ data, error,
+ * errorBody, status }` shape as `api()` so callers can run the response through
+ * `mapGateError` exactly like every other gated endpoint.
+ */
+export async function importVideo(opts: ImportVideoUpload): Promise<ApiResult<ImportVideoResponse>> {
+  const {
+    fileUri, fileName, mimeType,
+    platform = 'self', creatorHandle,
+    onProgress, signal, _retryCount = 0,
+  } = opts;
+
+  const token = await getAccessToken();
+
+  // Aborted while we awaited the token: never open the XHR at all.
+  if (signal?.aborted) {
+    return { data: null, error: 'Request aborted', errorBody: null, status: 0 };
+  }
+
+  let query = `platform=${encodeURIComponent(platform)}`;
+  if (creatorHandle) query += `&creatorHandle=${encodeURIComponent(creatorHandle)}`;
+
+  const form = new FormData();
+  // RN's FormData accepts a { uri, name, type } file part; the type cast keeps
+  // TypeScript happy (the DOM FormData typings don't model the RN file shape).
+  form.append('file', { uri: fileUri, name: fileName, type: mimeType } as unknown as Blob);
+
+  const result = await new Promise<ApiResult<ImportVideoResponse>>((resolve) => {
+    const xhr = new XMLHttpRequest();
+
+    // Settle exactly once: after an abort, any late onload/onerror/ontimeout
+    // from the dying request must be ignored, and the signal listener removed.
+    let settled = false;
+    const onExternalAbort = () => xhr.abort();
+    const finish = (r: ApiResult<ImportVideoResponse>) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener('abort', onExternalAbort);
+      resolve(r);
+    };
+
+    xhr.open('POST', `${API_URL}/import/video?${query}`);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Accept-Language', i18n.language || 'en');
+    // Deliberately NO Content-Type: RN sets the multipart boundary itself.
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (e: ProgressEvent) => {
+        if (settled) return;
+        if (e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total);
+      };
+    }
+
+    xhr.onload = () => {
+      const json = parseJsonSafe(xhr.responseText);
+      if (xhr.status < 200 || xhr.status >= 300) {
+        trackPlanLimitIfGate403(xhr.status, json);
+        finish({
+          data: null,
+          error: (json as { error?: string } | null)?.error ?? `HTTP ${xhr.status}`,
+          errorBody: json,
+          status: xhr.status,
+        });
+      } else {
+        finish({ data: json as ImportVideoResponse, error: null, errorBody: null, status: xhr.status });
+      }
+    };
+    xhr.onabort = () => finish({ data: null, error: 'Request aborted', errorBody: null, status: 0 });
+    xhr.onerror = () => finish({ data: null, error: 'Network error', errorBody: null, status: 0 });
+    xhr.ontimeout = () => finish({ data: null, error: 'Request timed out', errorBody: null, status: 0 });
+
+    signal?.addEventListener('abort', onExternalAbort);
+    xhr.send(form);
+  });
+
+  // Auto-refresh on 401 once, mirroring `api()`: an expired access token gets a
+  // fresh pair via the refresh token and the upload retries exactly once. Never
+  // retry an aborted upload.
+  if (result.status === 401 && token && _retryCount < 1 && !signal?.aborted) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) return importVideo({ ...opts, _retryCount: _retryCount + 1 });
+  }
+
+  return result;
+}
+
+/** Create a private plan from the selected matched places (JSON, gated). */
+export async function createImportPlan(req: ImportPlanRequest) {
+  return api<PlanDetailResponse>('/import/plan', { method: 'POST', body: req });
 }

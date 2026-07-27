@@ -129,6 +129,12 @@
         }
       ],
       "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "LocalList needs access to your photo library so you can pick a travel video to turn into a plan."
+        }
+      ],
       "./plugins/withCertPinning"
     ],
     "extra": {

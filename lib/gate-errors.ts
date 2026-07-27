@@ -23,7 +23,8 @@ export type UpsellCode =
   | 'duration_requires_plus'
   | 'multicity_requires_plus'
   | 'saved_plans_limit_reached'
-  | 'favorites_limit_reached';
+  | 'favorites_limit_reached'
+  | 'import_requires_plus';
 
 export type GateAction =
   /** 401 on an authenticated endpoint — a guest must register/log in. */
@@ -62,6 +63,7 @@ const UPSELL_CODES: readonly string[] = [
   'multicity_requires_plus',
   'saved_plans_limit_reached',
   'favorites_limit_reached',
+  'import_requires_plus',
 ];
 
 function asRecord(v: unknown): Record<string, unknown> | null {
