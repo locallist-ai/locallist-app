@@ -343,3 +343,11 @@ describe('FollowDaySheet — handoff "Cómo llegar"', () => {
     expect(alert).not.toHaveBeenCalled();
   });
 });
+
+describe('FollowDaySheet — hora de llegada', () => {
+  it('pinta suggestedArrival en 12h AM/PM (helper), no en 24h', () => {
+    renderSheet(0); // currentStop A, suggestedArrival '09:00'
+    expect(screen.getByText('9:00 AM')).toBeTruthy();
+    expect(screen.queryByText('09:00')).toBeNull();
+  });
+});

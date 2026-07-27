@@ -120,4 +120,11 @@ describe('StopCard', () => {
     render(<StopCard stop={makeStop(null)} />);
     expect(screen.queryByTestId('favorite-button')).toBeNull();
   });
+
+  it('pinta la hora de llegada en 12h AM/PM (helper), no en 24h', () => {
+    render(<StopCard stop={makeStop(makePlace({}))} />);
+    // suggestedArrival '09:00' -> '9:00 AM' vía formatTime12h.
+    expect(screen.getByText('9:00 AM')).toBeTruthy();
+    expect(screen.queryByText('09:00')).toBeNull();
+  });
 });

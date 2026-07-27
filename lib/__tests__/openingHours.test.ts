@@ -39,12 +39,12 @@ describe('getOpenState', () => {
 
   it('hint shows close time when open', () => {
     const { hint } = getOpenState(makeHours(9, 22), at(12));
-    expect(hint).toBe('Closes at 22:00');
+    expect(hint).toBe('Closes at 10:00 PM');
   });
 
   it('hint shows next open when closed and next window exists', () => {
     const { hint } = getOpenState(makeHours(14, 22), at(9));
-    expect(hint).toBe('Opens at 14:00');
+    expect(hint).toBe('Opens at 2:00 PM');
   });
 
   it('hint is null when closed with no next window', () => {
