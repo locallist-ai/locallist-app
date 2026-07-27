@@ -23,6 +23,7 @@ jest.mock('../../../lib/logger', () => ({
 }));
 jest.mock('../../../lib/map/tiles', () => ({ tilesEnabled: jest.fn(() => true) }));
 jest.mock('../../../lib/map/offline-packs', () => ({
+  DEFAULT_MAX_PACKS: 3,
   computeBounds: jest.fn(),
   ensurePack: jest.fn(),
   getPackStatus: jest.fn(),
@@ -84,8 +85,7 @@ it('sin planId: no-op idle', () => {
 
 it('created → downloading; el progreso lleva a ready al 100%', async () => {
   const { result } = renderHook(() => useOfflinePack('p1', STOPS, true));
-  await waitFor(() => expect(mockEnsurePack).toHaveBeenCalledTimes(1));
-  expect(result.current.status).toBe('downloading');
+  await waitFor(() => expect(result.current.status).toBe('downloading'));
 
   await act(async () => {
     emitProgress(40);
@@ -99,8 +99,8 @@ it('created → downloading; el progreso lleva a ready al 100%', async () => {
   expect(result.current.status).toBe('ready');
   expect(result.current.percentage).toBe(100);
 
-  // LRU se dispara tras asegurar.
-  await waitFor(() => expect(mockEvictLRU).toHaveBeenCalled());
+  // LRU se dispara tras asegurar, PROTEGIENDO el plan activo.
+  await waitFor(() => expect(mockEvictLRU).toHaveBeenCalledWith(3, 'p1'));
 });
 
 it('exists + pack ya completo → ready sin esperar progreso', async () => {
@@ -118,9 +118,11 @@ it('exists + descarga parcial → downloading con su porcentaje', async () => {
   expect(result.current.status).toBe('downloading');
 });
 
-it('unavailable (sin módulo nativo) → idle (degrada a online)', async () => {
+it('unavailable (sin módulo nativo) → idle SIN parpadeo de downloading', async () => {
   mockEnsurePack.mockResolvedValue('unavailable');
   const { result } = renderHook(() => useOfflinePack('p1', STOPS, true));
+  // Síncrono tras montar: NO debe estar en 'downloading' (sin frame "Saving 0%").
+  expect(result.current.status).toBe('idle');
   await waitFor(() => expect(mockEnsurePack).toHaveBeenCalled());
   await waitFor(() => expect(result.current.status).toBe('idle'));
 });

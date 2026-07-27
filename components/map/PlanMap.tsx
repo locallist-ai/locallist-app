@@ -72,6 +72,12 @@ interface PlanMapProps {
    * del plan. Ausente ⇒ sin offline (el mapa sigue online).
    */
   planId?: string;
+  /**
+   * Stops de TODO el plan (todos los días) SOLO para calcular el bbox del pack
+   * offline: el pack debe cubrir el plan entero, no el día visible. Los pines y
+   * la ruta siguen usando `stops` (el día activo). Si se omite, cae a `stops`.
+   */
+  packStops?: MapStop[];
 }
 
 const PIN_COLOR = '#3b82f6'; // electric-blue
@@ -88,6 +94,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
   interactive = true,
   followMode = false,
   planId,
+  packStops,
 }) => {
   const { t } = useTranslation();
   const mapRef = useRef<MapViewRef>(null);
@@ -97,8 +104,9 @@ export const PlanMap: React.FC<PlanMapProps> = ({
   const { status: locationStatus, coordinate: userCoordinate } = useFollowLocation(followMode);
   const [cameraMode, setCameraMode] = useState<CameraMode>('stop');
 
-  // Descarga del pack offline del plan (solo en follow con infra de tiles).
-  const offline = useOfflinePack(planId, stops, followMode);
+  // Descarga del pack offline del plan (solo en follow con infra de tiles). El
+  // bbox del pack cubre TODO el plan (`packStops`), no solo el día visible.
+  const offline = useOfflinePack(planId, packStops ?? stops, followMode);
 
   const showUserDot = followMode && locationStatus === 'granted' && userCoordinate !== null;
 

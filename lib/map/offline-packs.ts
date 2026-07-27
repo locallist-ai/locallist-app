@@ -144,6 +144,11 @@ function clamp(value: number, min: number, max: number): number {
  * `null` si no hay stops. El padding en longitud se escala por la latitud (los
  * meridianos se juntan hacia los polos). Se recorta a rangos web-mercator
  * válidos para que `createPack` no reciba coordenadas fuera de proyección.
+ *
+ * LIMITACIÓN CONOCIDA: no maneja el cruce del antimeridiano (±180°). Un plan
+ * que abarque el meridiano 180 produciría un bbox invertido en longitud. No
+ * aplica a las ciudades de lanzamiento (Miami/US), así que no se implementa el
+ * cruce ahora; documentado por si en el futuro hay cobertura en el Pacífico.
  */
 export function computeBounds(
   stops: OfflineStop[],
@@ -272,19 +277,34 @@ export async function deletePack(planId: string): Promise<void> {
 }
 
 /**
- * Evicción LRU: conserva los `maxPacks` más recientes (por `metadata.createdAt`)
- * y borra los más viejos. Devuelve los nombres borrados. Cap por defecto = 3
- * planes.
+ * Evicción LRU: conserva `maxPacks` packs (por `metadata.createdAt`, más viejo
+ * primero) y borra el sobrante. `keepPlanId` NUNCA se borra, aunque su pack sea
+ * el más viejo: es el plan que se está siguiendo ahora mismo — evicarlo justo
+ * tras asegurarlo dejaría el mapa activo sin tiles. Devuelve los nombres
+ * borrados. Cap por defecto = 3 planes.
+ *
+ * Nota: el orden es por creación (no last-used) porque `OfflineManager` no
+ * expone actualizar metadata de un pack sin recrearlo; proteger el plan activo
+ * es lo que evita el bug de borrar el pack recién abierto.
  */
-export async function evictLRU(maxPacks: number = DEFAULT_MAX_PACKS): Promise<string[]> {
+export async function evictLRU(
+  maxPacks: number = DEFAULT_MAX_PACKS,
+  keepPlanId?: string,
+): Promise<string[]> {
   const manager = getOfflineManager();
   if (!manager) return [];
   const packs = await listPacks();
-  if (packs.length <= maxPacks) return [];
 
-  // createdAt ascendente = más viejo primero.
-  const sorted = [...packs].sort((a, b) => a.createdAt - b.createdAt);
-  const toDelete = sorted.slice(0, packs.length - maxPacks);
+  const overflow = packs.length - maxPacks;
+  if (overflow <= 0) return [];
+
+  const keepName = keepPlanId ? packName(keepPlanId) : null;
+  // Candidatos = todos MENOS el pack del plan activo. createdAt ascendente.
+  const evictable = packs
+    .filter((p) => p.name !== keepName)
+    .sort((a, b) => a.createdAt - b.createdAt);
+
+  const toDelete = evictable.slice(0, overflow);
   const deleted: string[] = [];
   for (const pack of toDelete) {
     await manager.deletePack(pack.name).catch((err) => {

@@ -239,6 +239,23 @@ describe('evictLRU', () => {
     expect(mockManager.deletePack).toHaveBeenCalledWith('plan-old');
   });
 
+  it('NUNCA borra el pack del plan activo aunque sea el más viejo (keepPlanId)', async () => {
+    // El plan activo ("active") es el más viejo por createdAt. Sin la
+    // protección, con cap 3 y 4 packs, evictLRU borraría justo el que se acaba
+    // de abrir. Con keepPlanId debe evicar el siguiente más viejo (plan-b).
+    mockManager.getPacks.mockResolvedValue([
+      fakePack('active', 1),
+      fakePack('b', 2),
+      fakePack('c', 3),
+      fakePack('d', 4),
+    ]);
+    const deleted = await evictLRU(DEFAULT_MAX_PACKS, 'active');
+    expect(deleted).toEqual(['plan-b']);
+    expect(deleted).not.toContain('plan-active');
+    expect(mockManager.deletePack).not.toHaveBeenCalledWith('plan-active');
+    expect(mockManager.deletePack).toHaveBeenCalledWith('plan-b');
+  });
+
   it('no borra nada si hay <= maxPacks', async () => {
     mockManager.getPacks.mockResolvedValue([fakePack('a', 1), fakePack('b', 2)]);
     expect(await evictLRU(3)).toEqual([]);

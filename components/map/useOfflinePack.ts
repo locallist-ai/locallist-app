@@ -11,6 +11,7 @@ import { logger } from '../../lib/logger';
 import { tilesEnabled } from '../../lib/map/tiles';
 import {
   computeBounds,
+  DEFAULT_MAX_PACKS,
   deletePack,
   ensurePack,
   evictLRU,
@@ -84,7 +85,11 @@ export function useOfflinePack(
       setStatus('error');
     };
 
-    setStatus('downloading');
+    // No ponemos 'downloading' de forma síncrona: si el módulo nativo está
+    // ausente (o los tiles no están habilitados) `ensurePack` resuelve
+    // 'unavailable'/'disabled' y NO debe parpadear un pill "Saving map 0%" un
+    // frame. El estado solo pasa a 'downloading' cuando la descarga arranca de
+    // verdad ('created' / 'exists' parcial) o desde el progressListener.
     setPercentage(0);
 
     void (async () => {
@@ -102,7 +107,9 @@ export function useOfflinePack(
         setStatus('error');
         return;
       }
-      if (result === 'exists') {
+      if (result === 'created') {
+        setStatus('downloading'); // los listeners actualizan el progreso
+      } else if (result === 'exists') {
         // Un pack ya COMPLETO no vuelve a emitir progreso: consulta su status.
         const st = await getPackStatus(planId);
         if (cancelled) return;
@@ -113,9 +120,9 @@ export function useOfflinePack(
           setStatus('downloading');
         }
       }
-      // 'created' → sigue 'downloading'; los listeners actualizan el progreso.
 
-      void evictLRU().catch(() => undefined);
+      // Evicción LRU protegiendo SIEMPRE el pack del plan activo.
+      void evictLRU(DEFAULT_MAX_PACKS, planId).catch(() => undefined);
     })();
 
     return () => {

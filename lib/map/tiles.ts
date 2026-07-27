@@ -43,7 +43,7 @@ export const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
 export const ATTRIBUTION_OURS = '© OpenStreetMap contributors · Basemap © Protomaps';
 
 /** Atribución del basemap online de OpenFreeMap (fallback). */
-export const ATTRIBUTION_ONLINE = '© OpenStreetMap';
+export const ATTRIBUTION_ONLINE = '© OpenStreetMap contributors';
 
 /** Lee y normaliza `EXPO_PUBLIC_TILES_URL` (sin barra final). `null` si no está. */
 export function getTilesBaseUrl(): string | null {
