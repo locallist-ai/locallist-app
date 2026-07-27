@@ -1,10 +1,11 @@
+import { formatClock12h } from './helpers/time';
 import type { OpeningHours, OpeningPeriod } from './types';
 
 export type OpenState = 'open' | 'closed' | 'unknown';
 
 export type OpeningStatus = {
   state: OpenState;
-  /** Human-readable hint, e.g. "Opens at 14:00" or "Closes at 22:00" */
+  /** Human-readable hint, e.g. "Opens at 2:00 PM" or "Closes at 10:00 PM" */
   hint: string | null;
 };
 
@@ -21,7 +22,7 @@ export function getOpenState(hours: OpeningHours | null | undefined, now: Date =
   for (const period of hours.periods) {
     if (fitsInPeriod(period, h)) {
       const closeHint = period.close
-        ? `Closes at ${padTime(period.close.hour, period.close.minute)}`
+        ? `Closes at ${formatClock12h(period.close.hour, period.close.minute)}`
         : null;
       return { state: 'open', hint: closeHint };
     }
@@ -35,7 +36,7 @@ export function getOpenState(hours: OpeningHours | null | undefined, now: Date =
     .sort((a, b) => a - b)[0];
 
   const hint = next !== undefined
-    ? `Opens at ${padTime(Math.floor(next), Math.round((next % 1) * 60))}`
+    ? `Opens at ${formatClock12h(Math.floor(next), Math.round((next % 1) * 60))}`
     : null;
 
   return { state: 'closed', hint };
@@ -57,8 +58,4 @@ function fitsInPeriod(period: OpeningPeriod, h: number): boolean {
   }
 
   return h >= openH && h < closeH;
-}
-
-function padTime(hour: number, minute: number): string {
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }

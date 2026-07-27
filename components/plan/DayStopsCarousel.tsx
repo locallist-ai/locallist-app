@@ -14,6 +14,7 @@ import { CategoryBadge } from '../ui/CategoryBadge';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { formatPriceLabel } from '../../lib/helpers/price';
 import { TIME_BLOCK_ICON } from '../../lib/timeBlocks';
+import { formatTime12h } from '../../lib/helpers/time';
 import { usePlanEditorModals } from './PlanEditorModals';
 import type { PlanStop } from '../../lib/types';
 
@@ -98,7 +99,7 @@ const StopSlot: React.FC<StopSlotProps> = React.memo(({ stop, index, total, isOw
               <MaterialCommunityIcons name={timeIcon} size={12} color={colors.sunsetOrange} />
             </View>
             {stop.suggestedArrival && (
-              <Text style={styles.timeOverlayText}>{stop.suggestedArrival}</Text>
+              <Text style={styles.timeOverlayText}>{formatTime12h(stop.suggestedArrival)}</Text>
             )}
           </View>
         )}
