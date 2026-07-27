@@ -497,6 +497,7 @@ export default {
     thirdPartyDisabled: 'This feature is not available yet.',
     errorInvalidPlaces: 'Something went wrong with the selected places. Please try again.',
     errorTooManyPlaces: 'That is too many places for one plan. Remove a few and try again.',
+    errorMediaMismatch: 'That looks like a video, not a photo. Use the video option or pick a still image.',
     errorGeneric: 'Something went wrong. Please try again.',
     retry: 'Try again',
     startOver: 'Pick another video',

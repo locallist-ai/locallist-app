@@ -483,6 +483,7 @@ export default {
     thirdPartyDisabled: 'Esta función no está disponible todavía.',
     errorInvalidPlaces: 'Algo ha ido mal con los sitios seleccionados. Inténtalo de nuevo.',
     errorTooManyPlaces: 'Son demasiados sitios para un plan. Quita algunos e inténtalo de nuevo.',
+    errorMediaMismatch: 'Eso parece un vídeo, no una foto. Usa la opción de vídeo o elige una imagen fija.',
     errorGeneric: 'Algo ha ido mal. Inténtalo de nuevo.',
     retry: 'Reintentar',
     startOver: 'Elegir otro vídeo',

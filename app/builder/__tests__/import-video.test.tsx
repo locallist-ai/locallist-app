@@ -315,6 +315,16 @@ describe('import-video — errores de subida', () => {
     await waitFor(() => expect(screen.getByText('import.errorUnavailable')).toBeTruthy());
     expect(screen.getByTestId('import-retry')).toBeTruthy();
   });
+
+  // A file declared as a photo but read as a video by the File API (e.g. an iOS
+  // Live Photo) is a TERMINAL error: retrying the SAME file fails identically, so
+  // the copy must be the actionable dedicated one, NOT the generic "try again".
+  it('(f) 400 import_media_type_mismatch → copy dedicada accionable, NO la genérica', async () => {
+    await uploadFails(400, 'import_media_type_mismatch');
+    await waitFor(() => expect(screen.getByText('import.errorMediaMismatch')).toBeTruthy());
+    // Non-vacuity guard: sin el `case`, cae al default y pintaría errorGeneric.
+    expect(screen.queryByText('import.errorGeneric')).toBeNull();
+  });
 });
 
 describe('import-video — atribución de plataforma', () => {

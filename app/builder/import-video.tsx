@@ -86,6 +86,8 @@ function importErrorKey(status: number, code: string | null): string {
       return 'import.errorInvalidPlaces';
     case 'import_too_many_places':
       return 'import.errorTooManyPlaces';
+    case 'import_media_type_mismatch':
+      return 'import.errorMediaMismatch';
     default:
       break;
   }
