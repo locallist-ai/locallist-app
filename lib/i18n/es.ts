@@ -214,6 +214,7 @@ export default {
     loading: 'Iniciando Follow Mode...',
     loadError: 'No se pudo cargar el plan',
     offlineCached: 'Copia sin conexión',
+    offlineLive: 'Sin conexión, usando datos guardados',
     offlineDownloading: 'Guardando el mapa sin conexión',
     offlinePercent: '{{percentage}}%',
     offlineReady: 'Mapa guardado sin conexión',
