@@ -6,7 +6,7 @@ import { api, getAccessToken } from '../../lib/api';
 import { track } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan/plan-store';
-import { hapticImpact, WIZARD_ONLY, tierFromBudgetAmount, maxDaysForTier, BUDGET_AMOUNT_PRESETS } from './constants';
+import { hapticImpact, tierFromBudgetAmount, maxDaysForTier, BUDGET_AMOUNT_PRESETS } from './constants';
 import { getOnboardingPrefsSync } from '../../lib/onboarding-store';
 import { useTripContext, setStartDate as persistStartDate } from '../../lib/trip-context-store';
 import { useAuth } from '../../lib/auth';
@@ -17,35 +17,28 @@ import type { BuilderResponse } from '../../lib/types';
 // ── Return type ──
 
 export interface UseWizardResult {
-  /** Current step index (0 = city, 1-4 = prefs, 5 = chat legacy) */
+  /**
+   * Current wizard step (1 = duration, 2 = group, 3 = interests, 4 = budget).
+   * City is a separate pre-step chosen in the home tab; heredated prefs are
+   * skipped from the ACTIVE flow (see `activeSteps`) but remain reachable by
+   * going back.
+   */
   step: number;
   /** Slide direction for enter/exit animations */
   direction: 'forward' | 'back';
   /** User's preference selections (indexed 0-3 for steps 1-4) */
   selections: (string | null)[];
-  /** Chat message text */
-  message: string;
   /** Whether the AI request is in flight */
   loading: boolean;
   /** Error message from the last generate attempt */
   error: string | null;
-  /** Whether the AI bubble text should be shown (after typing dots) */
-  showBubbleText: boolean;
 
   /** Navigate back one step (no-op at step 0) */
   handleBack: () => void;
-  /** Select a city and auto-advance */
-  handleCitySelect: (cityName: string) => void;
-  /** Select a preference option and auto-advance */
-  handleSelect: (optionId: string) => void;
   /** Skip current preference step */
   advanceToNext: () => void;
-  /** Update the chat message */
-  setMessage: (text: string) => void;
   /** Submit the wizard and generate a plan */
   handleGenerate: () => void;
-  /** Reset wizard to step 0, clearing all selections and errors */
-  handleReset: () => void;
 
   /** Top-level interests (multi). */
   interests: string[];
@@ -129,14 +122,13 @@ export const useWizard = (): UseWizardResult => {
   const skipBudget = budgetPref === null || inheritedBudgetTier !== null;
 
   // Pasos ACTIVOS del flujo, en orden, tras aplicar la herencia. Raw step ids:
-  // 1=duración, 2=grupo, 3=interests, 4=budget (5=chat legacy cuando !WIZARD_ONLY).
-  // Los omitidos siguen existiendo (render por `step`) y son alcanzables yendo
-  // atrás; solo salen del avance por defecto y del recuento de dots.
+  // 1=duración, 2=grupo, 3=interests, 4=budget. Los omitidos siguen existiendo
+  // (render por `step`) y son alcanzables yendo atrás; solo salen del avance por
+  // defecto y del recuento de dots.
   const activeSteps = useMemo(() => {
     const s = [1, 2];
     if (!skipInterests) s.push(3);
     if (!skipBudget) s.push(4);
-    if (!WIZARD_ONLY) s.push(5);
     return s;
   }, [skipInterests, skipBudget]);
 
@@ -150,10 +142,8 @@ export const useWizard = (): UseWizardResult => {
     () => [null, null, null, inheritedBudgetTier ?? null],
   );
   const [city, setCity] = useState<string | null>(tripCity);
-  const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showBubbleText, setShowBubbleText] = useState(false);
 
   // Interests step state — multi-select + sub-categorías por interest.
   // Se pre-rellena con los intereses heredados del onboarding (si hay ≥1); el
@@ -183,15 +173,6 @@ export const useWizard = (): UseWizardResult => {
     if (tripCity && !city) setCity(tripCity);
   }, [tripCity, city]);
 
-  // Show bubble text after a delay when reaching the chat step.
-  // En WIZARD_ONLY no entramos a step 4 (chat legacy), este efecto queda dormido.
-  useEffect(() => {
-    if (step === 4 && !WIZARD_ONLY) {
-      const timer = setTimeout(() => setShowBubbleText(true), 800);
-      return () => clearTimeout(timer);
-    }
-  }, [step]);
-
   // Cleanup advance timer on unmount
   useEffect(() => {
     return () => {
@@ -220,21 +201,6 @@ export const useWizard = (): UseWizardResult => {
     });
   }, [activeSteps]);
 
-  const handleReset = useCallback(() => {
-    // Reset re-aplica la herencia del onboarding: vuelve al primer paso activo y
-    // restaura interests/budget heredados para conservar el mismo salto de pasos.
-    setStep(activeSteps[0]);
-    setDirection('forward');
-    setSelections([null, null, null, inheritedBudgetTier ?? null]);
-    setCity(tripCity);
-    setMessage('');
-    setError(null);
-    setInterests(inheritedInterests ?? []);
-    setSubcategoryPicks({});
-    setBudgetAmountState(inheritedBudgetAmount);
-    setCompanySubs([]);
-  }, [tripCity, activeSteps, inheritedInterests, inheritedBudgetTier, inheritedBudgetAmount]);
-
   const handleBack = useCallback(() => {
     if (step <= 1) {
       // At the first wizard step, go back to city picker instead of stepping back
@@ -245,28 +211,6 @@ export const useWizard = (): UseWizardResult => {
     setDirection('back');
     setError(null);
     setStep((s) => Math.max(s - 1, 1));
-  }, [step]);
-
-  const handleCitySelect = useCallback((cityName: string) => {
-    // Pablo 2026-04-26: no auto-advance. Solo guardamos la ciudad; el usuario
-    // pulsa Continue/Skip explícitamente para avanzar.
-    setCity(cityName);
-    hapticImpact(ImpactFeedbackStyle.Light);
-  }, []);
-
-  const handleSelect = useCallback((optionId: string) => {
-    // Step 3 = interests (multi-select), no usa este path; tiene su propio
-    // toggleInterest con botón Continue. Evitamos pisar selections[2].
-    if (step === 3) return;
-    const prefIdx = step - 1;
-    setSelections((prev) => {
-      const next = [...prev];
-      next[prefIdx] = optionId;
-      return next;
-    });
-    hapticImpact(ImpactFeedbackStyle.Light);
-    // Pablo 2026-04-26: no auto-advance. El usuario pulsa Continue/Skip
-    // explícitamente. Antes había setTimeout(advanceToNext, 350).
   }, [step]);
 
   // Duration step (step 1) usa DurationStep con pills numéricos (1..14 según
@@ -397,15 +341,15 @@ export const useWizard = (): UseWizardResult => {
     // - groupType (step 2): solo/couple/family/friends.
     // - categories + subcategories (step 3): interests multi-select con drill-down.
     // - budget (step 4): budget/moderate/premium + amount numérico raw.
-    // El chat es opcional. Si usuario no escribió nada, enviamos string vacío; el
-    // backend lo acepta (PR #48 Message nullable) y usa solo el wizard para el
-    // pipeline. En WIZARD_ONLY siempre va vacío (Pablo 2026-04-25).
+    // Solo wizard, sin chat concatenado (Pablo 2026-04-25): el `message` va
+    // siempre vacío. El backend lo acepta (PR #48 Message nullable) y usa solo
+    // el wizard para el pipeline.
     // `budget` = tier derivado desde budgetAmount (compat con backend actual).
     // `budgetAmount` = USD/día/persona raw para futuro matching más fino.
     // Backend: campos additive (System.Text.Json ignora unknown), añadidos al
     // DTO en este turno; matching se implementa en sesión siguiente.
     const body = {
-      message: WIZARD_ONLY ? '' : message.trim(),
+      message: '',
       tripContext: {
         city: city ?? undefined,
         // La fecha de inicio SIEMPRE se envía (default hoy, editable en el
@@ -469,7 +413,7 @@ export const useWizard = (): UseWizardResult => {
       pendingRef.current = false;
       setLoading(false);
     }
-  }, [loading, message, selections, city, tripStartDate, interests, subcategoryPicks, budgetAmount, companySubs, t, isPro, presentGate, presentClamped, refreshAiPlansQuota]);
+  }, [loading, selections, city, tripStartDate, interests, subcategoryPicks, budgetAmount, companySubs, t, isPro, presentGate, presentClamped, refreshAiPlansQuota]);
 
   // Mantener el ref siempre apuntando al último handleGenerate. advanceToNext
   // lo invoca cuando el usuario completa el último step de prefs y necesitamos
@@ -494,17 +438,11 @@ export const useWizard = (): UseWizardResult => {
     step,
     direction,
     selections,
-    message,
     loading,
     error,
-    showBubbleText,
     handleBack,
-    handleCitySelect,
-    handleSelect,
     advanceToNext,
-    setMessage,
     handleGenerate,
-    handleReset,
     interests,
     subcategoryPicks,
     toggleInterest,
