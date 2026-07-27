@@ -86,6 +86,8 @@ function importErrorKey(status: number, code: string | null): string {
       return 'import.errorInvalidPlaces';
     case 'import_too_many_places':
       return 'import.errorTooManyPlaces';
+    case 'import_media_type_mismatch':
+      return 'import.errorMediaMismatch';
     default:
       break;
   }
@@ -188,8 +190,14 @@ export default function ImportVideoScreen() {
         // Matched candidates start pre-selected.
         setSelectedIds(new Set(matched.map((c) => c.matchedPlaceId as string)));
         setPhase('results');
-        // `platform` is safe to log (attribution); the handle is NOT (PII).
-        track({ event: 'import_video_uploaded', candidates: list.length, matched: matched.length, platform });
+        // `platform` + `mediaKind` are safe to log (attribution); the handle is NOT (PII).
+        track({
+          event: 'import_video_uploaded',
+          candidates: list.length,
+          matched: matched.length,
+          platform,
+          mediaKind: asset.kind,
+        });
         return;
       }
 
@@ -230,7 +238,6 @@ export default function ImportVideoScreen() {
     if (busyRef.current) return;
     busyRef.current = true;
     try {
-      track({ event: 'import_video_started', platform });
       setErrorKey(null);
 
       // Guarded native module: no expo-image-picker in this binary → update notice.
@@ -258,6 +265,10 @@ export default function ImportVideoScreen() {
         return;
       }
       if (picked.status === 'canceled') return;
+
+      // `mediaKind` is only known once the user picked a video OR an image, so
+      // the "started" signal fires here (not on tap): a real import began.
+      track({ event: 'import_video_started', platform, mediaKind: picked.asset.kind });
 
       // Client validation BEFORE the network: reject known violations for free.
       const invalid = validatePickedVideo(picked.asset);

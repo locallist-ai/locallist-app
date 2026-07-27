@@ -23,6 +23,7 @@ import * as Crypto from 'expo-crypto';
 import * as FileSystem from 'expo-file-system/legacy';
 import { logger } from './logger';
 import { getCachedStorefront, type OfferingsError } from './purchases';
+import type { MediaKind } from './import/native-picker';
 
 const POSTHOG_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '';
 const POSTHOG_HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://eu.i.posthog.com';
@@ -241,11 +242,12 @@ export type AppEvent =
   | ({ event: 'purchase_cancelled' } & PurchaseProps)
   | ({ event: 'purchase_failed' } & PurchaseProps)
   | { event: 'restore_completed'; found: boolean }
-  // Import from video (F2 T5). SIN PII: `platform` (atribución) SÍ, el handle NO.
-  // El usuario abrió el flujo y tocó "elegir vídeo".
-  | { event: 'import_video_started'; platform: ImportPlatform }
-  // Vídeo subido y analizado: nº total de candidatos y cuántos matchearon.
-  | { event: 'import_video_uploaded'; candidates: number; matched: number; platform: ImportPlatform }
+  // Import from video/image (F2 T5). SIN PII: `platform` (atribución) y
+  // `mediaKind` (vídeo|imagen) SÍ, el handle NO. Se emite tras elegir el medio
+  // (`mediaKind` solo se conoce post-picker).
+  | { event: 'import_video_started'; platform: ImportPlatform; mediaKind: MediaKind }
+  // Medio subido y analizado: nº total de candidatos y cuántos matchearon.
+  | { event: 'import_video_uploaded'; candidates: number; matched: number; platform: ImportPlatform; mediaKind: MediaKind }
   // Plan creado desde el import: nº de sitios seleccionados.
   | { event: 'import_plan_created'; places: number }
   // Gate golpeado en el flujo de import (signup invitado / upsell Plus / límite).
