@@ -49,14 +49,16 @@ function pressCta(text: string) {
 describe('useGateHandler.presentGate', () => {
   afterEach(() => jest.clearAllMocks());
 
-  it('signup_required → Alert de registro + CTA que navega a /login', () => {
+  it('signup_required → Alert de registro + CTA que navega a /login EN MODO REGISTER', () => {
     const { result } = renderHook(() => useGateHandler());
     const msg = result.current.presentGate({ type: 'signup_required' });
 
     expect(msg).toBe('gate.signupRequiredBody');
     expect(lastAlert().title).toBe('gate.signupRequiredTitle');
     pressCta('gate.signupCta');
-    expect(mockPush).toHaveBeenCalledWith('/login');
+    // El gate de signup es SIEMPRE intención de crear cuenta (guardar
+    // favorito/plan, importar) → abre /login en la pestaña de registro.
+    expect(mockPush).toHaveBeenCalledWith('/login?intent=register');
   });
 
   it('signup_required con onDismiss: "quizás más tarde" lo dispara; el CTA de login NO', () => {
@@ -72,7 +74,7 @@ describe('useGateHandler.presentGate', () => {
     onDismiss.mockClear();
     result.current.presentGate({ type: 'signup_required' }, { onDismiss });
     pressCta('gate.signupCta');
-    expect(mockPush).toHaveBeenCalledWith('/login');
+    expect(mockPush).toHaveBeenCalledWith('/login?intent=register');
     expect(onDismiss).not.toHaveBeenCalled();
   });
 

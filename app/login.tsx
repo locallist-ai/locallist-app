@@ -11,10 +11,11 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../lib/theme';
 import { useResponsive } from '../lib/responsive';
-import { useAuthForm } from '../lib/auth/useAuthForm';
+import { useAuthForm, type AuthMode } from '../lib/auth/useAuthForm';
 import { AuthModeToggle } from '../components/auth/AuthModeToggle';
 import { AppleSignInButton } from '../components/auth/AppleSignInButton';
 import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
@@ -40,6 +41,7 @@ export default function LoginScreen({
   onClose,
   onRegisterInnerBack,
   contextMessage,
+  initialMode,
 }: {
   onClose?: () => void;
   onRegisterInnerBack?: (handler: (() => boolean) | null) => void;
@@ -49,10 +51,25 @@ export default function LoginScreen({
    * your plan and favorites"). Kept as plain text so callers own the i18n copy.
    */
   contextMessage?: string;
+  /**
+   * Which side the flow opens on. Inline hosts (the onboarding orchestrator)
+   * pass it directly. When rendered as the `/login` MODAL ROUTE (no props),
+   * it is instead read from the `intent` (or `mode`) route param, so a
+   * register-intent CTA can deep-link to `/login?intent=register`. The prop
+   * wins over the param; absent both, the screen opens on log-in as before.
+   */
+  initialMode?: AuthMode;
 } = {}) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { compact } = useResponsive();
+  // Route-param intent for the modal-route case. `register` (via `intent` or the
+  // `mode` alias) opens the screen on the create-account side; anything else
+  // keeps the historical log-in default. The explicit prop always overrides it.
+  const params = useLocalSearchParams<{ intent?: string; mode?: string }>();
+  const resolvedInitialMode: AuthMode =
+    initialMode ??
+    (params.intent === 'register' || params.mode === 'register' ? 'signup' : 'signin');
   const {
     step,
     authMode,
@@ -75,7 +92,7 @@ export default function LoginScreen({
     toggleCredentialsMode,
     backToChoose,
     submitCredentials,
-  } = useAuthForm();
+  } = useAuthForm(resolvedInitialMode);
 
   // Expose the login's internal back to an inline host (onboarding) so the Android
   // physical back respects the `credentials` → `choose` sub-step instead of tearing

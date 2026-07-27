@@ -56,6 +56,29 @@ beforeEach(() => {
   mockRouter.canGoBack.mockReturnValue(true);
 });
 
+describe('useAuthForm — initial mode', () => {
+  it('opens on LOG IN by default (no intent)', () => {
+    const { result } = renderHook(() => useAuthForm());
+    // The choose-step toggle and the credentials sub-step both default to log-in.
+    expect(result.current.authMode).toBe('signin');
+    expect(result.current.credentialsMode).toBe('login');
+  });
+
+  it('opens on REGISTER when seeded with a create-account intent', () => {
+    const { result } = renderHook(() => useAuthForm('signup'));
+    // A register-intent entry point (signup gate / onboarding "save this plan")
+    // must land the user on the create-account side, not log-in.
+    expect(result.current.authMode).toBe('signup');
+    expect(result.current.credentialsMode).toBe('register');
+  });
+
+  it('still lets the user switch sides after a register-seeded open', () => {
+    const { result } = renderHook(() => useAuthForm('signup'));
+    act(() => result.current.selectAuthMode('signin'));
+    expect(result.current.authMode).toBe('signin');
+  });
+});
+
 describe('useAuthForm — email login', () => {
   it('rejects an invalid email without calling the API', async () => {
     const { result } = renderHook(() => useAuthForm());

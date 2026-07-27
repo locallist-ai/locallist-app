@@ -161,6 +161,9 @@ export default function OnboardingScreen() {
         onClose={dismissLogin}
         onRegisterInnerBack={registerLoginInnerBack}
         contextMessage={loginForSavePlan ? t('onboarding.savePlanSignupPrompt') : undefined}
+        // "Save this plan" is a create-account intent → open on register; the
+        // generic "I already have an account" tap stays on log-in.
+        initialMode={loginForSavePlan ? 'signup' : 'signin'}
       />
     );
   }
