@@ -5,6 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Alert,
+  Linking,
   type LayoutChangeEvent,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -25,6 +27,9 @@ import { formatPriceLabel } from '../../lib/helpers/price';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import { PhotoAttribution } from '../ui/PhotoAttribution';
 import { resolvePhotoUrl, isPhotoDisplayable } from '../../lib/helpers/photo-url';
+import { buildGeoUrl, resolveHandoffTargets } from '../../lib/map/handoff';
+import { getTravelToStop, formatDistance, formatDuration } from '../../lib/map/eta';
+import { logger } from '../../lib/logger';
 import type { PlanStop } from '../../lib/types';
 
 const COLLAPSED_PEEK_HEIGHT = 56;
@@ -229,6 +234,56 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
     [allDays, onChangeDay],
   );
 
+  // --- ETA planificada para LLEGAR al stop mostrado (datos ya en el modelo,
+  // cero backend, cero GPS): `travelFromPrevious` del stop actual. Mismo destino
+  // que el botón "Cómo llegar" (que abre direcciones a este mismo stop). ---
+  const travelToCurrent = useMemo(
+    () => getTravelToStop(dayItems.map((it) => it.stop), safeDayPos),
+    [dayItems, safeDayPos],
+  );
+
+  // --- Handoff "Cómo llegar": navegación turn-by-turn a pie en la app de mapas
+  // del usuario (excepción stay-in-app autorizada desde un Follow activo). ---
+  const handleDirections = useCallback(async () => {
+    const lat = place?.latitude;
+    const lng = place?.longitude;
+    if (lat == null || lng == null) return;
+    const coord = { latitude: lat, longitude: lng };
+    Haptics.selectionAsync();
+
+    const openUrl = async (url: string) => {
+      try {
+        await Linking.openURL(url);
+      } catch {
+        try {
+          await Linking.openURL(buildGeoUrl(coord));
+        } catch (err) {
+          logger.warn('follow: no maps app could handle directions handoff', err);
+        }
+      }
+    };
+
+    let googleAvailable = false;
+    try {
+      googleAvailable = await Linking.canOpenURL('comgooglemaps://');
+    } catch {
+      googleAvailable = false;
+    }
+
+    const targets = resolveHandoffTargets(coord, googleAvailable);
+    if (targets.length === 1) {
+      await openUrl(targets[0].url);
+      return;
+    }
+    const apple = targets.find((tg) => tg.provider === 'apple');
+    const google = targets.find((tg) => tg.provider === 'google');
+    Alert.alert(t('follow.directionsTitle'), t('follow.directionsBody'), [
+      { text: t('follow.openAppleMaps'), onPress: () => { void (apple && openUrl(apple.url)); } },
+      { text: t('follow.openGoogleMaps'), onPress: () => { void (google && openUrl(google.url)); } },
+      { text: t('common.cancel'), style: 'cancel' },
+    ]);
+  }, [place, t]);
+
   return (
     <Animated.View
       style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }, animatedSheetStyle]}
@@ -376,6 +431,32 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
                   size={22}
                   color={hasNextStop ? colors.sunsetOrange : colors.borderColor}
                 />
+              </TouchableOpacity>
+            </View>
+
+            {/* ETA al stop mostrado + handoff a mapas (turn-by-turn), mismo destino */}
+            <View style={styles.followActionsRow}>
+              {travelToCurrent ? (
+                <View style={styles.etaPill}>
+                  <MaterialCommunityIcons name="walk" size={13} color={colors.deepOcean} />
+                  <Text style={styles.etaText} numberOfLines={1}>
+                    {`${formatDistance(travelToCurrent.distanceKm, t)} · ${formatDuration(travelToCurrent.durationMin, t)}`}
+                  </Text>
+                  <Text style={styles.etaLabel} numberOfLines={1}>{t('follow.toThisStop')}</Text>
+                </View>
+              ) : (
+                <View style={styles.etaSpacer} />
+              )}
+              <TouchableOpacity
+                style={styles.directionsBtn}
+                onPress={handleDirections}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={t('follow.getDirections')}
+                testID="follow-directions"
+              >
+                <MaterialCommunityIcons name="directions" size={16} color="#FFFFFF" />
+                <Text style={styles.directionsBtnText}>{t('follow.getDirections')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -644,6 +725,51 @@ const styles = StyleSheet.create({
   },
   navArrowDisabled: {
     opacity: 0.4,
+  },
+
+  // --- ETA + directions handoff row ---
+  followActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: 2,
+  },
+  etaPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  etaText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.deepOcean,
+  },
+  etaLabel: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textSecondary,
+    flexShrink: 1,
+  },
+  etaSpacer: {
+    flex: 1,
+  },
+  directionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.electricBlue,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: borderRadius.full,
+  },
+  directionsBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: '#FFFFFF',
   },
 
   // --- Empty state ---
