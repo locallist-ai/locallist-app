@@ -84,7 +84,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `map/useOfflineTiles.ts` | Offline tile caching hook |
 | `follow/StopCard.tsx` | Stop display card: photo, metadata, WhyThisPlace |
 | `follow/BottomSheetStop.tsx` | Animated bottom sheet with swipe gestures |
-| `follow/FollowDaySheet.tsx` | Day overview sheet inside Follow Mode |
+| `follow/FollowDaySheet.tsx` | Follow Mode sheet: centered day STEPPER (‹ Day X of N ›, arrows call `onChangeDay`, disabled at ends, hidden with 1 day) + one large PAGINATED stop card (‹ N / M › arrows + swipe call `onSelect(linearIndex)` to step ±1 stop within the day, disabled at first/last) + Complete-trip footer. Always mirrors `currentIndex` (sheet, map pin and "current" are one) |
 | `plan/PlanCardPager.tsx` | Pagination shell (~310 LoC): horizontal pager, current day, progress footer, swipe hint, back pill |
 | `plan/PlanEditorContext.tsx` | Context for plan editor state (days, isDirty, isSaving, dispatch, save) — provided from `app/plan/[id].tsx` |
 | `plan/PlanEditorModals.tsx` | `PlanEditorModalsHost`: owns move/add/replace modal state, renders MoveToDay + PlaceSearchModal above the pager; exposes request* via context |
