@@ -97,6 +97,14 @@ export default function FollowModeScreen() {
     [allStops, currentDay],
   );
 
+  // TODOS los stops del plan (todos los días) para el bbox del pack offline: el
+  // pack debe cubrir el plan entero, no el día visible (si no, días 2..N sin
+  // tiles). Solo alimenta el cálculo de bounds del pack, no el render.
+  const packMapStops = useMemo<MapStop[]>(
+    () => allStops.map(mapToMapStop).filter((s): s is MapStop => s !== null),
+    [allStops],
+  );
+
   // Persiste el stop actual en SecureStore para reanudar tras cerrar la app.
   useEffect(() => {
     if (!id || allStops.length === 0) return;
@@ -295,6 +303,8 @@ export default function FollowModeScreen() {
         routeSegments={routeSegments}
         activeDayNumber={currentDay}
         followMode
+        planId={id}
+        packStops={packMapStops}
       />
 
       <BlurView
