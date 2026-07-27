@@ -72,7 +72,15 @@ export const RefineableStep: React.FC<RefineableStepProps> = ({
   const handleSheetConfirm = (subs: string[]) => {
     onSetSubs(subs);
     setActiveSheetParent(null);
-    // No auto-advance — el usuario sigue en este step hasta pulsar Continue.
+    // Pablo 2026-07-27: el "Listo" del sheet ENCADENA directo al siguiente step
+    // en vez de dejar al usuario en este paso teniendo que pulsar "Continuar"
+    // (un solo gesto = menos clicks). Es seguro porque este step es single-select:
+    // elegir el grupo + refinar sus sub-tags COMPLETA el paso, no hay nada más que
+    // decidir aquí. `onContinue` es advanceToNext, que respeta activeSteps y, si
+    // este es el último paso activo, dispara la generación (gates/validación
+    // incluidos) — nunca "avanza a la nada". Volver atrás reabre el paso con la
+    // selección intacta (selectedId + selectedSubs persisten en el hook).
+    onContinue();
   };
 
   const handleSheetCancel = () => {
