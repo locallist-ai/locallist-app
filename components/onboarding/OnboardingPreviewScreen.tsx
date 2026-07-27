@@ -4,14 +4,71 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { getShowcasePlans, getPlanDetail } from '../../lib/api';
+import { getOnboardingPrefsSync } from '../../lib/onboarding-store';
 import { logger } from '../../lib/logger';
 import { PhotoHero, type Category } from '../ui/PhotoHero';
 import type { Plan } from '../../lib/types';
 
-// Onboarding screen 4 — value preview. Shows a REAL curated plan for the chosen
-// city (PhotoHero cover + the first 2-3 stops) so the payoff is concrete before
-// the user commits. Falls back to a generic category-gradient card when the city
-// has no showcase plan (never fabricates photos). The CTA finishes onboarding.
+// Onboarding screen 4: value preview. Shows a REAL curated plan (PhotoHero cover
+// pulled from the plan's stops + the first 2-3 stops) so the payoff is concrete
+// before the user commits. The plan is picked to match the interests the user
+// chose on the tastes screen (there is no city in onboarding; city is chosen in
+// the home, builder-first #91). Falls back to a generic category-gradient card
+// when there is no showcase plan (never fabricates photos). CTA finishes onboarding.
+
+// Ties an onboarding interest id (see components/home/constants INTEREST_OPTIONS)
+// to the showcase plans curated in prod (Romantic / Foodie / Outdoor / Family /
+// Culture). Matching is a case-insensitive substring test against each plan's
+// name + description + type + tripContext, so it survives however the backend
+// labels each showcase without hard-coding plan ids.
+const INTEREST_KEYWORDS: Record<string, string[]> = {
+  food: ['food', 'foodie', 'culinary', 'dining', 'gastro', 'eat'],
+  outdoors: ['outdoor', 'nature', 'adventure', 'hike', 'beach', 'park'],
+  coffee: ['coffee', 'cafe', 'café', 'espresso'],
+  culture: ['culture', 'cultural', 'art', 'museum', 'history', 'historic', 'heritage'],
+  nightlife: ['nightlife', 'night', 'bar', 'club', 'cocktail'],
+  wellness: ['wellness', 'spa', 'relax', 'yoga', 'retreat'],
+  shopping: ['shopping', 'boutique', 'market', 'shop'],
+};
+
+/**
+ * Pick the showcase plan that best matches the user's onboarding interests.
+ * Scores each plan by how many interest keywords appear in its text, then:
+ * no plans → null; no interests / no keyword signal / a tie for the top →
+ * `plans[0]` (deterministic); otherwise the unique highest-scoring plan.
+ */
+export function pickShowcasePlanForInterests(
+  plans: Plan[],
+  interests: string[] | undefined,
+): Plan | null {
+  if (plans.length === 0) return null;
+  const first = plans[0];
+  if (!interests || interests.length === 0) return first;
+
+  const keywords = interests.flatMap((id) => INTEREST_KEYWORDS[id] ?? []);
+  if (keywords.length === 0) return first;
+
+  let bestScore = 0;
+  let bestPlan: Plan | null = null;
+  let tie = false;
+  for (const plan of plans) {
+    const haystack = [plan.name, plan.description, plan.type, JSON.stringify(plan.tripContext ?? '')]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    const score = keywords.reduce((acc, kw) => (haystack.includes(kw) ? acc + 1 : acc), 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestPlan = plan;
+      tie = false;
+    } else if (score === bestScore && score > 0) {
+      tie = true;
+    }
+  }
+  // Nothing matched, or two plans tied for the top → deterministic default.
+  if (bestScore === 0 || tie || !bestPlan) return first;
+  return bestPlan;
+}
 
 interface OnboardingPreviewScreenProps {
   city: string | null;
@@ -28,6 +85,7 @@ export function OnboardingPreviewScreen({ city, onCreatePlan }: OnboardingPrevie
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [stops, setStops] = useState<PreviewStop[]>([]);
+  const [heroPhoto, setHeroPhoto] = useState<{ url: string; source: 'google' | 'external' | null } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -35,19 +93,29 @@ export function OnboardingPreviewScreen({ city, onCreatePlan }: OnboardingPrevie
       try {
         const listRes = await getShowcasePlans(city ?? undefined, controller.signal);
         if (controller.signal.aborted) return;
-        const first = listRes.data?.plans?.[0];
-        if (!first) {
+        const chosen = pickShowcasePlanForInterests(
+          listRes.data?.plans ?? [],
+          getOnboardingPrefsSync().interests,
+        );
+        if (!chosen) {
           setLoading(false);
           return;
         }
-        setPlan(first);
-        const detailRes = await getPlanDetail(first.id, controller.signal);
+        setPlan(chosen);
+        const detailRes = await getPlanDetail(chosen.id, controller.signal);
         if (controller.signal.aborted) return;
         const flat = (detailRes.data?.days ?? []).flatMap((d) => d.stops);
+        // The list DTO carries no photo; the detail's stops do. Use the first
+        // available so the cover is a real photo, not always the gradient.
+        const photoStop = flat.find((s) => s.place?.photos?.[0]);
+        const photoUrl = photoStop?.place?.photos?.[0];
+        if (photoUrl) {
+          setHeroPhoto({ url: photoUrl, source: photoStop?.place?.photoSource ?? null });
+        }
         setStops(
           flat.slice(0, 3).map((s) => ({
             name: s.place?.name ?? '',
-            category: s.place?.category ?? first.category ?? null,
+            category: s.place?.category ?? chosen.category ?? null,
           })),
         );
       } catch (err) {
@@ -79,7 +147,8 @@ export function OnboardingPreviewScreen({ city, onCreatePlan }: OnboardingPrevie
         ) : plan ? (
           <View style={styles.card}>
             <PhotoHero
-              imageUrl={plan.image ?? undefined}
+              imageUrl={heroPhoto?.url}
+              photoSource={heroPhoto?.source ?? null}
               fallbackCategory={heroCategory}
               height={200}
             />
