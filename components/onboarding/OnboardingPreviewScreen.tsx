@@ -3,8 +3,13 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
-import { getShowcasePlans, getPlanDetail } from '../../lib/api';
+import { getShowcasePlans, getPlanDetail, clonePlan } from '../../lib/api';
 import { getOnboardingPrefsSync } from '../../lib/onboarding-store';
+import { useAuth } from '../../lib/auth';
+import { useGateHandler } from '../../lib/useGateHandler';
+import { mapGateError } from '../../lib/gate-errors';
+import { setPendingClonePlan, setPendingCloneLanding } from '../../lib/clone-plan-store';
+import { track } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
 import { PhotoHero, type Category } from '../ui/PhotoHero';
 import type { Plan } from '../../lib/types';
@@ -72,7 +77,22 @@ export function pickShowcasePlanForInterests(
 
 interface OnboardingPreviewScreenProps {
   city: string | null;
+  /**
+   * Secondary "not now" path: continue WITHOUT saving. Preserves the pre-hook
+   * behaviour (advance to the paywall step / complete onboarding).
+   */
   onCreatePlan: () => void;
+  /**
+   * Guest tapped "Save this plan": the intent is staged, the orchestrator must
+   * present registration. Replayed after a successful login (`clone-plan-store`).
+   */
+  onRequestSignup: () => void;
+  /**
+   * An already-authenticated user saved directly (clone succeeded, or failed
+   * gracefully): complete onboarding. The app shell then lands on the cloned
+   * plan via the staged landing id.
+   */
+  onSaved: () => void;
 }
 
 interface PreviewStop {
@@ -80,9 +100,17 @@ interface PreviewStop {
   category: string | null;
 }
 
-export function OnboardingPreviewScreen({ city, onCreatePlan }: OnboardingPreviewScreenProps) {
+export function OnboardingPreviewScreen({
+  city,
+  onCreatePlan,
+  onRequestSignup,
+  onSaved,
+}: OnboardingPreviewScreenProps) {
   const { t } = useTranslation();
+  const { isAuthenticated } = useAuth();
+  const { presentGate } = useGateHandler();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [stops, setStops] = useState<PreviewStop[]>([]);
   const [heroPhoto, setHeroPhoto] = useState<{ url: string; source: 'google' | 'external' | null } | null>(null);
@@ -129,6 +157,49 @@ export function OnboardingPreviewScreen({ city, onCreatePlan }: OnboardingPrevie
 
   const cityLabel = city ?? t('onboarding.previewYourCity');
   const heroCategory = (plan?.category as Category | undefined) ?? 'Culture';
+
+  // "Save this plan": the primary hook. A guest must register first (intent
+  // staged + replayed post-login by `clone-plan-store`); an authenticated user
+  // clones directly. On success the cloned plan id is staged so the app shell
+  // lands on it. Failures never strand the user — a saved-cap 403 shows the Plus
+  // upsell, anything else logs and completes onboarding (lands home).
+  const handleSavePlan = async () => {
+    if (!plan || saving) return;
+    track({ event: 'onboarding_save_plan_tapped' });
+
+    if (!isAuthenticated) {
+      setPendingClonePlan(plan.id);
+      onRequestSignup();
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await clonePlan(plan.id);
+      if (res.data?.id) {
+        track({ event: 'onboarding_plan_saved', viaSignup: false });
+        setPendingCloneLanding(res.data.id);
+        onSaved();
+        return;
+      }
+      const action = mapGateError(res.status, res.errorBody);
+      if (action.type === 'upsell' && action.code === 'saved_plans_limit_reached') {
+        presentGate(action);
+        return;
+      }
+      if (action.type === 'signup_required') {
+        // A stale token expired mid-flight: stage the intent and steer to signup.
+        setPendingClonePlan(plan.id);
+        onRequestSignup();
+        return;
+      }
+      // Network / other: don't leave the user stuck — complete onboarding (home).
+      logger.warn('onboarding: save plan failed', { status: res.status });
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -188,13 +259,28 @@ export function OnboardingPreviewScreen({ city, onCreatePlan }: OnboardingPrevie
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={styles.primaryBtn}
+          style={[styles.primaryBtn, (saving || !plan) && styles.primaryBtnDisabled]}
           activeOpacity={0.85}
+          onPress={handleSavePlan}
+          disabled={saving || !plan}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: saving || !plan, busy: saving }}
+          accessibilityLabel={t('onboarding.savePlan')}
+        >
+          {saving ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.primaryBtnText}>{t('onboarding.savePlan')}</Text>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          activeOpacity={0.7}
           onPress={onCreatePlan}
           accessibilityRole="button"
-          accessibilityLabel={t('onboarding.createPlan')}
+          accessibilityLabel={t('onboarding.saveNotNow')}
         >
-          <Text style={styles.primaryBtnText}>{t('onboarding.createPlan')}</Text>
+          <Text style={styles.secondaryBtnText}>{t('onboarding.saveNotNow')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -295,6 +381,18 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     borderCurve: 'continuous',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 54,
   },
+  primaryBtnDisabled: { opacity: 0.6 },
   primaryBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 17, color: '#FFFFFF' },
+  secondaryBtn: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  secondaryBtnText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: colors.textSecondary,
+  },
 });

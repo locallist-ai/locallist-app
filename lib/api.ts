@@ -262,6 +262,19 @@ export async function getPlanDetail(id: string, signal?: AbortSignal) {
   return api<PlanDetailResponse>(`/plans/${id}`, { signal });
 }
 
+// ─── Plan clone ("save this plan", onboarding hook) ────────────────────────────
+// Contract (backend feat/clone-plan, in review):
+//   POST /plans/{id}/clone  [Authorize App]
+//     → 200 PlanDetailResponse of a PRIVATE copy owned by the caller (source=cloned)
+//     · 401 for an anonymous caller
+//     · 403 { error:'saved_plans_limit_reached', ... } when a free user is at the cap
+//   Idempotent: cloning the SAME source twice returns the SAME plan (no duplicate).
+// LAUNCH LIMITATION (documented, not resolved): the showcase plans are all Miami,
+// so the clone is always a Miami plan. Acceptable for the Miami-only launch.
+export async function clonePlan(planId: string) {
+  return api<PlanDetailResponse>(`/plans/${planId}/clone`, { method: 'POST' });
+}
+
 // ─── Plan sharing (Social S1) ──────────────────────────────────────────────────
 // Contract (backend en despliegue):
 //   POST   /plans/{id}/share  → 200 { shareToken, visibility } · OWNER-only, idempotente

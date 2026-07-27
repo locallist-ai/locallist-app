@@ -180,6 +180,13 @@ export type AppEvent =
   // user tapped "not now" or the paywall degraded (auto-skip), false after an
   // effective purchase/restore.
   | { event: 'onboarding_completed'; skippedPaywall: boolean }
+  // "Save this plan" hook on the showcase preview: the user tapped the primary
+  // save CTA. No ids/PII — just the funnel signal.
+  | { event: 'onboarding_save_plan_tapped' }
+  // The showcase plan was cloned into the user's own private copy. `viaSignup` =
+  // the save required registration first (guest → signup → replay), false when an
+  // already-authenticated user saved directly. No ids/PII.
+  | { event: 'onboarding_plan_saved'; viaSignup: boolean }
   // Content
   | { event: 'plan_viewed'; planId: string; source?: 'feed' | 'builder' | 'deep_link' }
   | { event: 'place_viewed'; placeId: string; planId?: string }
