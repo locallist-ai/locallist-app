@@ -17,10 +17,17 @@ import { useTaxonomy, getInterestSubcategories, taxonomyLocale } from './useTaxo
 // subcategorías por categoría. Renderizado por HomeV2 cuando step === 4.
 //
 // Diferencias con WizardStep (single-select):
-//   - Multi-select: el usuario puede picar varias interests.
-//   - Drill-down: al tap una con subcategorías disponibles, abre un
-//     SubcategorySheet para refinar (ej. food → sushi, italian).
-//   - No auto-advance: al ser multi, requiere botón "Continuar" explícito.
+//   - Multi-select: el usuario puede picar varias interests. El tap del chip SOLO
+//     togglea la categoría (add/remove) — NO abre ningún sheet — para que elegir
+//     varias sea fluido, sin un modal interrumpiendo cada selección.
+//   - Drill-down OPCIONAL: refinar sub-categorías de UNA interest (ej. food →
+//     sushi, italian) es opt-in vía el icono ⋯ (o long-press) del chip ya
+//     seleccionado, no automático.
+//   - "Listo" del sheet ENCADENA al siguiente step (igual que el step de grupo):
+//     cierra el sheet Y avanza en un gesto. Las categorías ya están elegidas en
+//     el step antes de abrir el sheet, así que confirmar el refinamiento = "he
+//     terminado aquí, avanza". Multi-select intacto: para varias categorías se
+//     tocan sus chips y se pulsa "Continuar" (o se refina una y su "Listo" avanza).
 //   - Skip: avanza sin selecciones (interests es opcional para el min input).
 
 interface InterestsStepProps {
@@ -28,7 +35,7 @@ interface InterestsStepProps {
   interests: string[];
   /** Sub-selecciones por categoría: { food: ['sushi','italian'] }. */
   subcategoryPicks: Record<string, string[]>;
-  /** Toggle interest top-level. Cuando agregamos un interest, opcionalmente abre el sheet. */
+  /** Toggle interest top-level (add/remove). No abre ningún sheet: el refinamiento es opt-in vía ⋯. */
   onToggleInterest: (id: string) => void;
   /** Setter para sub-categorías de una interest concreta. */
   onSetSubcategories: (interestId: string, subs: string[]) => void;
@@ -53,15 +60,12 @@ export const InterestsStep: React.FC<InterestsStepProps> = ({
   const [activeSheet, setActiveSheet] = useState<StepOption | null>(null);
 
   const handleChipPress = (opt: StepOption) => {
-    const wasSelected = interests.includes(opt.id);
+    // Pablo 2026-07-27: el tap del chip SOLO togglea la categoría (multi-select
+    // fluido). Ya NO auto-abre el sheet: abrirlo en cada selección obligaba a un
+    // "Listo" + "Continuar" por categoría y, si "Listo" avanzara, impediría elegir
+    // una segunda. El refinamiento pasa a ser opt-in (⋯ / long-press del chip ya
+    // seleccionado), y ahí SÍ su "Listo" encadena al siguiente step.
     onToggleInterest(opt.id);
-    // Si estamos AGREGANDO esta interest y tiene subcategorías disponibles,
-    // abrir el sheet automáticamente para que el usuario pueda refinar.
-    // Si la estamos quitando, no hacemos nada.
-    const hasSubs = getInterestSubcategories(opt.id, taxonomy, locale).length > 0;
-    if (!wasSelected && hasSubs) {
-      setActiveSheet(opt);
-    }
   };
 
   const handleEditSubs = (opt: StepOption) => {
@@ -73,9 +77,19 @@ export const InterestsStep: React.FC<InterestsStepProps> = ({
       onSetSubcategories(activeSheet.id, subs);
     }
     setActiveSheet(null);
+    // Pablo 2026-07-27: "Listo" del sheet ENCADENA al siguiente step (paridad con
+    // el step de grupo), en vez de dejar al usuario teniendo que pulsar además
+    // "Continuar". Seguro para el multi-select porque las categorías se eligen en
+    // el step ANTES de abrir el sheet (el sheet solo refina UNA); confirmar el
+    // refinamiento = "he terminado". `onContinue` es advanceToNext (respeta
+    // activeSteps; si interests es el último paso activo, dispara la generación con
+    // sus gates/validación). Volver atrás reabre el paso con la selección intacta.
+    onContinue();
   };
 
   const handleSheetCancel = () => {
+    // El descarte por backdrop NO avanza: el usuario canceló el refinamiento y
+    // sigue en el step para seguir eligiendo/refinando.
     setActiveSheet(null);
   };
 
