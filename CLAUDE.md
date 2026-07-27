@@ -71,7 +71,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `ui/PhotoAttribution.tsx` | Discreet "Google" label overlay for photos with `photoSource === 'google'`; v1 = brand name only, per-photo author (`authorAttributions`) is v1.1 |
 | `ui/SkeletonCard.tsx` | Shimmer skeleton loader |
 | `ui/CategoryBadge.tsx` | Category pill with per-category color |
-| `ui/FavoriteButton.tsx` | Favorite affordance: filled (sunsetOrange) / white-outline heart (Ionicons, brand contract = icon never emoji) inside a translucent dark bubble over a photo hero. Optimistic toggle via `useFavorites`; a guest tap routes to the signup gate. Used on `place/[id]`, `StopCard`, and the favorites list |
+| `ui/FavoriteButton.tsx` | Favorite affordance in the branded bubble language (same contract as ChoiceChip icon bubbles): unfavorited = paperWhite bubble (subtle sunsetOrange border) + `MaterialCommunityIcons` `heart-outline` in sunsetOrange; favorited = sunsetOrange bubble + filled `heart` in white. Heart is ALWAYS an icon, never emoji (brand contract); the paperWhite bubble keeps it legible over any photo. Optimistic toggle via `useFavorites`; a guest tap routes to the signup gate. Used on `place/[id]`, `StopCard`, and the favorites list |
 | `ui/ConfirmModal.tsx` | Reusable confirm/cancel modal |
 | `ui/design-system/` | ChoiceChip, EditorialTitle, StepSubtitle, ProgressDots — wizard design system |
 | `chat/` | Chat UI: MessageBubble, AiDisclaimerBanner (aviso fijo "es una IA, puede cometer errores"), CityNoticeBubble (aviso de ciudad no cubierta + CTA), ChatErrorBubble (error de infra `ai_unavailable` + reintento), QuickReplyChips, SlotBadges, SaveProfileSheet |
@@ -96,7 +96,7 @@ Credentials live in EAS (never in repo). `eas.json` configures development + pre
 | `plan-editor/SwipeableStopCard.tsx` | Swipe-to-delete stop row |
 | `plan-editor/MoveToDay.tsx` | Move stop between days modal |
 | `plan-editor/PlaceSearchModal.tsx` | Search places to add to a plan |
-| `home/HomeScreen.tsx` | AI wizard step flow (used by `builder/wizard.tsx`): DurationStep (tier-aware day pills 1..14 Plus / 1..3 free + upsell), InterestsStep + SubcategorySheet, BudgetStep, RefineableStep, ChatStep (legacy), `useWizard` state hook (guest gate + gate-error mapping + quota), `useTaxonomy`, constants |
+| `home/HomeScreen.tsx` | AI wizard step flow (used by `builder/wizard.tsx`): DurationStep (tier-aware day pills 1..14 Plus / 1..3 free + upsell), InterestsStep + SubcategorySheet, BudgetStep, RefineableStep, generating overlay, `useWizard` state hook (steps 1-4 + activeSteps, guest gate + gate-error mapping + quota), `useTaxonomy`, constants |
 | `home/CityCard.tsx` + `home/HeroSkiaBg.tsx` | City picker card + Skia hero background (home tab) |
 | `home/CityRequestInline.tsx` | "Pide tu ciudad" compartido (onboarding + home): link discreto → TextInput inline (autofocus ref+setTimeout) + enviar. Validación cliente espejo del server (máx 100, regex unicode) antes de `POST /cities/request`; estados enviando/ack/400/429/red; `track({event:'city_request_submitted', source})` solo en éxito (sin PII). Prop `variant` claro/oscuro |
 | `home/TypingDots.tsx` | Typing indicator (shared with chat) |

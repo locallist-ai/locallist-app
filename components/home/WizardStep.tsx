@@ -12,8 +12,7 @@ import type { WizardStepConfig } from './constants';
 // Generic single-select wizard step (title + option cards + Continue/Skip).
 // Duration used to render through this; it now uses the tier-aware DurationStep
 // (day pills 1..14 for Plus, 1..3 + upsell for free), so WizardStep is kept as
-// a reusable component for any future single-select step — same intent as the
-// other retained step pieces (ChatStep, StepDecorations).
+// a reusable component for any future single-select step.
 
 // ── Types ──
 

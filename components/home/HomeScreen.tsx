@@ -8,19 +8,14 @@ import { router, Redirect } from 'expo-router';
 import { fonts, colors } from '../../lib/theme';
 import {
   STEPS,
-  WIZARD_ONLY,
   INTERESTS_STEP_INDEX_IN_STEPS,
   COMPANY_SUBCATEGORIES,
 } from './constants';
 import { useWizard } from './useWizard';
 import { DurationStep } from './DurationStep';
-import { ChatStep } from './ChatStep';
 import { InterestsStep } from './InterestsStep';
 import { BudgetStep } from './BudgetStep';
 import { RefineableStep } from './RefineableStep';
-// StepDecorations + FloatingEmoji quedan en el repo como dead code reusable
-// para una futura capa de "branded particles". Pablo 2026-04-25 pidió quitar
-// los emojis legacy del bg — el wizard se ve más editorial sin ellos.
 import { ProgressDots } from './ProgressDots';
 import { HeroSkiaBg } from './HeroSkiaBg';
 import { useTripContext } from '../../lib/trip-context-store';
@@ -68,9 +63,6 @@ export const HomeScreen: React.FC = () => {
     !isInterestsStep &&
     !isBudgetStep;
   const currentStepConfig = usesWizardStep ? STEPS[stepIndexInSteps] : null;
-  // Chat step queda como step 6 cuando WIZARD_ONLY=false (legacy). En
-  // WIZARD_ONLY no se alcanza nunca — el ChatStep code se conserva intacto.
-  const isChatStep = wizard.step === STEPS.length + 1;
 
   return (
     <View style={styles.root}>
@@ -123,16 +115,11 @@ export const HomeScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Decorations layer eliminada — Pablo 2026-04-25: emojis flotando
-          * desentonan con el lenguaje editorial. StepDecorations + FloatingEmoji
-          * quedan como dead code en el repo para reusar si en el futuro
-          * cambiamos a "branded particles". */}
-
-        {/* Step content. Pablo 2026-04-26: cuando WIZARD_ONLY está generando o
-          * tiene error, mostramos SOLO el overlay (sin renderizar el step de
-          * fondo) para que no parezca que la página se "reabre". */}
+        {/* Step content. Pablo 2026-04-26: mientras se genera o hay error,
+          * mostramos SOLO el overlay (sin renderizar el step de fondo) para que
+          * no parezca que la página se "reabre". */}
         <View style={styles.stepContent}>
-          {WIZARD_ONLY && (wizard.loading || wizard.error) ? null : (
+          {wizard.loading || wizard.error ? null : (
           <>
           {currentStepConfig && (
             <Animated.View key={`step-${wizard.step}`} entering={entering} exiting={exiting} style={styles.stepFill}>
@@ -188,24 +175,12 @@ export const HomeScreen: React.FC = () => {
             </Animated.View>
           )}
 
-          {isChatStep && !WIZARD_ONLY && (
-            <Animated.View key="step-chat" entering={entering} exiting={exiting} style={styles.stepFill}>
-              <ChatStep
-                message={wizard.message}
-                onChangeMessage={wizard.setMessage}
-                showBubbleText={wizard.showBubbleText}
-                loading={wizard.loading}
-                error={wizard.error}
-                onGenerate={wizard.handleGenerate}
-              />
-            </Animated.View>
-          )}
           </>
           )}
 
-          {/* WIZARD_ONLY: loading overlay tras seleccionar el último step de
-            * preferencias. Sustituye al ChatStep como pantalla de generación. */}
-          {WIZARD_ONLY && (wizard.loading || wizard.error) && (
+          {/* Loading overlay tras seleccionar el último step de preferencias:
+            * es la pantalla de generación del plan. */}
+          {(wizard.loading || wizard.error) && (
             <Animated.View
               key="step-generating"
               entering={FadeIn.duration(300)}

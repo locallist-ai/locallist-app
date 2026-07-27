@@ -249,28 +249,3 @@ export const hapticSelect = (): void => {
 export const hapticImpact = (style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light): void => {
   if (Platform.OS === 'ios') Haptics.impactAsync(style);
 };
-
-/**
- * Feature flag — solo wizard, sin chat concatenado.
- *
- * Pablo (2026-04-25): "vamos a quitar el chat. No elimines el codigo, pero por
- * ahora vamos a mantener solo el wizard, no queremos concatenarlos ya. En el
- * futuro, los usuarios podrán construir sus planes desde el wizard o hablar
- * directamente en un chat conversacional, pero serán features y flows
- * completamente diferentes."
- *
- * Mientras este flag sea true:
- *   - El wizard salta directamente del último step de preferencias a generar.
- *   - El componente ChatStep + el estado `message` + el `useEffect` del bubble
- *     siguen vivos en el código pero no son alcanzables desde la UI.
- *   - El payload sigue mandando `message: ''` (backend lo acepta como nullable).
- *
- * Para reactivar el chat: setear a false (o eliminar el flag) y la UI vuelve.
- */
-export const WIZARD_ONLY = true;
-
-/** Total number of progress dots — 4 prefs (city is a separate pre-step). */
-export const TOTAL_STEPS = WIZARD_ONLY ? 4 : 5;
-
-/** Última step index del flujo interactivo (después → generar). step=4 = budget. */
-export const LAST_STEP_INDEX = WIZARD_ONLY ? 4 : 5;
