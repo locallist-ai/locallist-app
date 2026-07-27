@@ -18,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import type { RouteSegment } from '../../lib/types';
-import { colors } from '../../lib/theme';
+import { colors, fonts } from '../../lib/theme';
 import { buildRouteGeoJSON } from './route-geojson';
 import { splitRouteGeoJSON } from '../../lib/map/route-split';
 import {
@@ -79,9 +79,6 @@ interface PlanMapProps {
    */
   packStops?: MapStop[];
 }
-
-const PIN_COLOR = '#3b82f6'; // electric-blue
-const ACTIVE_PIN_COLOR = '#f97316'; // sunset-orange
 
 export const PlanMap: React.FC<PlanMapProps> = ({
   stops,
@@ -226,34 +223,36 @@ export const PlanMap: React.FC<PlanMapProps> = ({
           </MapLibreGL.ShapeSource>
         ) : null}
 
-        {/* Stop pins */}
-        {stops.map((stop, index) => (
-          <MapLibreGL.PointAnnotation
-            key={stop.id}
-            id={stop.id}
-            coordinate={[stop.longitude, stop.latitude]}
-            onSelected={onPinPress ? () => onPinPress(index) : undefined}
-          >
-            <View
-              style={[
-                styles.pinContainer,
-                {
-                  backgroundColor:
-                    index === activePinIndex ? ACTIVE_PIN_COLOR : PIN_COLOR,
-                },
-              ]}
+        {/* Stop pins — numbered circles. The number is the 1-based position of
+            the stop within the day being shown (`stops` arrives day-scoped and
+            already sorted by orderIndex), so it mirrors the "N / M" the sheet
+            shows. The active stop is highlighted (filled sunsetOrange, larger,
+            paperWhite number); the rest read as a light secondary marker. */}
+        {stops.map((stop, index) => {
+          const isActive = index === activePinIndex;
+          const stopNumber = index + 1;
+          return (
+            <MapLibreGL.PointAnnotation
+              key={stop.id}
+              id={stop.id}
+              coordinate={[stop.longitude, stop.latitude]}
+              onSelected={onPinPress ? () => onPinPress(index) : undefined}
             >
               <View
-                style={[
-                  styles.pinDot,
-                  {
-                    transform: [{ scale: index === activePinIndex ? 1.3 : 1 }],
-                  },
-                ]}
-              />
-            </View>
-          </MapLibreGL.PointAnnotation>
-        ))}
+                testID={`plan-map-pin-${index}`}
+                style={[styles.pin, isActive ? styles.pinActive : styles.pinInactive]}
+              >
+                <Text
+                  testID={`plan-map-pin-label-${index}`}
+                  style={[styles.pinLabel, isActive ? styles.pinLabelActive : styles.pinLabelInactive]}
+                  allowFontScaling={false}
+                >
+                  {stopNumber}
+                </Text>
+              </View>
+            </MapLibreGL.PointAnnotation>
+          );
+        })}
 
         {/* Punto azul del usuario (solo con permiso concedido). */}
         {showUserDot && userCoordinate && (
@@ -342,25 +341,42 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  pinContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  pin: {
+    minWidth: 30,
+    height: 30,
+    paddingHorizontal: 6,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderWidth: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },
-  pinDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+  pinInactive: {
+    backgroundColor: colors.paperWhite,
+    borderColor: colors.electricBlue,
+  },
+  pinActive: {
+    minWidth: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.sunsetOrange,
+    borderColor: colors.paperWhite,
+  },
+  pinLabel: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  pinLabelInactive: {
+    color: colors.deepOcean,
+  },
+  pinLabelActive: {
+    color: colors.paperWhite,
+    fontSize: 16,
   },
   userDotHalo: {
     width: 26,
