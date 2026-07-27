@@ -71,17 +71,19 @@ jest.mock('../../../lib/map/tiles', () => ({
   OSM_COPYRIGHT_URL: 'https://example.test/copyright',
 }));
 
-const makeStop = (n: number, orderIndex: number): MapStop => ({
+const makeStop = (n: number, orderIndex: number, number?: number): MapStop => ({
   id: `stop-${n}`,
   name: `Stop ${n}`,
   latitude: 25.7 + n * 0.01,
   longitude: -80.1 - n * 0.01,
   category: 'Coffee',
   orderIndex,
+  number,
 });
 
 // Day-scoped, already sorted by orderIndex (como llega desde el follow screen).
-const dayStops: MapStop[] = [makeStop(1, 0), makeStop(2, 1), makeStop(3, 2)];
+// `number` = posición en el día completo (aquí contigua: sin huecos de coords).
+const dayStops: MapStop[] = [makeStop(1, 0, 1), makeStop(2, 1, 2), makeStop(3, 2, 3)];
 
 const bg = (testID: string): string | undefined => {
   const flat = StyleSheet.flatten(screen.getByTestId(testID).props.style) as {
@@ -136,5 +138,39 @@ describe('PlanMap numbered pins', () => {
     // activePinIndex=2 -> el pin activo muestra "3" (posición 1-based).
     expect(screen.getByTestId('plan-map-pin-label-2')).toHaveTextContent('3');
     expect(bg('plan-map-pin-2')).toBe(colors.sunsetOrange);
+  });
+
+  it('usa stop.number (posición del día completo), no el índice del array', () => {
+    // Simula un stop intermedio sin coords: el día completo era 1,2,3,4 pero el
+    // "2" no tiene pin, así que los pines llevan number 1,3,4 (no 1,2,3).
+    const gappy: MapStop[] = [makeStop(1, 0, 1), makeStop(3, 2, 3), makeStop(4, 3, 4)];
+    render(<PlanMap stops={gappy} activePinIndex={0} />);
+
+    // Mutación: si el pin usara `index + 1` mostraría 1,2,3 y esto caería.
+    expect(screen.getByTestId('plan-map-pin-label-0')).toHaveTextContent('1');
+    expect(screen.getByTestId('plan-map-pin-label-1')).toHaveTextContent('3');
+    expect(screen.getByTestId('plan-map-pin-label-2')).toHaveTextContent('4');
+    expect(screen.queryByText('2')).toBeNull();
+  });
+
+  it('con activePinIndex=-1 (stop actual sin coords) no destaca ningún pin', () => {
+    render(<PlanMap stops={dayStops} activePinIndex={-1} />);
+
+    // Ningún pin en sunsetOrange: destacar el "1" contradiría el N/M del sheet.
+    expect(bg('plan-map-pin-0')).toBe(colors.paperWhite);
+    expect(bg('plan-map-pin-1')).toBe(colors.paperWhite);
+    expect(bg('plan-map-pin-2')).toBe(colors.paperWhite);
+    // Los números se siguen pintando (solo cambia el destacado).
+    expect(screen.getByTestId('plan-map-pin-label-0')).toHaveTextContent('1');
+  });
+
+  it('con numbered=false no pinta números (marcador de ubicación simple)', () => {
+    // Detalle de sitio: un único stop, sin "1" que se lea como "paso 1".
+    render(<PlanMap stops={[makeStop(1, 0)]} numbered={false} />);
+
+    expect(screen.queryByTestId('plan-map-pin-label-0')).toBeNull();
+    expect(screen.queryByText('1')).toBeNull();
+    // El pin (marcador) sigue existiendo.
+    expect(screen.getByTestId('plan-map-pin-0')).toBeTruthy();
   });
 });

@@ -40,6 +40,13 @@ export interface MapStop {
   category?: string;
   /** orderIndex del stop en el plan (para dividir la ruta hecha/pendiente). */
   orderIndex?: number;
+  /**
+   * Número de orden 1-based del stop DENTRO del día mostrado, calculado sobre el
+   * día completo antes de descartar stops sin coords (ver `lib/map/day-map-stops`).
+   * Es la fuente del número del pin y coincide con el "N / M" del FollowDaySheet.
+   * Si falta, el pin cae al índice del array (`index + 1`).
+   */
+  number?: number;
 }
 
 interface PlanMapProps {
@@ -78,6 +85,13 @@ interface PlanMapProps {
    * la ruta siguen usando `stops` (el día activo). Si se omite, cae a `stops`.
    */
   packStops?: MapStop[];
+  /**
+   * Si es `false`, los pines NO muestran número (marcador de ubicación simple).
+   * Lo usa el detalle de un sitio, donde hay un único stop y un "1" destacado se
+   * leería como "paso 1 de un itinerario" que no existe. Por defecto `true`
+   * (Follow Mode numera el orden del día).
+   */
+  numbered?: boolean;
 }
 
 export const PlanMap: React.FC<PlanMapProps> = ({
@@ -90,6 +104,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
   activeDayNumber,
   interactive = true,
   followMode = false,
+  numbered = true,
   planId,
   packStops,
 }) => {
@@ -117,7 +132,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
   }, [scaleAnim]);
 
   const activeStop = useMemo<MapPoint | null>(() => {
-    if (stops.length === 0 || activePinIndex >= stops.length) return null;
+    if (stops.length === 0 || activePinIndex < 0 || activePinIndex >= stops.length) return null;
     const s = stops[activePinIndex];
     return { latitude: s.latitude, longitude: s.longitude };
   }, [stops, activePinIndex]);
@@ -230,7 +245,11 @@ export const PlanMap: React.FC<PlanMapProps> = ({
             paperWhite number); the rest read as a light secondary marker. */}
         {stops.map((stop, index) => {
           const isActive = index === activePinIndex;
-          const stopNumber = index + 1;
+          // El número sale de la posición del día completo (`stop.number`), no del
+          // índice del array YA filtrado por coords: así coincide con el "N / M"
+          // del sheet aunque un stop intermedio sin coords no tenga pin. Cae a
+          // `index + 1` solo si nadie calculó `number` (p. ej. un stop suelto).
+          const stopNumber = stop.number ?? index + 1;
           return (
             <MapLibreGL.PointAnnotation
               key={stop.id}
@@ -242,13 +261,15 @@ export const PlanMap: React.FC<PlanMapProps> = ({
                 testID={`plan-map-pin-${index}`}
                 style={[styles.pin, isActive ? styles.pinActive : styles.pinInactive]}
               >
-                <Text
-                  testID={`plan-map-pin-label-${index}`}
-                  style={[styles.pinLabel, isActive ? styles.pinLabelActive : styles.pinLabelInactive]}
-                  allowFontScaling={false}
-                >
-                  {stopNumber}
-                </Text>
+                {numbered && (
+                  <Text
+                    testID={`plan-map-pin-label-${index}`}
+                    style={[styles.pinLabel, isActive ? styles.pinLabelActive : styles.pinLabelInactive]}
+                    allowFontScaling={false}
+                  >
+                    {stopNumber}
+                  </Text>
+                )}
               </View>
             </MapLibreGL.PointAnnotation>
           );
