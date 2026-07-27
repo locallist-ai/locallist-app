@@ -241,8 +241,8 @@ export function PaywallView({ source, onClose, onSkip, onDone, autoSkipOnUnavail
           <View style={s.features}>
             {([
               ['map-outline', t('paywall.featurePlans')],
-              ['flash-outline', t('paywall.featurePriority')],
-              ['diamond-outline', t('paywall.featureCurated')],
+              ['videocam-outline', t('paywall.featureImport')],
+              ['heart-outline', t('paywall.featureFavorites')],
             ] as const).map(([icon, label]) => (
               <View key={icon} style={s.featureRow}>
                 <Ionicons name={icon} size={16} color={colors.electricBlue} />
