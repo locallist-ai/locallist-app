@@ -27,6 +27,7 @@ import { FavoriteButton } from '../../components/ui/FavoriteButton';
 import { PlanMap } from '../../components/map/PlanMap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getOpenState } from '../../lib/openingHours';
+import { formatTimeRangeLine } from '../../lib/helpers/time';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import type { Place } from '../../lib/types';
 
@@ -285,7 +286,7 @@ export default function PlaceDetailScreen() {
                   <Text style={s.detailValueSecondary}>{openStatus.hint}</Text>
                 )}
                 {place.openingHours.weekdayDescriptions.map((line, i) => (
-                  <Text key={i} style={s.hoursLine}>{line}</Text>
+                  <Text key={i} style={s.hoursLine}>{formatTimeRangeLine(line)}</Text>
                 ))}
               </View>
             </View>

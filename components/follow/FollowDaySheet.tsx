@@ -29,6 +29,7 @@ import { PhotoAttribution } from '../ui/PhotoAttribution';
 import { resolvePhotoUrl, isPhotoDisplayable } from '../../lib/helpers/photo-url';
 import { buildGeoUrl, resolveHandoffTargets } from '../../lib/map/handoff';
 import { getTravelToStop, formatDistance, formatDuration } from '../../lib/map/eta';
+import { formatTime12h } from '../../lib/helpers/time';
 import { logger } from '../../lib/logger';
 import type { PlanStop } from '../../lib/types';
 
@@ -371,7 +372,7 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
               {currentStop?.suggestedArrival && (
                 <View style={styles.timePill}>
                   <MaterialCommunityIcons name={iconName} size={12} color={colors.sunsetOrange} />
-                  <Text style={styles.timePillText}>{currentStop.suggestedArrival}</Text>
+                  <Text style={styles.timePillText}>{formatTime12h(currentStop.suggestedArrival)}</Text>
                 </View>
               )}
               <View style={[styles.categoryBadge, { backgroundColor: categoryColor }]}>
