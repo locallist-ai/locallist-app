@@ -438,6 +438,17 @@ export default {
     intro: 'Elige uno de tus vídeos de viaje y extraeremos los sitios para emparejarlos con LocalList, listos para seguir.',
     chooseVideo: 'Elegir un vídeo',
     chooseVideoHint: 'MP4, MOV o WebM. Hasta 150 MB y 10 minutos.',
+    // Atribución: de dónde viene el vídeo (que el usuario sube desde su fototeca).
+    platformLabel: '¿De dónde es este vídeo?',
+    platformSelf: 'Mi vídeo',
+    platformTiktok: 'TikTok',
+    platformInstagram: 'Instagram',
+    platformOther: 'Otro',
+    // Solo para vídeos de terceros: aviso legal prominente + crédito opcional.
+    disclaimer:
+      'Función en pruebas. Sube solo vídeos sobre los que tengas derechos. Importar contenido de terceros puede infringir los términos de TikTok o Instagram y las normas de la App Store.',
+    creatorHandleLabel: '¿De quién es el vídeo? (opcional)',
+    creatorHandlePlaceholder: '@creador',
     updateNeededTitle: 'Actualización necesaria',
     updateNeededBody: 'Importar desde un vídeo necesita una versión más reciente de la app. Actualiza para usarlo.',
     permissionDeniedTitle: 'Falta acceso a fotos',
@@ -468,7 +479,8 @@ export default {
     errorInvalidRequest: 'Algo ha ido mal con la petición. Inténtalo de nuevo.',
     errorLimit: 'Has alcanzado tu límite de importaciones por ahora. Inténtalo más tarde.',
     errorUnavailable: 'La importación de vídeos no está disponible ahora mismo. Inténtalo en un momento.',
-    errorDisabled: 'Importar desde esta fuente no está disponible.',
+    // Gate de terceros aún apagado (Import:ThirdPartyEnabled) → claro "todavía no".
+    thirdPartyDisabled: 'Esta función no está disponible todavía.',
     errorInvalidPlaces: 'Algo ha ido mal con los sitios seleccionados. Inténtalo de nuevo.',
     errorTooManyPlaces: 'Son demasiados sitios para un plan. Quita algunos e inténtalo de nuevo.',
     errorGeneric: 'Algo ha ido mal. Inténtalo de nuevo.',

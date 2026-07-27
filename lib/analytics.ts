@@ -159,6 +159,9 @@ export type OnboardingStepName = 'value' | 'interests' | 'preview' | 'paywall';
 /** Where a favorite was toggled from, for funnel attribution (no PII). */
 export type FavoriteSource = 'place_detail' | 'card' | 'list';
 
+/** Attribution for an imported video (own content vs a tagged third-party clip). */
+export type ImportPlatform = 'self' | 'tiktok' | 'instagram' | 'other';
+
 export type AppEvent =
   // Auth
   | { event: 'sign_up'; provider: 'apple' | 'google' | 'email' }
@@ -231,11 +234,11 @@ export type AppEvent =
   | ({ event: 'purchase_cancelled' } & PurchaseProps)
   | ({ event: 'purchase_failed' } & PurchaseProps)
   | { event: 'restore_completed'; found: boolean }
-  // Import from video (F2 T5). SIN PII: nunca nombres de sitios ni handles.
+  // Import from video (F2 T5). SIN PII: `platform` (atribución) SÍ, el handle NO.
   // El usuario abrió el flujo y tocó "elegir vídeo".
-  | { event: 'import_video_started' }
+  | { event: 'import_video_started'; platform: ImportPlatform }
   // Vídeo subido y analizado: nº total de candidatos y cuántos matchearon.
-  | { event: 'import_video_uploaded'; candidates: number; matched: number }
+  | { event: 'import_video_uploaded'; candidates: number; matched: number; platform: ImportPlatform }
   // Plan creado desde el import: nº de sitios seleccionados.
   | { event: 'import_plan_created'; places: number }
   // Gate golpeado en el flujo de import (signup invitado / upsell Plus / límite).

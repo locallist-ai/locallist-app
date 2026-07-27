@@ -30,7 +30,7 @@ import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { useGateHandler } from '../../lib/useGateHandler';
 import { mapGateError } from '../../lib/gate-errors';
-import { track } from '../../lib/analytics';
+import { track, type ImportPlatform } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
 import { getAccessToken, importVideo, createImportPlan } from '../../lib/api';
 import { pickVideo, isImagePickerAvailable, type PickedVideo } from '../../lib/import/native-picker';
@@ -39,6 +39,27 @@ import { maxDaysForTier, PLUS_MAX_DAYS, FREE_MAX_DAYS } from '../../components/h
 import type { ImportCandidate } from '../../lib/types';
 
 type Phase = 'idle' | 'uploading' | 'analyzing' | 'results';
+
+/**
+ * Attribution platform (`ImportPlatform`). The video is ALWAYS a file the user
+ * picked from their own library — `platform` is metadata that tags where the clip
+ * came from, never a download source (we never touch TikTok/Instagram). `self`
+ * (own content) is the default and the only one that needs no disclaimer; the
+ * rest are gated server-side behind `Import:ThirdPartyEnabled`.
+ */
+const PLATFORM_OPTIONS: { value: ImportPlatform; labelKey: string }[] = [
+  { value: 'self', labelKey: 'import.platformSelf' },
+  { value: 'tiktok', labelKey: 'import.platformTiktok' },
+  { value: 'instagram', labelKey: 'import.platformInstagram' },
+  { value: 'other', labelKey: 'import.platformOther' },
+];
+
+/** The backend validates the handle with a strict regex; we only keep the client
+ *  input sane (trim + hard cap) so we never send obvious garbage. */
+const MAX_HANDLE = 64;
+function sanitizeHandle(raw: string): string {
+  return raw.trim().slice(0, MAX_HANDLE);
+}
 
 /** Backend error code → i18n key. Falls back on status, then generic. */
 function importErrorKey(status: number, code: string | null): string {
@@ -60,7 +81,7 @@ function importErrorKey(status: number, code: string | null): string {
     case 'import_limit_reached':
       return 'import.errorLimit';
     case 'third_party_import_disabled':
-      return 'import.errorDisabled';
+      return 'import.thirdPartyDisabled';
     case 'import_invalid_places':
       return 'import.errorInvalidPlaces';
     case 'import_too_many_places':
@@ -94,6 +115,9 @@ export default function ImportVideoScreen() {
   const { presentGate } = useGateHandler();
 
   const [phase, setPhase] = useState<Phase>('idle');
+  // Attribution: where the (self-uploaded) video came from. `self` = own content.
+  const [platform, setPlatform] = useState<ImportPlatform>('self');
+  const [creatorHandle, setCreatorHandle] = useState('');
   const [progress, setProgress] = useState(0);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<ImportCandidate[]>([]);
@@ -137,11 +161,14 @@ export default function ImportVideoScreen() {
       setProgress(0);
       setPhase('uploading');
 
+      // Handle is attribution only, and only for third-party clips.
+      const handle = platform !== 'self' ? sanitizeHandle(creatorHandle) || undefined : undefined;
       const res = await importVideo({
         fileUri: asset.uri,
         fileName: asset.fileName,
         mimeType: resolveUploadMime(asset),
-        platform: 'self',
+        platform,
+        creatorHandle: handle,
         signal: controller.signal,
         onProgress: (fraction) => {
           if (!mountedRef.current) return;
@@ -161,7 +188,8 @@ export default function ImportVideoScreen() {
         // Matched candidates start pre-selected.
         setSelectedIds(new Set(matched.map((c) => c.matchedPlaceId as string)));
         setPhase('results');
-        track({ event: 'import_video_uploaded', candidates: list.length, matched: matched.length });
+        // `platform` is safe to log (attribution); the handle is NOT (PII).
+        track({ event: 'import_video_uploaded', candidates: list.length, matched: matched.length, platform });
         return;
       }
 
@@ -195,14 +223,14 @@ export default function ImportVideoScreen() {
       );
       setPhase('idle');
     },
-    [presentGate],
+    [presentGate, platform, creatorHandle],
   );
 
   const handleChooseVideo = useCallback(async () => {
     if (busyRef.current) return;
     busyRef.current = true;
     try {
-      track({ event: 'import_video_started' });
+      track({ event: 'import_video_started', platform });
       setErrorKey(null);
 
       // Guarded native module: no expo-image-picker in this binary → update notice.
@@ -246,7 +274,7 @@ export default function ImportVideoScreen() {
     } finally {
       busyRef.current = false;
     }
-  }, [t, presentGate, doUpload]);
+  }, [t, presentGate, doUpload, platform]);
 
   const handleRetryUpload = useCallback(() => {
     const asset = lastAssetRef.current;
@@ -301,7 +329,9 @@ export default function ImportVideoScreen() {
       days: selectedDays,
       placeIds,
       planName: planName.trim() ? planName.trim() : undefined,
-      platform: 'self',
+      platform,
+      // Attribution carried through to the created plan for third-party clips.
+      creatorHandle: platform !== 'self' ? sanitizeHandle(creatorHandle) || undefined : undefined,
     });
     if (!mountedRef.current) return;
     setCreating(false);
@@ -325,7 +355,7 @@ export default function ImportVideoScreen() {
     }
     if (res.status === 429) track({ event: 'import_gate_hit', reason: 'limit' });
     setErrorKey(importErrorKey(res.status, extractCode(res.errorBody)));
-  }, [creating, selectedIds, city, selectedDays, planName, t, presentGate]);
+  }, [creating, selectedIds, city, selectedDays, planName, platform, creatorHandle, t, presentGate]);
 
   // ── Render helpers ──
 
@@ -505,15 +535,73 @@ export default function ImportVideoScreen() {
 
   // ── Idle ──
   const retryable = uploadRetryable && lastAssetRef.current !== null;
+  const isThirdParty = platform !== 'self';
   return (
     <View style={[s.container, { paddingTop: insets.top }]}>
       {renderClose()}
-      <View style={s.idleContent}>
+      <ScrollView
+        contentContainerStyle={s.idleContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={s.iconBubble}>
           <MaterialCommunityIcons name="movie-open-outline" size={44} color={colors.sunsetOrange} />
         </View>
         <Text style={s.title}>{t('import.title')}</Text>
         <Text style={[s.subtitle, s.idleIntro]}>{t('import.intro')}</Text>
+
+        {/* Attribution: where the video came from (self = own content, default). */}
+        <Text style={s.platformLabel}>{t('import.platformLabel')}</Text>
+        <View style={s.platformRow}>
+          {PLATFORM_OPTIONS.map((opt) => {
+            const on = platform === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                testID={`import-platform-${opt.value}`}
+                onPress={() => setPlatform(opt.value)}
+                style={[s.platformPill, on && s.platformPillOn]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={t(opt.labelKey as 'import.platformSelf')}
+              >
+                <Text style={[s.platformPillText, on && s.platformPillTextOn]}>
+                  {t(opt.labelKey as 'import.platformSelf')}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {isThirdParty ? (
+          <>
+            {/* Prominent, unambiguous legal notice — only for third-party clips. */}
+            <View style={s.disclaimerBox} testID="import-disclaimer">
+              <MaterialCommunityIcons
+                name="alert-outline"
+                size={20}
+                color={colors.sunsetOrange}
+                style={{ marginTop: 1 }}
+              />
+              <Text style={s.disclaimerText}>{t('import.disclaimer')}</Text>
+            </View>
+
+            {/* Optional creator attribution (not logged — treated as PII). */}
+            <Text style={s.platformLabel}>{t('import.creatorHandleLabel')}</Text>
+            <TextInput
+              testID="import-creator-handle"
+              style={s.handleInput}
+              value={creatorHandle}
+              onChangeText={setCreatorHandle}
+              placeholder={t('import.creatorHandlePlaceholder')}
+              placeholderTextColor={colors.textSecondary}
+              maxLength={MAX_HANDLE}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+            />
+          </>
+        ) : null}
 
         {errorKey ? (
           <View style={s.errorBox}>
@@ -538,7 +626,7 @@ export default function ImportVideoScreen() {
           <Text style={s.primaryButtonText}>{t('import.chooseVideo')}</Text>
         </TouchableOpacity>
         <Text style={s.hint}>{t('import.chooseVideoHint')}</Text>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -566,11 +654,80 @@ const s = StyleSheet.create({
     gap: spacing.md,
   },
   idleContent: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
-    marginTop: -40,
+    paddingVertical: spacing.xl,
+  },
+  platformLabel: {
+    alignSelf: 'stretch',
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 14,
+    color: colors.textMain,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  platformRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    alignSelf: 'stretch',
+  },
+  platformPill: {
+    paddingHorizontal: spacing.md,
+    height: 42,
+    borderRadius: borderRadius.full,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
+  platformPillOn: {
+    backgroundColor: colors.sunsetOrange,
+    borderColor: colors.sunsetOrange,
+  },
+  platformPillText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 14,
+    color: colors.textMain,
+  },
+  platformPillTextOn: {
+    color: '#FFFFFF',
+  },
+  disclaimerBox: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignSelf: 'stretch',
+    backgroundColor: colors.sunsetOrangeLight,
+    borderRadius: borderRadius.md,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.25)',
+    padding: spacing.md,
+    marginTop: spacing.lg,
+  },
+  disclaimerText: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textMain,
+  },
+  handleInput: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.bgCard,
+    borderRadius: borderRadius.md,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.textMain,
   },
   iconBubble: {
     width: 96,
