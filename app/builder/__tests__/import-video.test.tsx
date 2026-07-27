@@ -248,6 +248,26 @@ describe('import-video — resultados y creación', () => {
   });
 });
 
+describe('import-video — cableado de fases (orquestador)', () => {
+  it('durante la subida muestra la pantalla de progreso y oculta el botón de cierre', async () => {
+    mockPickVideo.mockResolvedValue(validAsset);
+    // Upload stays pending: the screen sits in the progress phase.
+    mockImportVideo.mockImplementation(() => new Promise(() => {}));
+    render(<ImportVideoScreen />);
+
+    // Idle first: close button + choose CTA present, no progress steps.
+    expect(screen.getByTestId('import-close')).toBeTruthy();
+    expect(screen.queryByTestId('import-steps')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('import-choose'));
+
+    // Progress phase: the honest two-step indicator shows, the close button hides.
+    await waitFor(() => expect(screen.getByTestId('import-steps')).toBeTruthy());
+    expect(screen.queryByTestId('import-close')).toBeNull();
+    expect(screen.queryByTestId('import-choose')).toBeNull();
+  });
+});
+
 describe('import-video — abort y reintento de red', () => {
   it('aborta la subida al desmontar (swipe-back iOS durante uploading)', async () => {
     mockPickVideo.mockResolvedValue(validAsset);
@@ -373,6 +393,8 @@ describe('import-video — atribución de plataforma', () => {
     mockImportVideo.mockResolvedValue(okUpload);
     render(<ImportVideoScreen />);
 
+    // Attribution UI is folded by default (self-first) — unfold it, then pick.
+    fireEvent.press(screen.getByTestId('import-attribution-toggle'));
     fireEvent.press(screen.getByTestId('import-platform-tiktok'));
 
     // Disclaimer + optional handle appear only for third-party.
@@ -393,6 +415,7 @@ describe('import-video — atribución de plataforma', () => {
     mockImportVideo.mockResolvedValue(okUpload);
     render(<ImportVideoScreen />);
 
+    fireEvent.press(screen.getByTestId('import-attribution-toggle'));
     fireEvent.press(screen.getByTestId('import-platform-tiktok'));
     fireEvent.changeText(screen.getByTestId('import-creator-handle'), '@localguide');
     fireEvent.press(screen.getByTestId('import-choose'));
@@ -421,6 +444,7 @@ describe('import-video — atribución de plataforma', () => {
     mockImportVideo.mockResolvedValue(okUpload);
     render(<ImportVideoScreen />);
 
+    fireEvent.press(screen.getByTestId('import-attribution-toggle'));
     fireEvent.press(screen.getByTestId('import-platform-instagram'));
     // Surrounding whitespace trimmed; a 100-char handle capped to 64.
     fireEvent.changeText(screen.getByTestId('import-creator-handle'), `  ${'a'.repeat(100)}  `);
@@ -442,6 +466,7 @@ describe('import-video — atribución de plataforma', () => {
     });
     render(<ImportVideoScreen />);
 
+    fireEvent.press(screen.getByTestId('import-attribution-toggle'));
     fireEvent.press(screen.getByTestId('import-platform-tiktok'));
     fireEvent.press(screen.getByTestId('import-choose'));
 
