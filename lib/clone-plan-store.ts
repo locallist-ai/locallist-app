@@ -22,6 +22,8 @@
  * LAUNCH LIMITATION (documented, not resolved): the showcase plans are all Miami,
  * so a cloned plan is always a Miami plan. Fine for the Miami-only launch.
  */
+import { useEffect } from 'react';
+import { router } from 'expo-router';
 import { clonePlan } from './api';
 import { track } from './analytics';
 import { logger } from './logger';
@@ -73,6 +75,31 @@ export function consumePendingCloneLanding(): string | null {
   return id;
 }
 
+/**
+ * Land on a freshly cloned plan once the app shell is mounted. This is the sole
+ * production hook-point of the "save this plan" payoff, wired once from the app
+ * stack (`app/_layout` `AppStack`).
+ *
+ * The entry gate flips onboarding → app the instant `login()` sets `user` — which
+ * happens BEFORE the async clone replay finishes — so we BOTH consume any landing
+ * id already staged at mount AND subscribe for one staged just after. Consuming
+ * and subscribing in the same effect closes the tiny window between the two.
+ *
+ * TODO polish: the guest→signup path briefly shows the home before pushing the
+ * plan (~1-2s: mount → app home → clone resolves → push), a visible flash. A
+ * later polish could hold a splash/skeleton while a pending clone is in flight.
+ */
+export function usePendingCloneLanding(): void {
+  useEffect(() => {
+    const landIfPending = () => {
+      const id = consumePendingCloneLanding();
+      if (id) router.push(`/plan/${id}`);
+    };
+    landIfPending();
+    return subscribeCloneLanding(landIfPending);
+  }, []);
+}
+
 // ─── Auth-wired replay ───────────────────────────────────
 
 /**
@@ -80,14 +107,28 @@ export function consumePendingCloneLanding(): string | null {
  * Clones the pending showcase into the caller's private copy, stages the new
  * plan id for the app to land on, and reports the save (`viaSignup:true`).
  *
+ * Having a pending intent here IS the save-hook conversion: the guest onboarded,
+ * tapped save, and just registered. `login()` completes onboarding for this path
+ * (the orchestrator's `completeFlow` never runs), so we emit the terminal
+ * `onboarding_completed` here too — otherwise this converting cohort would be
+ * missing from the funnel's completion count. Fired regardless of the clone
+ * outcome: the user has completed onboarding by registering either way.
+ *
  * Best-effort by contract: any failure (network, 4xx) is logged and the user
  * simply lands on the home rather than being stranded. Single replay, last-wins:
  * the pending id is cleared whether or not the clone succeeds.
+ *
+ * A 403 `saved_plans_limit_reached` here is swallowed silently (log only): it is
+ * UNREACHABLE for a fresh signup (0 saved plans, cap not met). It could only
+ * surface for a returning free user at their cap who somehow re-runs onboarding —
+ * an accepted edge; the app is authenticated and functional, just without the
+ * clone. The reachable upsell path is the authenticated save in the preview.
  */
 export async function applyPendingClonePlan(): Promise<void> {
   const planId = _pendingClonePlanId;
   if (!planId) return;
   _pendingClonePlanId = null;
+  track({ event: 'onboarding_completed', skippedPaywall: true });
   try {
     const res = await clonePlan(planId);
     if (res.data?.id) {

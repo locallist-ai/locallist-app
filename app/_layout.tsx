@@ -4,7 +4,7 @@ import { initSentry, Sentry } from '../lib/sentry';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Animated as RNAnimated, Platform, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Stack, router } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -19,7 +19,7 @@ import { logger } from '../lib/logger';
 import { useOnboarding } from '../lib/onboarding-store';
 import { resolveEntryState, isGuestSession } from '../lib/entry-state';
 import { track } from '../lib/analytics';
-import { subscribeCloneLanding, consumePendingCloneLanding } from '../lib/clone-plan-store';
+import { usePendingCloneLanding } from '../lib/clone-plan-store';
 import OnboardingScreen from './onboarding';
 
 // Initialize Sentry as early as possible
@@ -204,18 +204,9 @@ function AppStack() {
   // evento + cuenta, y cancelación del recordatorio huérfano vía tier.
   useTrialReminder();
   // "Save this plan" landing: after the onboarding save hook clones a plan
-  // (directly, or via the post-login replay), land on it once the app shell is
-  // mounted. The entry gate flips onboarding → app the instant `login()` sets the
-  // user — which happens BEFORE the async clone replay finishes — so we both
-  // consume any id already staged and subscribe for one staged just after mount.
-  useEffect(() => {
-    const landIfPending = () => {
-      const id = consumePendingCloneLanding();
-      if (id) router.push(`/plan/${id}`);
-    };
-    landIfPending();
-    return subscribeCloneLanding(landIfPending);
-  }, []);
+  // (directly, or via the post-login replay), navigate to it once mounted. The
+  // race-safe consume + subscribe wiring lives in the hook (unit-tested there).
+  usePendingCloneLanding();
   return (
     <Stack
       screenOptions={{

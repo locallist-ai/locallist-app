@@ -167,6 +167,11 @@ export function OnboardingPreviewScreen({
     if (!plan || saving) return;
     track({ event: 'onboarding_save_plan_tapped' });
 
+    // The LIVE route in onboarding is the guest branch: the EntryGate only ever
+    // renders onboarding while `!isAuthenticated` (see `resolveEntryState`), so a
+    // guest stages the clone intent and registers. The authenticated branch below
+    // is a defensive path (dead in the onboarding entry today) — kept correct so
+    // the screen also works if ever reused where a session already exists.
     if (!isAuthenticated) {
       setPendingClonePlan(plan.id);
       onRequestSignup();
