@@ -39,6 +39,7 @@ const mapToMapStop = (planStop: PlanStop): MapStop | null => {
     latitude: lat,
     longitude: lng,
     category: planStop.place?.category,
+    orderIndex: planStop.orderIndex,
   };
 };
 
@@ -228,6 +229,7 @@ export default function FollowModeScreen() {
         style={s.map}
         routeSegments={routeSegments}
         activeDayNumber={currentDay}
+        followMode
       />
 
       <BlurView
