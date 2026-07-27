@@ -110,8 +110,8 @@ export default {
     buildYourOwn: 'Build your own plan',
     buildYourOwnSub: 'Tell us your vibe, we do the rest',
     buildYourOwnLocked: 'Plus feature',
-    importVideo: 'Import from a video',
-    importVideoSub: 'Turn your own travel video into a plan',
+    importVideo: 'Import your own plan',
+    importVideoSub: 'Turn your own travel video or photo into a plan',
     importVideoBadge: 'Plus',
     myPlans: 'My Plans',
     myPlansCount: '{{count}} plan{{s}} saved',
@@ -463,13 +463,15 @@ export default {
   },
   // Import a plan from your own travel video (F2 T5). v1 = own content only.
   import: {
-    title: 'Import from a video or photo',
-    intro: 'Pick one of your own travel videos or a screenshot and we will pull out the places and match them to LocalList, ready to follow.',
+    title: 'Import your own plans',
+    intro: "Pick one of your own travel videos or photos and we'll pull out the places, match them to LocalList, and build a plan you can follow.",
     chooseVideo: 'Choose a video or photo',
     chooseVideoHint: 'Video (MP4, MOV, WebM) up to 150 MB and 10 min, or photo (JPG, PNG, WebP, HEIC) up to 25 MB.',
+    // Opt-in link that unfolds the third-party attribution UI.
+    addAttribution: 'Not yours? Add attribution',
     // Attribution: where the (self-uploaded) video or photo came from.
     platformLabel: 'Where is this from?',
-    platformSelf: 'My video',
+    platformSelf: 'Mine',
     platformTiktok: 'TikTok',
     platformInstagram: 'Instagram',
     platformOther: 'Other',
@@ -488,6 +490,11 @@ export default {
     uploading: 'Uploading your video',
     uploadingPercent: 'Uploading {{percent}}%',
     analyzing: 'Finding places in your video',
+    // Editorial phase titles + the two honest steps of the progress screen.
+    phaseUploadingTitle: 'Reading your upload',
+    phaseAnalyzingTitle: 'Finding your places',
+    stepUpload: 'Uploading',
+    stepAnalyze: 'Analyzing',
     // Results.
     resultsTitle: 'We found these places',
     resultsSubtitle: 'Pick the ones to add to your plan.',
