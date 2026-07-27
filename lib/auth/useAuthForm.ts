@@ -52,13 +52,23 @@ function closeAfterLogin() {
  * Owns the entire login/registration flow: choose vs credentials step,
  * Apple/Google OAuth, email login/register with validation, and the
  * password-strength derivation. Keeps `app/login.tsx` a thin composition.
+ *
+ * `initialMode` seeds which side of the flow the screen opens on. It defaults to
+ * `'signin'` (the historical behaviour: a bare `/login` opens on log-in). Entry
+ * points whose INTENT is to create an account — the signup gate ("sign up to
+ * save this favorite/plan/import") and the onboarding "save this plan" hook —
+ * pass `'signup'` so the screen opens with the REGISTER option active instead of
+ * making the user find the toggle. Only the initial render is seeded; the user
+ * can still switch sides freely afterwards.
  */
-export function useAuthForm() {
+export function useAuthForm(initialMode: AuthMode = 'signin') {
   const { t } = useTranslation();
   const { login } = useAuth();
   const [step, setStep] = useState<AuthStep>('choose');
-  const [authMode, setAuthMode] = useState<AuthMode>('signin');
-  const [credentialsMode, setCredentialsMode] = useState<CredentialsMode>('login');
+  const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
+  const [credentialsMode, setCredentialsMode] = useState<CredentialsMode>(
+    initialMode === 'signup' ? 'register' : 'login',
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');

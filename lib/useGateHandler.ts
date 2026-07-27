@@ -88,7 +88,9 @@ export function useGateHandler() {
           const body = t('gate.signupRequiredBody');
           Alert.alert(t('gate.signupRequiredTitle'), body, [
             { text: t('gate.maybeLater'), style: 'cancel', onPress: () => opts?.onDismiss?.() },
-            { text: t('gate.signupCta'), onPress: () => router.push('/login') },
+            // The signup gate always fires for a create-account intent (save a
+            // favorite/plan, import), so open `/login` on the REGISTER side.
+            { text: t('gate.signupCta'), onPress: () => router.push('/login?intent=register') },
           ]);
           return body;
         }
