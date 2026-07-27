@@ -447,6 +447,17 @@ export default {
     intro: 'Pick one of your own travel videos and we will pull out the places and match them to LocalList, ready to follow.',
     chooseVideo: 'Choose a video',
     chooseVideoHint: 'MP4, MOV or WebM. Up to 150 MB and 10 minutes.',
+    // Attribution: where the (self-uploaded) video came from.
+    platformLabel: 'Where is this video from?',
+    platformSelf: 'My video',
+    platformTiktok: 'TikTok',
+    platformInstagram: 'Instagram',
+    platformOther: 'Other',
+    // Shown only for third-party clips — prominent legal notice + optional credit.
+    disclaimer:
+      'Testing feature. Only upload videos you have the rights to. Importing third-party content may breach TikTok or Instagram terms and App Store rules.',
+    creatorHandleLabel: 'Whose video is this? (optional)',
+    creatorHandlePlaceholder: '@creator',
     // Native module missing (dev client predates the rebuild).
     updateNeededTitle: 'Update needed',
     updateNeededBody: 'Importing from a video needs a newer version of the app. Please update to use it.',
@@ -482,7 +493,8 @@ export default {
     errorInvalidRequest: 'Something went wrong with that request. Please try again.',
     errorLimit: 'You have reached your video import limit for now. Try again later.',
     errorUnavailable: 'Video import is temporarily unavailable. Please try again shortly.',
-    errorDisabled: 'Importing from this source is not available.',
+    // Third-party gate still off (Import:ThirdPartyEnabled) → clear "not yet".
+    thirdPartyDisabled: 'This feature is not available yet.',
     errorInvalidPlaces: 'Something went wrong with the selected places. Please try again.',
     errorTooManyPlaces: 'That is too many places for one plan. Remove a few and try again.',
     errorGeneric: 'Something went wrong. Please try again.',

@@ -185,7 +185,12 @@ describe('import-video — resultados y creación', () => {
     expect(matched.props.accessibilityState.checked).toBe(true);
     expect(unmatched.props.accessibilityState.disabled).toBe(true);
 
-    expect(mockTrack).toHaveBeenCalledWith({ event: 'import_video_uploaded', candidates: 2, matched: 1 });
+    expect(mockTrack).toHaveBeenCalledWith({
+      event: 'import_video_uploaded',
+      candidates: 2,
+      matched: 1,
+      platform: 'self',
+    });
   });
 
   it('(e) confirmar → POST /import/plan con los ids seleccionados + navega al plan', async () => {
@@ -295,5 +300,106 @@ describe('import-video — errores de subida', () => {
     await uploadFails(503, 'import_unavailable');
     await waitFor(() => expect(screen.getByText('import.errorUnavailable')).toBeTruthy());
     expect(screen.getByTestId('import-retry')).toBeTruthy();
+  });
+});
+
+describe('import-video — atribución de plataforma', () => {
+  it('(a) self por defecto → sin disclaimer ni handle, sube con platform=self', async () => {
+    mockPickVideo.mockResolvedValue(validAsset);
+    mockImportVideo.mockResolvedValue(okUpload);
+    render(<ImportVideoScreen />);
+
+    // 'self' is preselected: no third-party UI.
+    expect(screen.queryByTestId('import-disclaimer')).toBeNull();
+    expect(screen.queryByTestId('import-creator-handle')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('import-choose'));
+
+    await waitFor(() => expect(mockImportVideo).toHaveBeenCalled());
+    const call = mockImportVideo.mock.calls[0][0];
+    expect(call.platform).toBe('self');
+    expect(call.creatorHandle).toBeUndefined();
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'import_video_started', platform: 'self' });
+  });
+
+  it('(b) elegir TikTok → disclaimer + campo handle visibles, sube con platform=tiktok&creatorHandle', async () => {
+    mockPickVideo.mockResolvedValue(validAsset);
+    mockImportVideo.mockResolvedValue(okUpload);
+    render(<ImportVideoScreen />);
+
+    fireEvent.press(screen.getByTestId('import-platform-tiktok'));
+
+    // Disclaimer + optional handle appear only for third-party.
+    expect(screen.getByTestId('import-disclaimer')).toBeTruthy();
+    expect(screen.getByText('import.disclaimer')).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId('import-creator-handle'), '@localguide');
+
+    fireEvent.press(screen.getByTestId('import-choose'));
+
+    await waitFor(() => expect(mockImportVideo).toHaveBeenCalled());
+    const call = mockImportVideo.mock.calls[0][0];
+    expect(call.platform).toBe('tiktok');
+    expect(call.creatorHandle).toBe('@localguide');
+  });
+
+  it('(e) analytics lleva platform pero NUNCA el handle (PII)', async () => {
+    mockPickVideo.mockResolvedValue(validAsset);
+    mockImportVideo.mockResolvedValue(okUpload);
+    render(<ImportVideoScreen />);
+
+    fireEvent.press(screen.getByTestId('import-platform-tiktok'));
+    fireEvent.changeText(screen.getByTestId('import-creator-handle'), '@localguide');
+    fireEvent.press(screen.getByTestId('import-choose'));
+
+    await waitFor(() =>
+      expect(mockTrack).toHaveBeenCalledWith({ event: 'import_video_started', platform: 'tiktok' }),
+    );
+    await waitFor(() =>
+      expect(mockTrack).toHaveBeenCalledWith({
+        event: 'import_video_uploaded',
+        candidates: 2,
+        matched: 1,
+        platform: 'tiktok',
+      }),
+    );
+    // No tracked event should carry the handle.
+    const anyHandleLogged = mockTrack.mock.calls.some((c: unknown[]) =>
+      JSON.stringify(c[0] ?? {}).includes('localguide'),
+    );
+    expect(anyHandleLogged).toBe(false);
+  });
+
+  it('(d) handle saneado: recorta espacios y aplica el tope de longitud', async () => {
+    mockPickVideo.mockResolvedValue(validAsset);
+    mockImportVideo.mockResolvedValue(okUpload);
+    render(<ImportVideoScreen />);
+
+    fireEvent.press(screen.getByTestId('import-platform-instagram'));
+    // Surrounding whitespace trimmed; a 100-char handle capped to 64.
+    fireEvent.changeText(screen.getByTestId('import-creator-handle'), `  ${'a'.repeat(100)}  `);
+    fireEvent.press(screen.getByTestId('import-choose'));
+
+    await waitFor(() => expect(mockImportVideo).toHaveBeenCalled());
+    const call = mockImportVideo.mock.calls[0][0];
+    expect(call.platform).toBe('instagram');
+    expect(call.creatorHandle).toBe('a'.repeat(64));
+  });
+
+  it('(c) 403 third_party_import_disabled → mensaje "no disponible todavía" específico', async () => {
+    mockPickVideo.mockResolvedValue(validAsset);
+    mockImportVideo.mockResolvedValue({
+      data: null,
+      error: 'third_party_import_disabled',
+      errorBody: { error: 'third_party_import_disabled' },
+      status: 403,
+    });
+    render(<ImportVideoScreen />);
+
+    fireEvent.press(screen.getByTestId('import-platform-tiktok'));
+    fireEvent.press(screen.getByTestId('import-choose'));
+
+    await waitFor(() => expect(screen.getByText('import.thirdPartyDisabled')).toBeTruthy());
+    // Not a gate/upsell: the specific copy, not a generic error.
+    expect(screen.queryByText('import.errorGeneric')).toBeNull();
   });
 });
