@@ -415,3 +415,64 @@ describe('lib/api wiring de gates Plus (403 estructurado → analytics)', () => 
     expect(trackPlanLimitIfGate403).toHaveBeenCalledWith(429, { error: 'daily_cap_reached', used: 50, limit: 50 });
   });
 });
+
+describe('lib/api dev tier tools (setDevTier / resetDevQuota)', () => {
+  const jsonRes = (status: number, body: unknown) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  });
+
+  const lastCall = (fetchMock: jest.Mock) =>
+    fetchMock.mock.calls[fetchMock.mock.calls.length - 1] as [string, RequestInit];
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.resetModules();
+  });
+
+  it('setDevTier: 200 → { ok:true, disabled:false } y POST /account/dev/tier con el body del tier', async () => {
+    const fetchMock = jest.fn(async () => jsonRes(200, { tier: 'pro' }));
+    (global as unknown as { fetch: jest.Mock }).fetch = fetchMock;
+
+    const { setDevTier } = require('../api') as typeof import('../api');
+    const res = await setDevTier('pro');
+
+    expect(res).toEqual({ ok: true, disabled: false });
+    const [url, init] = lastCall(fetchMock);
+    expect(url).toBe('https://api.test.local/account/dev/tier');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ tier: 'pro' });
+  });
+
+  it('setDevTier: 404 → { ok:false, disabled:true } (deshabilitado, sin lanzar)', async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () =>
+      jsonRes(404, { error: 'not_found' }),
+    );
+
+    const { setDevTier } = require('../api') as typeof import('../api');
+    await expect(setDevTier('free')).resolves.toEqual({ ok: false, disabled: true });
+  });
+
+  it('resetDevQuota: 200 → { ok:true, disabled:false } y POST /account/dev/reset-quota', async () => {
+    const fetchMock = jest.fn(async () => jsonRes(200, { reset: true }));
+    (global as unknown as { fetch: jest.Mock }).fetch = fetchMock;
+
+    const { resetDevQuota } = require('../api') as typeof import('../api');
+    const res = await resetDevQuota();
+
+    expect(res).toEqual({ ok: true, disabled: false });
+    const [url, init] = lastCall(fetchMock);
+    expect(url).toBe('https://api.test.local/account/dev/reset-quota');
+    expect(init.method).toBe('POST');
+  });
+
+  it('resetDevQuota: 404 → { ok:false, disabled:true } (deshabilitado, sin lanzar)', async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () =>
+      jsonRes(404, { error: 'not_found' }),
+    );
+
+    const { resetDevQuota } = require('../api') as typeof import('../api');
+    await expect(resetDevQuota()).resolves.toEqual({ ok: false, disabled: true });
+  });
+});

@@ -44,8 +44,6 @@ interface AuthContextType {
    * generation so the "X of N plans" line reflects the latest usage (g3).
    */
   refreshAiPlansQuota: () => Promise<void>;
-  /** Override tier locally for testing. Pass null to reset to real tier. */
-  setTierOverride: (tier: 'free' | 'pro' | null) => void;
 }
 
 /**
@@ -66,7 +64,6 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => { },
   refreshUser: async () => null,
   refreshAiPlansQuota: async () => { },
-  setTierOverride: () => { },
 });
 
 export function useAuth() {
@@ -76,11 +73,13 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [tierOverride, setTierOverride] = useState<'free' | 'pro' | null>(null);
   const [aiPlansMonth, setAiPlansMonth] = useState<AiPlansQuota | null>(null);
 
   const isAdmin = !!user?.email?.endsWith(ADMIN_DOMAIN);
-  const effectiveTier = tierOverride ?? user?.tier ?? 'free';
+  // `isPro` derives from the REAL server-side tier. Dev tools flip `User.Tier`
+  // on the backend and re-fetch `/account`, so the local flag and the server
+  // gates always agree (no client-only override that lies to `isPro`).
+  const effectiveTier = user?.tier ?? 'free';
 
   // Best-effort refresh of the monthly AI-plan quota from `GET /account`. Kept
   // separate from `refreshUser` so callers can update just the quota (after a
@@ -146,7 +145,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // handler de foreground (usePurchaseReconciliation) podría colarse con la
     // sesión aún "viva" y re-adoptar la identidad RC recién desvinculada.
     setUser(null);
-    setTierOverride(null);
     setAiPlansMonth(null);
     setAnalyticsUserId(null);
     // logOutPurchases es síncrona y por contrato no lanza (la llamada de red
@@ -180,8 +178,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await clearTokens();
   }, []);
 
-  // Re-fetch /account (e.g. after purchase/restore) so `isPro` flips without
-  // an app restart. Does not touch tierOverride: dev override keeps winning.
+  // Re-fetch /account (e.g. after purchase/restore, or a dev tier flip) so
+  // `isPro` reflects the real server-side tier without an app restart.
   const refreshUser = useCallback(async (): Promise<'free' | 'pro' | null> => {
     try {
       const res = await api<{ user: User }>('/account');
@@ -246,7 +244,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         refreshUser,
         refreshAiPlansQuota,
-        setTierOverride,
       },
     },
     children,

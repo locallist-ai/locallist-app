@@ -211,6 +211,16 @@ export default {
     shareLocalList: 'Share LocalList',
     shareMessage: "Check out LocalList - Your AI travel curator. Stop Researching. Start Traveling.\nhttps://locallist.ai",
   },
+  devTools: {
+    header: 'Dev Tools',
+    switchToPlus: 'Switch to Plus',
+    switchToFree: 'Switch to Free',
+    badgePlus: 'PLUS',
+    badgeFree: 'FREE',
+    resetQuota: 'Reset plan quota',
+    disabledTitle: 'Not available',
+    disabledBody: 'Dev tier override is not enabled in this environment.',
+  },
   follow: {
     loading: 'Starting Follow Mode...',
     loadError: 'Failed to load plan',

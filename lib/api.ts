@@ -465,3 +465,35 @@ export async function importVideo(opts: ImportVideoUpload): Promise<ApiResult<Im
 export async function createImportPlan(req: ImportPlanRequest) {
   return api<PlanDetailResponse>('/import/plan', { method: 'POST', body: req });
 }
+
+// ─── Dev-only tier tools ───────────────────────────────────────────────────────
+// Backend dev endpoints (already on main), DEV-ONLY and gated server-side. When
+// the environment does NOT enable them the backend answers 404 — that is not an
+// error to surface to the user, it just means "unavailable here". We normalise
+// the outcome to a typed `DevToolResult` so callers can branch on `disabled`
+// without string-matching a 404, and never see an uncaught throw.
+//   POST /account/dev/tier  body { tier: 'pro' | 'free' }  → 200 { tier }   · 404 disabled
+//   POST /account/dev/reset-quota  (no body)               → 200 { reset }  · 404 disabled
+// Both ride `api()` so they reuse the in-memory access token + the single silent
+// 401 refresh, exactly like every other authenticated call.
+
+export interface DevToolResult {
+  /** The endpoint accepted the request (2xx). */
+  ok: boolean;
+  /** The endpoint is disabled in this environment (404) — do not treat as an error. */
+  disabled: boolean;
+}
+
+/** Flip the REAL server-side `User.Tier` (dev-only). 404 → `{ ok:false, disabled:true }`. */
+export async function setDevTier(tier: 'pro' | 'free'): Promise<DevToolResult> {
+  const res = await api<{ tier: string }>('/account/dev/tier', { method: 'POST', body: { tier } });
+  if (res.status === 404) return { ok: false, disabled: true };
+  return { ok: !res.error, disabled: false };
+}
+
+/** Reset the caller's monthly usage counters (dev-only). 404 → `{ ok:false, disabled:true }`. */
+export async function resetDevQuota(): Promise<DevToolResult> {
+  const res = await api<{ reset: boolean }>('/account/dev/reset-quota', { method: 'POST' });
+  if (res.status === 404) return { ok: false, disabled: true };
+  return { ok: !res.error, disabled: false };
+}
