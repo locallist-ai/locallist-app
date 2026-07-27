@@ -21,6 +21,7 @@ import { getPreviewPlan } from '../../lib/plan/plan-store';
 import { useTripContext } from '../../lib/trip-context-store';
 import { PlanCardPager } from '../../components/plan/PlanCardPager';
 import { PlanEditorProvider } from '../../components/plan/PlanEditorContext';
+import { ShareButton, shouldShowShareButton } from '../../components/plan/ShareButton';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { usePlanEditor } from '../../lib/plan/use-plan-editor';
 import { track } from '../../lib/analytics';
@@ -340,6 +341,17 @@ export default function PlanDetailScreen() {
         />
       </PlanEditorProvider>
 
+      {/* Owner-only share affordance: floating pill top-right, mirroring the
+          back pill. Only for a persisted, owned plan: never id==='new'
+          (unpersisted draft); /plan/preview DOES qualify once effectivePlanId
+          resolves to the backend id (the preview plan is already persisted). */}
+      {shouldShowShareButton({ isNew, isOwner, planId: effectivePlanId }) && (
+        <ShareButton
+          planId={effectivePlanId!}
+          style={[s.sharePill, { top: insets.top + spacing.xs }]}
+        />
+      )}
+
       {/* Discard changes confirm */}
       <ConfirmModal
         visible={discardVisible}
@@ -393,6 +405,10 @@ export default function PlanDetailScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bgMain },
+  sharePill: {
+    position: 'absolute',
+    right: spacing.md,
+  },
   center: {
     flex: 1,
     backgroundColor: colors.bgMain,
