@@ -8,6 +8,7 @@ import { cancelTrialReminder } from './trial-reminder';
 import { completeOnboarding } from './onboarding-store';
 import { syncOnboardingPrefsToProfile } from './onboarding-sync';
 import { loadFavoriteIds, clearFavorites, applyPendingFavorite } from './favorites-store';
+import { applyPendingClonePlan, clearCloneState } from './clone-plan-store';
 
 interface User {
   id: string;
@@ -129,6 +130,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       logger.warn('favorites hydration during login failed', error);
     }
+    // "Save this plan": replay a staged guest clone intent (onboarding hook). The
+    // replay stages a landing id the app shell navigates to once mounted. Never
+    // throws by contract; wrapped as extra defence so nothing can break login.
+    try {
+      await applyPendingClonePlan();
+    } catch (error) {
+      logger.warn('clone-plan replay during login failed', error);
+    }
   }, [refreshAiPlansQuota]);
 
   const logout = useCallback(async () => {
@@ -161,6 +170,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearFavorites();
     } catch (error) {
       logger.warn('clearFavorites failed during logout', error);
+    }
+    // Any staged "save this plan" intent/landing is session-scoped too.
+    try {
+      clearCloneState();
+    } catch (error) {
+      logger.warn('clearCloneState failed during logout', error);
     }
     await clearTokens();
   }, []);

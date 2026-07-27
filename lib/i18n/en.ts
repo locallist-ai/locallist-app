@@ -213,6 +213,7 @@ export default {
   follow: {
     loading: 'Starting Follow Mode...',
     loadError: 'Failed to load plan',
+    offlineCached: 'Offline copy',
     tripCompleteTitle: 'Trip Complete!',
     tripCompleteBody: 'You finished the plan. Enjoy your trip!',
     done: 'Done',
@@ -227,8 +228,20 @@ export default {
     pause: 'Pause',
     skip: 'Skip',
     dayLabel: 'Day {{day}}',
+    dayStepper: 'Day {{current}} of {{total}}',
+    stopPosition: '{{current}} / {{total}}',
+    prevDay: 'Previous day',
+    nextDay: 'Next day',
+    prevStop: 'Previous stop',
+    nextStop: 'Next stop',
     expandSheet: 'Show stops',
     collapseSheet: 'Show map',
+    toThisStop: 'to this stop',
+    getDirections: 'Directions',
+    directionsTitle: 'Get directions',
+    directionsBody: 'Open turn-by-turn walking directions in your maps app.',
+    openAppleMaps: 'Apple Maps',
+    openGoogleMaps: 'Google Maps',
   },
   builder: {
     title: 'Build Your Plan',
@@ -525,6 +538,10 @@ export default {
     previewGenericSubtitle: 'Curated stops, timed and ordered for you.',
     previewGenericHint: 'Built the moment you start.',
     createPlan: 'Create my plan',
+    // Save-this-plan hook (registration gate for the showcase preview)
+    savePlan: 'Save this plan',
+    saveNotNow: 'Not now',
+    savePlanSignupPrompt: 'Sign up to save your plan and favorites',
   },
   // Shared "request your city" inline input (onboarding + home city picker).
   cityRequest: {
@@ -616,6 +633,14 @@ export default {
     next: 'Next',
     stopFallback: 'Stop',
     openStreetMapCopyright: 'OpenStreetMap copyright',
+    recenterMap: 'Recenter map',
+  },
+  units: {
+    distanceKm: '{{value}} km',
+    distanceMeters: '{{value}} m',
+    durationMin: '{{value}} min',
+    durationHour: '{{value}} h',
+    durationHourMin: '{{h}} h {{min}} min',
   },
   brand: {
     // INTENCIONAL: el lema de marca se mantiene en inglés en TODOS los idiomas

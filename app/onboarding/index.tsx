@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { track, type OnboardingStepName } from '../../lib/analytics';
 import { completeOnboarding, setOnboardingPrefs } from '../../lib/onboarding-store';
+import { clearPendingClonePlan } from '../../lib/clone-plan-store';
 import { logger } from '../../lib/logger';
 import LoginScreen from '../login';
 import { OnboardingBackground } from '../../components/onboarding/OnboardingBackground';
@@ -23,10 +25,15 @@ import { OnboardingPaywallStep } from '../../components/onboarding/OnboardingPay
  * moment the user enters the app, so asking for it here too would just repeat it.
  * The "request your city" affordance still lives in the home tab.
  *
- * The preview "Create my plan" CTA advances to the paywall step (W5); the flow
- * completes from there, after a purchase/restore (`skippedPaywall:false`), on
- * "not now", or on a clean auto-skip when RevenueCat is not configured
- * (`skippedPaywall:true`). Completion lands the guest in the app.
+ * The preview's PRIMARY CTA is now "Save this plan": it clones the shown showcase
+ * into the user's own plan, which REQUIRES registration. A guest tap stages the
+ * clone intent and swaps to the inline login (save-specific copy); a successful
+ * login replays the clone (`lib/auth` → `clone-plan-store`), completes onboarding,
+ * and the app shell lands on the cloned plan. The SECONDARY "not now" link keeps
+ * the old path: advance to the paywall step (W5); the flow completes from there,
+ * after a purchase/restore (`skippedPaywall:false`), on "not now", or on a clean
+ * auto-skip when RevenueCat is not configured (`skippedPaywall:true`). Completion
+ * lands the guest in the app.
  *
  * PRODUCT DECISION TO FLAG (does not block): a brand-new user who taps "I already
  * have an account" and then REGISTERS never sees these value screens, `login()`
@@ -42,8 +49,13 @@ const TOTAL_STEPS = STEP_NAMES.length;
 const PAYWALL_STEP = STEP_NAMES.indexOf('paywall');
 
 export default function OnboardingScreen() {
+  const { t } = useTranslation();
   const [stepIndex, setStepIndex] = useState(0);
   const [showLogin, setShowLogin] = useState(false);
+  // Why the inline login is up: a generic "I already have an account" tap vs the
+  // "save this plan" hook (which stages a pending clone + shows save-specific
+  // copy, and must discard that intent if the login is dismissed).
+  const [loginForSavePlan, setLoginForSavePlan] = useState(false);
 
   // Fire `onboarding_started` once, on first mount.
   useEffect(() => {
@@ -86,7 +98,7 @@ export default function OnboardingScreen() {
     const onHardwareBack = (): boolean => {
       if (showLogin) {
         if (loginInnerBackRef.current?.()) return true;
-        setShowLogin(false);
+        dismissLogin();
         return true;
       }
       if (stepIndex > 0) {
@@ -124,11 +136,31 @@ export default function OnboardingScreen() {
     completeOnboarding().catch((err) => logger.warn('onboarding: completeOnboarding failed', err));
   };
 
+  // Guest tapped "Save this plan": the preview already staged the pending clone;
+  // present the inline login with save-specific copy. A successful login replays
+  // the clone (lib/auth → clone-plan-store) and completes onboarding.
+  const presentSavePlanSignup = () => {
+    setLoginForSavePlan(true);
+    setShowLogin(true);
+  };
+
+  // Tear down the inline login. If it was the save-plan hook, the staged clone
+  // intent is discarded (mirrors the favorites gate: an abandoned gate never
+  // leaves a phantom intent to replay on some later login).
+  const dismissLogin = () => {
+    if (loginForSavePlan) {
+      clearPendingClonePlan();
+      setLoginForSavePlan(false);
+    }
+    setShowLogin(false);
+  };
+
   if (showLogin) {
     return (
       <LoginScreen
-        onClose={() => setShowLogin(false)}
+        onClose={dismissLogin}
         onRegisterInnerBack={registerLoginInnerBack}
+        contextMessage={loginForSavePlan ? t('onboarding.savePlanSignupPrompt') : undefined}
       />
     );
   }
@@ -161,7 +193,12 @@ export default function OnboardingScreen() {
         <OnboardingTasteScreen onContinue={handleTasteContinue} onSkip={() => goTo(2)} />
       )}
       {stepIndex === 2 && (
-        <OnboardingPreviewScreen city={null} onCreatePlan={goToPaywall} />
+        <OnboardingPreviewScreen
+          city={null}
+          onCreatePlan={goToPaywall}
+          onRequestSignup={presentSavePlanSignup}
+          onSaved={() => completeFlow(true)}
+        />
       )}
     </OnboardingBackground>
   );

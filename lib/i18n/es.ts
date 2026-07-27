@@ -213,6 +213,7 @@ export default {
   follow: {
     loading: 'Iniciando Follow Mode...',
     loadError: 'No se pudo cargar el plan',
+    offlineCached: 'Copia sin conexión',
     tripCompleteTitle: '¡Plan completado!',
     tripCompleteBody: 'Has terminado el plan. ¡Disfruta del viaje!',
     done: 'Hecho',
@@ -227,8 +228,20 @@ export default {
     pause: 'Pausar',
     skip: 'Saltar',
     dayLabel: 'Día {{day}}',
+    dayStepper: 'Día {{current}} de {{total}}',
+    stopPosition: '{{current}} / {{total}}',
+    prevDay: 'Día anterior',
+    nextDay: 'Día siguiente',
+    prevStop: 'Parada anterior',
+    nextStop: 'Parada siguiente',
     expandSheet: 'Ver paradas',
     collapseSheet: 'Ver el mapa',
+    toThisStop: 'a esta parada',
+    getDirections: 'Cómo llegar',
+    directionsTitle: 'Cómo llegar',
+    directionsBody: 'Abre la navegación a pie paso a paso en tu app de mapas.',
+    openAppleMaps: 'Apple Maps',
+    openGoogleMaps: 'Google Maps',
   },
   builder: {
     title: 'Crea tu plan',
@@ -511,6 +524,10 @@ export default {
     previewGenericSubtitle: 'Paradas curadas, con horarios y orden pensados para ti.',
     previewGenericHint: 'Se crea en cuanto empiezas.',
     createPlan: 'Crear mi plan',
+    // Gancho "guardar este plan" (registro para guardar la vista previa curada)
+    savePlan: 'Guardar este plan',
+    saveNotNow: 'Ahora no',
+    savePlanSignupPrompt: 'Regístrate para guardar tu plan y tus favoritos',
   },
   // Input inline compartido "pide tu ciudad" (onboarding + selector del home).
   cityRequest: {
@@ -602,6 +619,14 @@ export default {
     next: 'Siguiente',
     stopFallback: 'Parada',
     openStreetMapCopyright: 'Derechos de autor de OpenStreetMap',
+    recenterMap: 'Recentrar el mapa',
+  },
+  units: {
+    distanceKm: '{{value}} km',
+    distanceMeters: '{{value}} m',
+    durationMin: '{{value}} min',
+    durationHour: '{{value}} h',
+    durationHourMin: '{{h}} h {{min}} min',
   },
   brand: {
     // INTENCIONAL: el lema de marca se mantiene en inglés en TODOS los idiomas

@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, Pressable, Text, type ViewStyle } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import MapLibreGL, { type MapViewRef, type CameraRef } from '@maplibre/maplibre-react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -10,7 +11,17 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import type { RouteSegment } from '../../lib/types';
+import { colors } from '../../lib/theme';
 import { buildRouteGeoJSON } from './route-geojson';
+import { splitRouteGeoJSON } from '../../lib/map/route-split';
+import {
+  computeBounds,
+  recenterMode,
+  resolveCameraTarget,
+  type CameraMode,
+  type MapPoint,
+} from '../../lib/map/camera';
+import { useFollowLocation } from './useFollowLocation';
 
 export interface MapStop {
   id: string;
@@ -18,6 +29,8 @@ export interface MapStop {
   latitude: number;
   longitude: number;
   category?: string;
+  /** orderIndex del stop en el plan (para dividir la ruta hecha/pendiente). */
+  orderIndex?: number;
 }
 
 interface PlanMapProps {
@@ -37,6 +50,13 @@ interface PlanMapProps {
    * Por defecto `true` (interactivo, como en Follow Mode).
    */
   interactive?: boolean;
+  /**
+   * Activa las capacidades de seguimiento de Follow Mode: punto azul del usuario
+   * (permiso WhenInUse pedido aquí), botón de recentrar, modos de cámara
+   * (stop-focus / seguir al usuario) y ruta hecha vs pendiente. Por defecto
+   * `false` (p. ej. el mapa de detalle de un sitio no lo usa).
+   */
+  followMode?: boolean;
 }
 
 const PIN_COLOR = '#3b82f6'; // electric-blue
@@ -51,11 +71,17 @@ export const PlanMap: React.FC<PlanMapProps> = ({
   routeSegments,
   activeDayNumber,
   interactive = true,
+  followMode = false,
 }) => {
   const { t } = useTranslation();
   const mapRef = useRef<MapViewRef>(null);
   const cameraRef = useRef<CameraRef>(null);
   const scaleAnim = useSharedValue(1);
+
+  const { status: locationStatus, coordinate: userCoordinate } = useFollowLocation(followMode);
+  const [cameraMode, setCameraMode] = useState<CameraMode>('stop');
+
+  const showUserDot = followMode && locationStatus === 'granted' && userCoordinate !== null;
 
   // Pulsing animation for active pin
   useEffect(() => {
@@ -66,58 +92,65 @@ export const PlanMap: React.FC<PlanMapProps> = ({
     );
   }, [scaleAnim]);
 
-  // Fly to active pin when it changes
+  const activeStop = useMemo<MapPoint | null>(() => {
+    if (stops.length === 0 || activePinIndex >= stops.length) return null;
+    const s = stops[activePinIndex];
+    return { latitude: s.latitude, longitude: s.longitude };
+  }, [stops, activePinIndex]);
+
+  const flyTo = useCallback((point: MapPoint) => {
+    cameraRef.current?.flyTo([point.longitude, point.latitude], 1500);
+    onCameraUpdate?.({ latitude: point.latitude, longitude: point.longitude });
+  }, [onCameraUpdate]);
+
+  // Fly to active pin when it changes. Cambiar de stop (tap en pin o navegación
+  // en la hoja) re-asienta el foco en el stop, por encima de un follow-user o de
+  // un pan libre previo — el botón de recentrar vuelve a seguir al usuario.
   useEffect(() => {
-    if (stops.length === 0 || activePinIndex >= stops.length) return;
+    if (!activeStop) return;
+    if (followMode) setCameraMode('stop');
+    flyTo(activeStop);
+  }, [activePinIndex, activeStop, followMode, flyTo]);
 
-    const activeStop = stops[activePinIndex];
-    if (cameraRef.current) {
-      cameraRef.current.flyTo(
-        [activeStop.longitude, activeStop.latitude],
-        1500 // duration in ms
-      );
-      onCameraUpdate?.({ latitude: activeStop.latitude, longitude: activeStop.longitude });
-    }
-  }, [activePinIndex, stops, onCameraUpdate]);
+  // En modo "seguir al usuario", la cámara persigue el punto azul.
+  useEffect(() => {
+    if (!followMode || cameraMode !== 'user' || !userCoordinate) return;
+    cameraRef.current?.flyTo([userCoordinate.longitude, userCoordinate.latitude], 800);
+  }, [followMode, cameraMode, userCoordinate]);
 
-  // Calculate center and bounds for initial view
-  const calculateBounds = () => {
-    if (stops.length === 0) {
-      return {
-        center: [0, 0],
-        bounds: undefined,
-      };
-    }
+  const handleRecenter = useCallback(() => {
+    const mode = recenterMode(userCoordinate !== null);
+    setCameraMode(mode);
+    const target = resolveCameraTarget(mode, { userCoordinate, activeStop });
+    if (target) flyTo(target);
+  }, [userCoordinate, activeStop, flyTo]);
 
-    let minLat = stops[0].latitude;
-    let maxLat = stops[0].latitude;
-    let minLng = stops[0].longitude;
-    let maxLng = stops[0].longitude;
+  // Si el usuario mueve el mapa a mano, no le secuestramos la cámara hasta que
+  // pulse recentrar.
+  const handleRegionWillChange = useCallback(
+    (feature: GeoJSON.Feature<GeoJSON.Point, { isUserInteraction: boolean }>) => {
+      if (followMode && feature?.properties?.isUserInteraction) {
+        setCameraMode('free');
+      }
+    },
+    [followMode],
+  );
 
-    stops.forEach((stop) => {
-      minLat = Math.min(minLat, stop.latitude);
-      maxLat = Math.max(maxLat, stop.latitude);
-      minLng = Math.min(minLng, stop.longitude);
-      maxLng = Math.max(maxLng, stop.longitude);
-    });
+  const { center, bounds } = computeBounds(stops);
 
-    const centerLat = (minLat + maxLat) / 2;
-    const centerLng = (minLng + maxLng) / 2;
-
-    return {
-      center: [centerLng, centerLat],
-      bounds: {
-        ne: [maxLng, maxLat],
-        sw: [minLng, minLat],
-      },
-    };
-  };
-
-  const { center, bounds } = calculateBounds();
+  const activeOrderIndex = stops[activePinIndex]?.orderIndex ?? activePinIndex;
 
   const routeGeoJSON = useMemo<GeoJSON.GeoJSON>(
     () => buildRouteGeoJSON(stops, routeSegments, activeDayNumber),
     [stops, routeSegments, activeDayNumber],
+  );
+
+  const routeSplit = useMemo(
+    () =>
+      followMode
+        ? splitRouteGeoJSON(stops, routeSegments, activeDayNumber, activeOrderIndex)
+        : null,
+    [followMode, stops, routeSegments, activeDayNumber, activeOrderIndex],
   );
 
   return (
@@ -130,6 +163,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
         rotateEnabled={false}
         scrollEnabled={interactive}
         zoomEnabled={interactive}
+        onRegionWillChange={followMode ? handleRegionWillChange : undefined}
       >
         <MapLibreGL.Camera
           ref={cameraRef}
@@ -139,19 +173,31 @@ export const PlanMap: React.FC<PlanMapProps> = ({
           animationDuration={1500}
         />
 
-        {/* Route line */}
-        {stops.length > 1 && (
+        {/* Route line: en Follow Mode se divide en hecho (atenuado) vs pendiente
+            (destacado); fuera, una sola línea como siempre. */}
+        {stops.length > 1 && followMode && routeSplit ? (
+          <>
+            <MapLibreGL.ShapeSource id="routeTraveled" shape={routeSplit.traveled}>
+              <MapLibreGL.LineLayer
+                id="routeTraveledLine"
+                style={{ lineColor: '#94a3b8', lineWidth: 3, lineOpacity: 0.45 }}
+              />
+            </MapLibreGL.ShapeSource>
+            <MapLibreGL.ShapeSource id="routeUpcoming" shape={routeSplit.upcoming}>
+              <MapLibreGL.LineLayer
+                id="routeUpcomingLine"
+                style={{ lineColor: '#3b82f6', lineWidth: 4, lineOpacity: 0.9 }}
+              />
+            </MapLibreGL.ShapeSource>
+          </>
+        ) : stops.length > 1 ? (
           <MapLibreGL.ShapeSource id="routeSource" shape={routeGeoJSON}>
             <MapLibreGL.LineLayer
               id="routeLine"
-              style={{
-                lineColor: '#3b82f6',
-                lineWidth: 3,
-                lineOpacity: 0.6,
-              }}
+              style={{ lineColor: '#3b82f6', lineWidth: 3, lineOpacity: 0.6 }}
             />
           </MapLibreGL.ShapeSource>
-        )}
+        ) : null}
 
         {/* Stop pins */}
         {stops.map((stop, index) => (
@@ -181,7 +227,35 @@ export const PlanMap: React.FC<PlanMapProps> = ({
             </View>
           </MapLibreGL.PointAnnotation>
         ))}
+
+        {/* Punto azul del usuario (solo con permiso concedido). */}
+        {showUserDot && userCoordinate && (
+          <MapLibreGL.PointAnnotation
+            id="user-location"
+            coordinate={[userCoordinate.longitude, userCoordinate.latitude]}
+          >
+            <View style={styles.userDotHalo}>
+              <View style={styles.userDotCore} />
+            </View>
+          </MapLibreGL.PointAnnotation>
+        )}
       </MapLibreGL.MapView>
+
+      {followMode && (
+        <Pressable
+          onPress={handleRecenter}
+          style={styles.recenterButton}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('a11y.recenterMap')}
+        >
+          <MaterialCommunityIcons
+            name={cameraMode === 'user' ? 'crosshairs-gps' : 'crosshairs'}
+            size={22}
+            color={colors.sunsetOrange}
+          />
+        </Pressable>
+      )}
 
       <Pressable
         onPress={() => WebBrowser.openBrowserAsync('https://www.openstreetmap.org/copyright')}
@@ -224,6 +298,38 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: '#FFFFFF',
+  },
+  userDotHalo: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(59, 130, 246, 0.22)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userDotCore: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#3b82f6',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+  },
+  recenterButton: {
+    position: 'absolute',
+    bottom: 26,
+    right: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F2EFE9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
   },
   attribution: {
     position: 'absolute',

@@ -27,7 +27,10 @@
           }
         ],
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "LocalList may request your location in the future to surface nearby places. We do not currently collect your location."
+        "NSLocationWhenInUseUsageDescription": "LocalList uses your location to show where you are on your plan's map while you follow an itinerary.",
+        "LSApplicationQueriesSchemes": [
+          "comgooglemaps"
+        ]
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -133,6 +136,14 @@
         "expo-image-picker",
         {
           "photosPermission": "LocalList needs access to your photo library so you can pick a travel video to turn into a plan."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "LocalList uses your location to show where you are on your plan's map while you follow an itinerary.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false
         }
       ],
       "./plugins/withCertPinning"
