@@ -19,6 +19,7 @@ import { logger } from '../lib/logger';
 import { useOnboarding } from '../lib/onboarding-store';
 import { resolveEntryState, isGuestSession } from '../lib/entry-state';
 import { track } from '../lib/analytics';
+import { usePendingCloneLanding } from '../lib/clone-plan-store';
 import OnboardingScreen from './onboarding';
 
 // Initialize Sentry as early as possible
@@ -202,6 +203,10 @@ function AppStack() {
   // Recordatorio de fin de trial (día 5): presentación en foreground, tap →
   // evento + cuenta, y cancelación del recordatorio huérfano vía tier.
   useTrialReminder();
+  // "Save this plan" landing: after the onboarding save hook clones a plan
+  // (directly, or via the post-login replay), navigate to it once mounted. The
+  // race-safe consume + subscribe wiring lives in the hook (unit-tested there).
+  usePendingCloneLanding();
   return (
     <Stack
       screenOptions={{

@@ -39,9 +39,16 @@ import { CredentialsForm } from '../components/auth/CredentialsForm';
 export default function LoginScreen({
   onClose,
   onRegisterInnerBack,
+  contextMessage,
 }: {
   onClose?: () => void;
   onRegisterInnerBack?: (handler: (() => boolean) | null) => void;
+  /**
+   * Optional intent-specific line shown under the title in place of the generic
+   * tagline (e.g. the onboarding "save this plan" hook passes "Sign up to save
+   * your plan and favorites"). Kept as plain text so callers own the i18n copy.
+   */
+  contextMessage?: string;
 } = {}) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -121,8 +128,14 @@ export default function LoginScreen({
             ? authMode === 'signin' ? t('auth.welcomeBack') : t('auth.joinLocalList')
             : credentialsMode === 'login' ? t('auth.logIn') : t('auth.createAccount')}
         </Text>
-        <Text style={s.tagline}>{t('auth.taglineLine1')}</Text>
-        <Text style={[s.tagline, s.taglineLast]}>{t('auth.taglineLine2')}</Text>
+        {contextMessage ? (
+          <Text style={[s.tagline, s.taglineLast]}>{contextMessage}</Text>
+        ) : (
+          <>
+            <Text style={s.tagline}>{t('auth.taglineLine1')}</Text>
+            <Text style={[s.tagline, s.taglineLast]}>{t('auth.taglineLine2')}</Text>
+          </>
+        )}
 
         {error && (
           <View style={s.errorBox}>

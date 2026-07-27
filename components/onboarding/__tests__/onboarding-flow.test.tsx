@@ -15,12 +15,14 @@ import { Platform, BackHandler } from 'react-native';
 import OnboardingScreen from '../../../app/onboarding';
 import { track } from '../../../lib/analytics';
 import { completeOnboarding, setOnboardingPrefs } from '../../../lib/onboarding-store';
+import { clearPendingClonePlan } from '../../../lib/clone-plan-store';
 
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../lib/onboarding-store', () => ({
   completeOnboarding: jest.fn(() => Promise.resolve()),
   setOnboardingPrefs: jest.fn(() => Promise.resolve()),
 }));
+jest.mock('../../../lib/clone-plan-store', () => ({ clearPendingClonePlan: jest.fn() }));
 jest.mock('../../../lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
@@ -94,10 +96,31 @@ jest.mock('../OnboardingTasteScreen', () => {
 jest.mock('../OnboardingPreviewScreen', () => {
   const { TouchableOpacity, Text } = jest.requireActual('react-native');
   return {
-    OnboardingPreviewScreen: ({ city, onCreatePlan }: { city: string | null; onCreatePlan: () => void }) => (
-      <TouchableOpacity testID="preview-create" onPress={onCreatePlan}>
-        <Text>{`create for ${city}`}</Text>
-      </TouchableOpacity>
+    OnboardingPreviewScreen: ({
+      city,
+      onCreatePlan,
+      onRequestSignup,
+      onSaved,
+    }: {
+      city: string | null;
+      onCreatePlan: () => void;
+      onRequestSignup: () => void;
+      onSaved: () => void;
+    }) => (
+      <>
+        {/* "Not now" secondary path (advances to the paywall step). */}
+        <TouchableOpacity testID="preview-create" onPress={onCreatePlan}>
+          <Text>{`create for ${city}`}</Text>
+        </TouchableOpacity>
+        {/* Guest "Save this plan" → orchestrator presents the save-plan login. */}
+        <TouchableOpacity testID="preview-request-signup" onPress={onRequestSignup}>
+          <Text>request signup</Text>
+        </TouchableOpacity>
+        {/* Authenticated save success → orchestrator completes onboarding. */}
+        <TouchableOpacity testID="preview-saved" onPress={onSaved}>
+          <Text>saved</Text>
+        </TouchableOpacity>
+      </>
     ),
   };
 });
@@ -142,9 +165,11 @@ jest.mock('../../../app/login', () => {
   const MockLoginScreen = ({
     onClose,
     onRegisterInnerBack,
+    contextMessage,
   }: {
     onClose?: () => void;
     onRegisterInnerBack?: (handler: (() => boolean) | null) => void;
+    contextMessage?: string;
   }) => {
     const [subStep, setSubStep] = useState('choose');
     useEffect(() => {
@@ -162,6 +187,7 @@ jest.mock('../../../app/login', () => {
       <>
         <Text>LOGIN</Text>
         <Text>{`login-step:${subStep}`}</Text>
+        <Text testID="login-ctx">{contextMessage ?? 'NONE'}</Text>
         <TouchableOpacity testID="login-to-credentials" onPress={() => setSubStep('credentials')}>
           <Text>to credentials</Text>
         </TouchableOpacity>
@@ -177,6 +203,13 @@ jest.mock('../../../app/login', () => {
 });
 
 const mockTrack = track as jest.Mock;
+const mockClearPending = clearPendingClonePlan as jest.Mock;
+
+// Walk the flow to the preview step (value → interests → preview).
+const goToPreview = () => {
+  fireEvent.press(screen.getByTestId('value-start'));
+  fireEvent.press(screen.getByTestId('taste-continue'));
+};
 
 // Captures the `hardwareBackPress` callback the orchestrator registers so tests
 // can simulate the Android physical back button. The handler is Android-only, so
@@ -351,6 +384,61 @@ describe('onboarding orchestrator — navigation + side effects', () => {
     const interestsViews = stepViews.filter((e) => e.step === 'interests');
     expect(valueViews).toHaveLength(1);
     expect(interestsViews).toHaveLength(1);
+  });
+});
+
+// "Save this plan" hook: the primary preview CTA gates registration. The
+// orchestrator wires the guest signup request (save-specific login copy) and the
+// dismissal cleanup (discard the staged clone), plus the authenticated-save
+// completion. The clone replay + navigation live in lib (clone-plan-store).
+describe('onboarding orchestrator — save-this-plan hook', () => {
+  it('guest "save this plan" opens the inline login with save-specific copy', () => {
+    render(<OnboardingScreen />);
+    goToPreview();
+
+    fireEvent.press(screen.getByTestId('preview-request-signup'));
+    // Inline login is up with the save-plan context message (not the generic one).
+    expect(screen.getByText('LOGIN')).toBeTruthy();
+    expect(screen.getByTestId('login-ctx').props.children).not.toBe('NONE');
+    // Presenting the login must not complete onboarding or clear the intent yet.
+    expect(completeOnboarding).not.toHaveBeenCalled();
+    expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
+  it('the generic "I already have an account" login carries NO save-plan copy', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-signin'));
+    expect(screen.getByText('LOGIN')).toBeTruthy();
+    expect(screen.getByTestId('login-ctx').props.children).toBe('NONE');
+  });
+
+  it('dismissing the save-plan login DISCARDS the staged clone intent', () => {
+    render(<OnboardingScreen />);
+    goToPreview();
+    fireEvent.press(screen.getByTestId('preview-request-signup'));
+    expect(screen.getByText('LOGIN')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('login-close'));
+    // Back on the preview, and the pending clone was cleared (no phantom replay).
+    expect(screen.getByTestId('preview-request-signup')).toBeTruthy();
+    expect(mockClearPending).toHaveBeenCalledTimes(1);
+  });
+
+  it('dismissing the GENERIC sign-in login does not touch the clone intent', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByTestId('value-signin'));
+    fireEvent.press(screen.getByTestId('login-close'));
+    expect(screen.getByTestId('value-start')).toBeTruthy();
+    expect(mockClearPending).not.toHaveBeenCalled();
+  });
+
+  it('an authenticated save (onSaved) completes onboarding (skippedPaywall:true)', async () => {
+    render(<OnboardingScreen />);
+    goToPreview();
+
+    fireEvent.press(screen.getByTestId('preview-saved'));
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_completed', skippedPaywall: true });
+    await waitFor(() => expect(completeOnboarding).toHaveBeenCalledTimes(1));
   });
 });
 

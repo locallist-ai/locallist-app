@@ -2,13 +2,20 @@
  * Onboarding screen 4 (value preview): shows a REAL curated plan (name + first
  * stops + a real cover photo pulled from the plan's stops), picked to match the
  * interests chosen on the tastes screen; falls back to a generic gradient card
- * when there is no showcase plan. The CTA finishes onboarding.
+ * when there is no showcase plan.
+ *
+ * The PRIMARY CTA is now "Save this plan" (the registration hook): a guest tap
+ * stages the clone intent and asks the orchestrator to present signup; an
+ * authenticated tap clones directly, stages the landing id, and completes. The
+ * SECONDARY "not now" link keeps the old continue-without-saving path.
  */
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import { OnboardingPreviewScreen } from '../OnboardingPreviewScreen';
-import { getShowcasePlans, getPlanDetail } from '../../../lib/api';
+import { getShowcasePlans, getPlanDetail, clonePlan } from '../../../lib/api';
 import { getOnboardingPrefsSync } from '../../../lib/onboarding-store';
+import { track } from '../../../lib/analytics';
+import { setPendingClonePlan, setPendingCloneLanding } from '../../../lib/clone-plan-store';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -18,9 +25,24 @@ jest.mock('react-i18next', () => ({
 jest.mock('../../../lib/api', () => ({
   getShowcasePlans: jest.fn(),
   getPlanDetail: jest.fn(),
+  clonePlan: jest.fn(),
 }));
 jest.mock('../../../lib/onboarding-store', () => ({
   getOnboardingPrefsSync: jest.fn(() => ({})),
+}));
+jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
+jest.mock('../../../lib/clone-plan-store', () => ({
+  setPendingClonePlan: jest.fn(),
+  setPendingCloneLanding: jest.fn(),
+}));
+// Auth state is controlled per-test via `mockIsAuthed`.
+let mockIsAuthed = false;
+jest.mock('../../../lib/auth', () => ({
+  useAuth: () => ({ isAuthenticated: mockIsAuthed }),
+}));
+const mockPresentGate = jest.fn();
+jest.mock('../../../lib/useGateHandler', () => ({
+  useGateHandler: () => ({ presentGate: mockPresentGate, presentClamped: jest.fn() }),
 }));
 // Mock PhotoHero to a bare View that surfaces the props under test, so we can
 // assert whether it receives a real photo URL or falls back to the gradient.
@@ -35,7 +57,11 @@ jest.mock('../../ui/PhotoHero', () => {
 
 const mockList = getShowcasePlans as jest.Mock;
 const mockDetail = getPlanDetail as jest.Mock;
+const mockClone = clonePlan as jest.Mock;
 const mockPrefs = getOnboardingPrefsSync as jest.Mock;
+const mockTrack = track as jest.Mock;
+const mockSetPending = setPendingClonePlan as jest.Mock;
+const mockSetLanding = setPendingCloneLanding as jest.Mock;
 
 // The five showcase plans curated in prod (list DTO shape: no photo field).
 const SHOWCASE = [
@@ -78,12 +104,32 @@ const detailNoPhoto = {
   status: 200,
 };
 
+// Render helper with the required callbacks defaulted to spies; individual tests
+// override what they assert on.
+function renderScreen(
+  props: Partial<React.ComponentProps<typeof OnboardingPreviewScreen>> = {},
+) {
+  const onCreatePlan = props.onCreatePlan ?? jest.fn();
+  const onRequestSignup = props.onRequestSignup ?? jest.fn();
+  const onSaved = props.onSaved ?? jest.fn();
+  render(
+    <OnboardingPreviewScreen
+      city={props.city ?? null}
+      onCreatePlan={onCreatePlan}
+      onRequestSignup={onRequestSignup}
+      onSaved={onSaved}
+    />,
+  );
+  return { onCreatePlan, onRequestSignup, onSaved };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockIsAuthed = false;
   mockPrefs.mockReturnValue({});
 });
 
-describe('OnboardingPreviewScreen', () => {
+describe('OnboardingPreviewScreen — preview rendering', () => {
   it('renders the real plan name and its first stops', async () => {
     mockList.mockResolvedValueOnce({
       data: { plans: [{ id: 'p1', name: 'Miami Weekend', description: 'A curated weekend', type: 'foodie', tripContext: null }] },
@@ -92,7 +138,7 @@ describe('OnboardingPreviewScreen', () => {
     });
     mockDetail.mockResolvedValueOnce(detailNoPhoto);
 
-    render(<OnboardingPreviewScreen city="Miami" onCreatePlan={jest.fn()} />);
+    renderScreen({ city: 'Miami' });
 
     await waitFor(() => expect(screen.getByText('Miami Weekend')).toBeTruthy());
     expect(screen.getByText('Cafe A')).toBeTruthy();
@@ -105,7 +151,7 @@ describe('OnboardingPreviewScreen', () => {
     mockList.mockResolvedValueOnce({ data: { plans: [SHOWCASE[0]] }, error: null, status: 200 });
     mockDetail.mockResolvedValueOnce(detailWithPhoto(r2));
 
-    render(<OnboardingPreviewScreen city={null} onCreatePlan={jest.fn()} />);
+    renderScreen();
 
     await waitFor(() => expect(screen.getByText('Romantic Weekend in Miami')).toBeTruthy());
     const hero = screen.getByTestId('photo-hero');
@@ -118,7 +164,7 @@ describe('OnboardingPreviewScreen', () => {
     mockList.mockResolvedValueOnce({ data: { plans: SHOWCASE }, error: null, status: 200 });
     mockDetail.mockResolvedValueOnce(detailNoPhoto);
 
-    render(<OnboardingPreviewScreen city={null} onCreatePlan={jest.fn()} />);
+    renderScreen();
 
     await waitFor(() => expect(screen.getByText('Foodie Crawl')).toBeTruthy());
     expect(mockDetail).toHaveBeenCalledWith('foodie', expect.anything());
@@ -130,7 +176,7 @@ describe('OnboardingPreviewScreen', () => {
     mockList.mockResolvedValueOnce({ data: { plans: SHOWCASE }, error: null, status: 200 });
     mockDetail.mockResolvedValueOnce(detailNoPhoto);
 
-    render(<OnboardingPreviewScreen city={null} onCreatePlan={jest.fn()} />);
+    renderScreen();
 
     await waitFor(() => expect(screen.getByText('Romantic Weekend in Miami')).toBeTruthy());
     expect(mockDetail).toHaveBeenCalledWith('romantic', expect.anything());
@@ -140,7 +186,7 @@ describe('OnboardingPreviewScreen', () => {
     mockList.mockResolvedValueOnce({ data: { plans: [SHOWCASE[0]] }, error: null, status: 200 });
     mockDetail.mockResolvedValueOnce(detailNoPhoto);
 
-    render(<OnboardingPreviewScreen city={null} onCreatePlan={jest.fn()} />);
+    renderScreen();
 
     await waitFor(() => expect(screen.getByText('Romantic Weekend in Miami')).toBeTruthy());
     expect(screen.getByTestId('photo-hero').props.imageUrl).toBeNull();
@@ -149,7 +195,7 @@ describe('OnboardingPreviewScreen', () => {
   it('falls back to a generic card when there is no showcase plan', async () => {
     mockList.mockResolvedValueOnce({ data: { plans: [] }, error: null, status: 200 });
 
-    render(<OnboardingPreviewScreen city="Miami" onCreatePlan={jest.fn()} />);
+    renderScreen({ city: 'Miami' });
 
     await waitFor(() =>
       expect(screen.getByText('onboarding.previewGenericTitle:Miami')).toBeTruthy(),
@@ -157,13 +203,91 @@ describe('OnboardingPreviewScreen', () => {
     // Never fetches detail when there is no plan.
     expect(mockDetail).not.toHaveBeenCalled();
   });
+});
 
-  it('CTA finishes onboarding', async () => {
-    mockList.mockResolvedValueOnce({ data: { plans: [] }, error: null, status: 200 });
-    const onCreatePlan = jest.fn();
-    render(<OnboardingPreviewScreen city="Miami" onCreatePlan={onCreatePlan} />);
-    await waitFor(() => expect(screen.getByText('onboarding.createPlan')).toBeTruthy());
-    fireEvent.press(screen.getByText('onboarding.createPlan'));
+describe('OnboardingPreviewScreen — save-this-plan hook', () => {
+  // Load a concrete showcase plan (id 'romantic') for the save tests.
+  const renderWithPlan = async (
+    props: Partial<React.ComponentProps<typeof OnboardingPreviewScreen>> = {},
+  ) => {
+    mockList.mockResolvedValueOnce({ data: { plans: [SHOWCASE[0]] }, error: null, status: 200 });
+    mockDetail.mockResolvedValueOnce(detailNoPhoto);
+    const spies = renderScreen(props);
+    await waitFor(() => expect(screen.getByText('Romantic Weekend in Miami')).toBeTruthy());
+    return spies;
+  };
+
+  it('(a) authenticated: tap clones the plan, stages the landing id, and completes', async () => {
+    mockIsAuthed = true;
+    mockClone.mockResolvedValueOnce({ data: { id: 'cloned-1' }, error: null, status: 200 });
+    const { onSaved, onRequestSignup } = await renderWithPlan();
+
+    fireEvent.press(screen.getByText('onboarding.savePlan'));
+
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_save_plan_tapped' });
+    await waitFor(() => expect(mockClone).toHaveBeenCalledWith('romantic'));
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_plan_saved', viaSignup: false });
+    expect(mockSetLanding).toHaveBeenCalledWith('cloned-1');
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    // Authenticated path never routes through signup or stages a guest pending.
+    expect(onRequestSignup).not.toHaveBeenCalled();
+    expect(mockSetPending).not.toHaveBeenCalled();
+  });
+
+  it('(b) guest: tap stages the pending clone + requests signup, WITHOUT cloning', async () => {
+    mockIsAuthed = false;
+    const { onRequestSignup, onSaved } = await renderWithPlan();
+
+    fireEvent.press(screen.getByText('onboarding.savePlan'));
+
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'onboarding_save_plan_tapped' });
+    expect(mockSetPending).toHaveBeenCalledWith('romantic');
+    expect(onRequestSignup).toHaveBeenCalledTimes(1);
+    // A guest never hits the network and never completes here.
+    expect(mockClone).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(mockTrack).not.toHaveBeenCalledWith({ event: 'onboarding_plan_saved', viaSignup: expect.anything() });
+  });
+
+  it('(d) authenticated: a 403 saved_plans_limit shows the Plus upsell, does not complete', async () => {
+    mockIsAuthed = true;
+    mockClone.mockResolvedValueOnce({
+      data: null,
+      error: 'saved_plans_limit_reached',
+      errorBody: { error: 'saved_plans_limit_reached', limit: 3 },
+      status: 403,
+    });
+    const { onSaved } = await renderWithPlan();
+
+    fireEvent.press(screen.getByText('onboarding.savePlan'));
+
+    await waitFor(() => expect(mockPresentGate).toHaveBeenCalledTimes(1));
+    const action = mockPresentGate.mock.calls[0][0];
+    expect(action).toMatchObject({ type: 'upsell', code: 'saved_plans_limit_reached' });
+    expect(mockSetLanding).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('(e) authenticated: a network failure does not crash — completes onboarding (lands home)', async () => {
+    mockIsAuthed = true;
+    mockClone.mockResolvedValueOnce({ data: null, error: 'Network error', errorBody: null, status: 0 });
+    const { onSaved } = await renderWithPlan();
+
+    fireEvent.press(screen.getByText('onboarding.savePlan'));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(mockSetLanding).not.toHaveBeenCalled();
+    expect(mockPresentGate).not.toHaveBeenCalled();
+  });
+
+  it('(f) the "not now" link continues without saving (onCreatePlan)', async () => {
+    const { onCreatePlan, onRequestSignup } = await renderWithPlan();
+
+    fireEvent.press(screen.getByText('onboarding.saveNotNow'));
+
     expect(onCreatePlan).toHaveBeenCalledTimes(1);
+    expect(mockClone).not.toHaveBeenCalled();
+    expect(mockSetPending).not.toHaveBeenCalled();
+    expect(onRequestSignup).not.toHaveBeenCalled();
   });
 });

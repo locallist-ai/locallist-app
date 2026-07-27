@@ -510,6 +510,10 @@ export default {
     previewGenericSubtitle: 'Paradas curadas, con horarios y orden pensados para ti.',
     previewGenericHint: 'Se crea en cuanto empiezas.',
     createPlan: 'Crear mi plan',
+    // Gancho "guardar este plan" (registro para guardar la vista previa curada)
+    savePlan: 'Guardar este plan',
+    saveNotNow: 'Ahora no',
+    savePlanSignupPrompt: 'Regístrate para guardar tu plan y tus favoritos',
   },
   // Input inline compartido "pide tu ciudad" (onboarding + selector del home).
   cityRequest: {
