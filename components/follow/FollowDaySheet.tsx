@@ -28,7 +28,7 @@ import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import { PhotoAttribution } from '../ui/PhotoAttribution';
 import { resolvePhotoUrl, isPhotoDisplayable } from '../../lib/helpers/photo-url';
 import { buildGeoUrl, resolveHandoffTargets } from '../../lib/map/handoff';
-import { getTravelToNextStop, formatDistance, formatDuration } from '../../lib/map/eta';
+import { getTravelToStop, formatDistance, formatDuration } from '../../lib/map/eta';
 import { logger } from '../../lib/logger';
 import type { PlanStop } from '../../lib/types';
 
@@ -234,10 +234,11 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
     [allDays, onChangeDay],
   );
 
-  // --- ETA planificada al próximo stop del día (datos ya en el modelo, cero
-  // backend, cero GPS): `travelFromPrevious` del siguiente stop. ---
-  const travelToNext = useMemo(
-    () => getTravelToNextStop(dayItems.map((it) => it.stop), safeDayPos),
+  // --- ETA planificada para LLEGAR al stop mostrado (datos ya en el modelo,
+  // cero backend, cero GPS): `travelFromPrevious` del stop actual. Mismo destino
+  // que el botón "Cómo llegar" (que abre direcciones a este mismo stop). ---
+  const travelToCurrent = useMemo(
+    () => getTravelToStop(dayItems.map((it) => it.stop), safeDayPos),
     [dayItems, safeDayPos],
   );
 
@@ -433,15 +434,15 @@ export const FollowDaySheet: React.FC<FollowDaySheetProps> = ({
               </TouchableOpacity>
             </View>
 
-            {/* ETA al próximo stop + handoff a mapas (turn-by-turn) */}
+            {/* ETA al stop mostrado + handoff a mapas (turn-by-turn), mismo destino */}
             <View style={styles.followActionsRow}>
-              {travelToNext ? (
+              {travelToCurrent ? (
                 <View style={styles.etaPill}>
                   <MaterialCommunityIcons name="walk" size={13} color={colors.deepOcean} />
                   <Text style={styles.etaText} numberOfLines={1}>
-                    {`${formatDistance(travelToNext.distanceKm, t)} · ${formatDuration(travelToNext.durationMin, t)}`}
+                    {`${formatDistance(travelToCurrent.distanceKm, t)} · ${formatDuration(travelToCurrent.durationMin, t)}`}
                   </Text>
-                  <Text style={styles.etaLabel} numberOfLines={1}>{t('follow.toNextStop')}</Text>
+                  <Text style={styles.etaLabel} numberOfLines={1}>{t('follow.toThisStop')}</Text>
                 </View>
               ) : (
                 <View style={styles.etaSpacer} />

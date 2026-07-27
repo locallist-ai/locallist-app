@@ -37,7 +37,7 @@ export function buildGoogleMapsUrl({ latitude, longitude }: LatLng): string {
   return `comgooglemaps://?daddr=${formatCoord(latitude)},${formatCoord(longitude)}&directionsmode=walking`;
 }
 
-/** Fallback universal `geo:` (último recurso si falla el open del elegido). */
+/** Fallback `geo:` (convención Android; último recurso si falla el open del elegido). */
 export function buildGeoUrl({ latitude, longitude }: LatLng): string {
   return `geo:${formatCoord(latitude)},${formatCoord(longitude)}`;
 }

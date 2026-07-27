@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import { formatDistance, formatDuration, getTravelToNextStop } from '../eta';
+import { formatDistance, formatDuration, getTravelToStop } from '../eta';
 import type { PlanStop } from '../../types';
 
 // t falso que devuelve la clave + los params, para verificar QUÉ rama i18n se elige.
@@ -20,25 +20,24 @@ const stop = (distance_km: number | null, duration_min: number | null): PlanStop
   place: null,
 });
 
-describe('getTravelToNextStop', () => {
-  it('lee el travelFromPrevious del SIGUIENTE stop del día', () => {
-    const dayStops = [stop(0, 0), stop(1.2, 15)];
-    expect(getTravelToNextStop(dayStops, 0)).toEqual({ distanceKm: 1.2, durationMin: 15 });
+describe('getTravelToStop', () => {
+  it('lee el travelFromPrevious del stop en index (tramo para llegar a él)', () => {
+    const dayStops = [stop(null, null), stop(1.2, 15)];
+    expect(getTravelToStop(dayStops, 1)).toEqual({ distanceKm: 1.2, durationMin: 15 });
   });
 
-  it('sin siguiente stop devuelve null', () => {
-    const dayStops = [stop(1.2, 15)];
-    expect(getTravelToNextStop(dayStops, 0)).toBeNull();
+  it('el primer stop del día no tiene tramo previo -> null', () => {
+    const dayStops = [stop(null, null), stop(1.2, 15)];
+    expect(getTravelToStop(dayStops, 0)).toBeNull();
   });
 
-  it('si el siguiente no tiene datos de viaje devuelve null', () => {
-    const dayStops = [stop(0, 0), stop(null, null)];
-    expect(getTravelToNextStop(dayStops, 0)).toBeNull();
+  it('index fuera de rango -> null', () => {
+    expect(getTravelToStop([stop(1.2, 15)], 5)).toBeNull();
   });
 });
 
 describe('formatDistance', () => {
-  it('por debajo de 1 km usa metros redondeados a 10', () => {
+  it('por debajo de la frontera usa metros redondeados a 10', () => {
     expect(formatDistance(0.456, t)).toBe('units.distanceMeters|{"value":460}');
   });
 
@@ -46,8 +45,16 @@ describe('formatDistance', () => {
     expect(formatDistance(1.25, t)).toBe('units.distanceKm|{"value":1.3}');
   });
 
-  it('1 km justo ya es kilómetros (frontera)', () => {
+  it('1 km justo ya es kilómetros', () => {
     expect(formatDistance(1, t)).toBe('units.distanceKm|{"value":1}');
+  });
+
+  it('en la frontera 0.995 km muestra "1 km", nunca "1000 m"', () => {
+    expect(formatDistance(0.995, t)).toBe('units.distanceKm|{"value":1}');
+  });
+
+  it('justo por debajo de la frontera sigue en metros', () => {
+    expect(formatDistance(0.994, t)).toBe('units.distanceMeters|{"value":990}');
   });
 });
 

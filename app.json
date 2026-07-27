@@ -61,14 +61,6 @@
         ],
         "NSPrivacyCollectedDataTypes": [
           {
-            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePreciseLocation",
-            "NSPrivacyCollectedDataTypeLinked": false,
-            "NSPrivacyCollectedDataTypeTracking": false,
-            "NSPrivacyCollectedDataTypePurposes": [
-              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
-            ]
-          },
-          {
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeEmailAddress",
             "NSPrivacyCollectedDataTypeLinked": true,
             "NSPrivacyCollectedDataTypeTracking": false,
@@ -149,7 +141,9 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "LocalList uses your location to show where you are on your plan's map while you follow an itinerary."
+          "locationWhenInUsePermission": "LocalList uses your location to show where you are on your plan's map while you follow an itinerary.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false
         }
       ],
       "./plugins/withCertPinning"

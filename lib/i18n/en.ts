@@ -235,7 +235,7 @@ export default {
     nextStop: 'Next stop',
     expandSheet: 'Show stops',
     collapseSheet: 'Show map',
-    toNextStop: 'to next stop',
+    toThisStop: 'to this stop',
     getDirections: 'Directions',
     directionsTitle: 'Get directions',
     directionsBody: 'Open turn-by-turn walking directions in your maps app.',

@@ -1,5 +1,9 @@
 import { acquireLocation, type Coordinate, type LocationModuleLike } from '../location';
 
+jest.mock('../../logger', () => ({
+  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
+
 describe('acquireLocation (degradación por permiso)', () => {
   it('módulo nulo (binario sin expo-location) -> unavailable, sin watch', async () => {
     const onCoordinate = jest.fn();
@@ -51,5 +55,32 @@ describe('acquireLocation (degradación por permiso)', () => {
     // Una actualización de posición llega al callback.
     emitted?.({ coords: { latitude: 1, longitude: 2 } });
     expect(onCoordinate).toHaveBeenCalledWith({ latitude: 1, longitude: 2 });
+  });
+
+  it('watchPositionAsync RECHAZA (Location Services OFF) -> unavailable, sin rejection', async () => {
+    const module: LocationModuleLike = {
+      requestForegroundPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+      watchPositionAsync: jest.fn().mockRejectedValue(new Error('Location services are disabled')),
+    };
+    const onCoordinate = jest.fn();
+
+    // No debe lanzar: el await resuelve a un resultado degradado.
+    const result = await acquireLocation(module, onCoordinate);
+
+    expect(result).toEqual({ status: 'unavailable', subscription: null });
+    expect(onCoordinate).not.toHaveBeenCalled();
+  });
+
+  it('requestForegroundPermissionsAsync RECHAZA -> unavailable, sin arrancar watch', async () => {
+    const watchPositionAsync = jest.fn();
+    const module: LocationModuleLike = {
+      requestForegroundPermissionsAsync: jest.fn().mockRejectedValue(new Error('boom')),
+      watchPositionAsync,
+    };
+
+    const result = await acquireLocation(module, jest.fn());
+
+    expect(result).toEqual({ status: 'unavailable', subscription: null });
+    expect(watchPositionAsync).not.toHaveBeenCalled();
   });
 });

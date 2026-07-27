@@ -1,7 +1,7 @@
 /**
- * ETA / distancia PLANIFICADA al próximo stop (no GPS en vivo): usa los datos
- * que ya trae el modelo (`PlanStop.travelFromPrevious`, que en el stop k es el
- * viaje desde k-1). Formateo de unidades vía i18n. Puro y testeable.
+ * ETA / distancia PLANIFICADA para llegar a un stop (no GPS en vivo): usa los
+ * datos que ya trae el modelo (`PlanStop.travelFromPrevious`, el tramo desde el
+ * stop anterior hasta ese stop). Formateo de unidades vía i18n. Puro y testeable.
  */
 import type { TFunction } from 'i18next';
 import type { PlanStop } from '../types';
@@ -12,13 +12,12 @@ export interface Travel {
 }
 
 /**
- * Viaje planificado del stop activo al SIGUIENTE del día. Lee el
- * `travelFromPrevious` del próximo stop. `null` si no hay siguiente o el dato
- * no existe.
+ * Viaje planificado para LLEGAR al stop `index` del día (el tramo desde el stop
+ * anterior). Se alinea con el destino que muestra la hoja y al que apunta "Cómo
+ * llegar". `null` si es el primer stop (sin tramo previo) o no hay dato.
  */
-export function getTravelToNextStop(dayStops: PlanStop[], activeIndex: number): Travel | null {
-  const next = dayStops[activeIndex + 1];
-  const travel = next?.travelFromPrevious;
+export function getTravelToStop(dayStops: PlanStop[], index: number): Travel | null {
+  const travel = dayStops[index]?.travelFromPrevious;
   if (!travel) return null;
 
   const distanceKm =
@@ -34,10 +33,14 @@ export function getTravelToNextStop(dayStops: PlanStop[], activeIndex: number): 
   return { distanceKm: distanceKm ?? 0, durationMin: durationMin ?? 0 };
 }
 
-/** Distancia: metros (redondeo a 10 m) por debajo de 1 km, km con 1 decimal si no. */
+/**
+ * Distancia: metros (redondeo a 10 m) por debajo de 1 km, km con 1 decimal si no.
+ * Frontera en 0.995 km: a partir de ahí el redondeo a 1 decimal ya da 1.0 km, así
+ * que se muestra "1 km" en vez del feo "1000 m".
+ */
 export function formatDistance(distanceKm: number, t: TFunction): string {
   const safe = Number.isFinite(distanceKm) && distanceKm > 0 ? distanceKm : 0;
-  if (safe < 1) {
+  if (safe < 0.995) {
     const meters = Math.round((safe * 1000) / 10) * 10;
     return t('units.distanceMeters', { value: meters });
   }

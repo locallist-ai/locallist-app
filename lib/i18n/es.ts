@@ -235,7 +235,7 @@ export default {
     nextStop: 'Parada siguiente',
     expandSheet: 'Ver paradas',
     collapseSheet: 'Ver el mapa',
-    toNextStop: 'a la siguiente parada',
+    toThisStop: 'a esta parada',
     getDirections: 'Cómo llegar',
     directionsTitle: 'Cómo llegar',
     directionsBody: 'Abre la navegación a pie paso a paso en tu app de mapas.',

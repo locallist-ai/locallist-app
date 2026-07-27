@@ -7,7 +7,11 @@
  *  - permiso DENEGADO                          -> 'denied', sin watch (nunca se
  *    arranca el watcher ni se vuelve a pedir permiso; el resto del mapa sigue)
  *  - permiso CONCEDIDO                         -> 'granted' + suscripción viva
+ *  - Location Services OFF a nivel de SO / cualquier throw de expo-location ->
+ *    'unavailable' (el request o el watch RECHAZAN); nunca una promesa rechazada
+ *    sin capturar ni un mapa a medias.
  */
+import { logger } from '../logger';
 
 export type LocationStatus = 'idle' | 'granted' | 'denied' | 'unavailable';
 
@@ -45,12 +49,19 @@ export async function acquireLocation(
 ): Promise<AcquireResult> {
   if (!module) return { status: 'unavailable', subscription: null };
 
-  const permission = await module.requestForegroundPermissionsAsync();
-  if (!permission.granted) return { status: 'denied', subscription: null };
+  try {
+    const permission = await module.requestForegroundPermissionsAsync();
+    if (!permission.granted) return { status: 'denied', subscription: null };
 
-  const subscription = await module.watchPositionAsync(
-    { accuracy: module.Accuracy?.Balanced ?? 3, distanceInterval: 10 },
-    (location) => onCoordinate(location.coords),
-  );
-  return { status: 'granted', subscription };
+    const subscription = await module.watchPositionAsync(
+      { accuracy: module.Accuracy?.Balanced ?? 3, distanceInterval: 10 },
+      (location) => onCoordinate(location.coords),
+    );
+    return { status: 'granted', subscription };
+  } catch (err) {
+    // Location Services desactivado a nivel de SO, o cualquier fallo del módulo:
+    // degradar (sin punto azul) en vez de dejar una promesa rechazada colgando.
+    logger.warn('follow map: location acquisition failed (services off?), disabling user dot', err);
+    return { status: 'unavailable', subscription: null };
+  }
 }
