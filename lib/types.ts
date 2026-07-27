@@ -142,6 +142,41 @@ export type FavoritesResponse = { places: Place[]; total: number };
 /** `GET /favorites/ids` — just the ids, to paint hearts across the app. */
 export type FavoriteIdsResponse = { ids: string[] };
 
+// ─── Import from video ───────────────────────────────────────────────────────
+// Contract (backend already in prod):
+//   POST /import/video?platform=self&creatorHandle=  (multipart `file`, JWT)
+//     → 200 { candidates: [...], city?, language? }
+//   POST /import/plan  { city, days, placeIds, planName?, platform?, creatorHandle? }
+//     → PlanDetailResponse of the created (private) plan.
+
+/**
+ * A place the backend extracted from the video. `matchedPlaceId` present = it
+ * exists in LocalList and can be added to the plan; absent = "not on LocalList
+ * yet" (shown for honesty, never selectable).
+ */
+export type ImportCandidate = {
+  name: string;
+  category?: string | null;
+  matchedPlaceId?: string | null;
+  matchedPlaceName?: string | null;
+  matchConfidence?: 'high' | 'medium' | null;
+};
+
+export type ImportVideoResponse = {
+  candidates: ImportCandidate[];
+  city?: string | null;
+  language?: string | null;
+};
+
+export type ImportPlanRequest = {
+  city: string;
+  days: number;
+  placeIds: string[];
+  planName?: string;
+  platform?: string;
+  creatorHandle?: string;
+};
+
 // ─── Chat ────────────────────────────────────────────────────────────────────
 
 export type ChatSlots = {

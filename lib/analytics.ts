@@ -227,6 +227,15 @@ export type AppEvent =
   | ({ event: 'purchase_cancelled' } & PurchaseProps)
   | ({ event: 'purchase_failed' } & PurchaseProps)
   | { event: 'restore_completed'; found: boolean }
+  // Import from video (F2 T5). SIN PII: nunca nombres de sitios ni handles.
+  // El usuario abrió el flujo y tocó "elegir vídeo".
+  | { event: 'import_video_started' }
+  // Vídeo subido y analizado: nº total de candidatos y cuántos matchearon.
+  | { event: 'import_video_uploaded'; candidates: number; matched: number }
+  // Plan creado desde el import: nº de sitios seleccionados.
+  | { event: 'import_plan_created'; places: number }
+  // Gate golpeado en el flujo de import (signup invitado / upsell Plus / límite).
+  | { event: 'import_gate_hit'; reason: 'signup' | 'plus' | 'limit' }
   // 403 estructurado de un gate del catálogo Plus (ver trackPlanLimitIfGate403).
   | { event: 'plan_limit_hit'; gate: string }
   // Aviso de fin de trial (día 5 de 7). Se emite AL TAP de la notificación

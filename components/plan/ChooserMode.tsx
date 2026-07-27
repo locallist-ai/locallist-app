@@ -57,6 +57,7 @@ export function ChooserMode({
       title: t('plans.importVideo'),
       sub: t('plans.importVideoSub'),
       onPress: onImportVideo,
+      badge: t('plans.importVideoBadge'),
     },
     ...(isAuthenticated
       ? [
