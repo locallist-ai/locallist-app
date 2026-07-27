@@ -14,24 +14,47 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { StartDateField } from '../../components/ui/StartDateField';
+import { EditorialTitle, StepSubtitle, PrimaryButton } from '../../components/ui/design-system';
 import { getStartDateSync, setStartDate as persistStartDate } from '../../lib/trip-context-store';
+import { useAuth } from '../../lib/auth';
+import { useGateHandler } from '../../lib/useGateHandler';
+import { maxDaysForTier, FREE_MAX_DAYS, PLUS_MAX_DAYS } from '../../components/home/constants';
 import type { CityDto } from '../../lib/types';
-
-const DURATION_OPTIONS = [1, 2, 3] as const;
 
 export default function CustomBuilderScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { isPro } = useAuth();
+  const { presentGate } = useGateHandler();
 
   const [name, setName] = useState('');
   const [city, setCity] = useState('Miami');
   const [days, setDays] = useState(2);
+
+  // Duración TIER-AWARE (misma regla que el wizard `DurationStep`): free llega a
+  // FREE_MAX_DAYS; Plus desbloquea hasta PLUS_MAX_DAYS. El rango 4..14 se ofrece
+  // a los free como una única afford. bloqueada que dispara el upsell (espejo del
+  // gate del backend), nunca un no-op silencioso.
+  const maxDays = maxDaysForTier(isPro);
+  const dayOptions = Array.from({ length: maxDays }, (_, i) => i + 1);
+
+  const handleLockedDuration = () => {
+    presentGate({
+      type: 'upsell',
+      code: 'duration_requires_plus',
+      used: null,
+      limit: null,
+      resetsAt: null,
+      requestedDays: null,
+      maxDays: FREE_MAX_DAYS,
+      plusMaxDays: PLUS_MAX_DAYS,
+    });
+  };
   // Fecha de inicio del viaje. Siempre presente (default hoy vía trip-context),
   // editable. Se envía como `yyyy-MM-dd` al crear el plan.
   const [startDate, setStartDate] = useState<string>(() => getStartDateSync());
@@ -167,24 +190,25 @@ export default function CustomBuilderScreen() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
+        {/* Header — gesto de cierre unificado con el resto de flujos modales
+          * (import usa `close`): una X, no un chevron-back. custom queda
+          * consistente con import-video.tsx. */}
         <View style={s.header}>
           <TouchableOpacity
             style={s.closeBtn}
             onPress={() => router.back()}
             accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
           >
-            <Ionicons name="chevron-back" size={24} color={colors.textMain} />
+            <Ionicons name="close" size={24} color={colors.textMain} />
           </TouchableOpacity>
         </View>
 
-        {/* Title */}
+        {/* Title — voz editorial (sin burbuja de pin: el brief prohíbe el pin
+          * como metáfora). Alineado a la izquierda, tono formulario. */}
         <Animated.View entering={FadeInDown.duration(320)} style={s.titleSection}>
-          <View style={s.titleIcon}>
-            <MaterialCommunityIcons name="map-marker-outline" size={28} color={colors.sunsetOrange} />
-          </View>
-          <Text style={s.title}>{t('builder.title')}</Text>
-          <Text style={s.subtitle}>{t('builder.subtitle')}</Text>
+          <EditorialTitle text={t('builder.title')} size="sm" align="left" style={s.titleSpacing} />
+          <StepSubtitle text={t('builder.subtitle')} align="left" />
         </Animated.View>
 
         {/* Form card */}
@@ -209,7 +233,9 @@ export default function CustomBuilderScreen() {
               <Text style={s.label}>{t('builder.cityLabel')}</Text>
               <View style={[s.inputWithIcon, !!(cityError || cityUnconfirmedError) && s.inputWithIconError]}>
                 <View style={s.inputIconBubble}>
-                  <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.sunsetOrange} />
+                  {/* Buscador de ciudad: lupa, no pin (el campo BUSCA, y el pin
+                    * está vetado por el brief). */}
+                  <MaterialCommunityIcons name="magnify" size={18} color={colors.sunsetOrange} />
                 </View>
                 <TextInput
                   style={s.inputInner}
@@ -278,25 +304,48 @@ export default function CustomBuilderScreen() {
               )}
             </View>
 
-            {/* Duration */}
+            {/* Duration — pills tier-aware (mismo token de pill que el wizard
+              * `DurationStep`, light-surfaced). */}
             <View style={s.field}>
               <Text style={s.label}>{t('builder.durationLabel')}</Text>
               <View style={s.durationRow}>
-                {DURATION_OPTIONS.map((d) => (
+                {dayOptions.map((d) => {
+                  const selected = days === d;
+                  return (
+                    <TouchableOpacity
+                      key={d}
+                      testID={`duration-pill-${d}`}
+                      style={[s.dayPill, selected && s.dayPillActive]}
+                      onPress={() => {
+                        setDays(d);
+                        Haptics.selectionAsync();
+                      }}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={t('common.dayCount', { count: d })}
+                    >
+                      <Text style={[s.dayPillText, selected && s.dayPillTextActive]}>{d}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {/* Free: afford. bloqueada única para el rango Plus (4..14). */}
+                {!isPro && (
                   <TouchableOpacity
-                    key={d}
-                    style={[s.durationChip, days === d && s.durationChipActive]}
-                    onPress={() => {
-                      setDays(d);
-                      Haptics.selectionAsync();
-                    }}
-                    activeOpacity={0.7}
+                    testID="duration-plus-locked"
+                    style={[s.dayPill, s.dayPillLocked]}
+                    onPress={handleLockedDuration}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('gate.durationPlusLocked', { plusMaxDays: PLUS_MAX_DAYS })}
                   >
-                    <Text style={[s.durationText, days === d && s.durationTextActive]}>
-                      {t('common.dayCount', { count: d })}
+                    <Ionicons name="lock-closed" size={13} color={colors.sunsetOrange} style={s.lockIcon} />
+                    <Text style={s.dayPillLockedText} numberOfLines={1}>
+                      {t('gate.durationPlusLocked', { plusMaxDays: PLUS_MAX_DAYS })}
                     </Text>
                   </TouchableOpacity>
-                ))}
+                )}
               </View>
             </View>
 
@@ -317,24 +366,15 @@ export default function CustomBuilderScreen() {
           </View>
         </Animated.View>
 
-        {/* Create button */}
+        {/* Create button — PrimaryButton plano (naranja). Sin gradiente y sin
+          * `sparkles`: es un builder MANUAL, no hay IA que insinuar. */}
         <Animated.View entering={FadeInDown.duration(500).delay(200).springify().damping(16)}>
-          <TouchableOpacity
+          <PrimaryButton
+            label={t('builder.startBuilding')}
             onPress={handleCreate}
             disabled={!canCreate}
-            activeOpacity={0.8}
-            style={{ opacity: canCreate ? 1 : 0.5 }}
-          >
-            <LinearGradient
-              colors={[colors.sunsetOrange, '#ea580c']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={s.createBtn}
-            >
-              <Ionicons name="sparkles" size={20} color="#FFFFFF" />
-              <Text style={s.createBtnText}>{t('builder.startBuilding')}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+            testID="builder-create-button"
+          />
         </Animated.View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -362,34 +402,11 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   titleSection: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: spacing.xl,
   },
-  titleIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-    backgroundColor: 'rgba(242, 239, 233, 0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(249, 115, 22, 0.18)',
-  },
-  title: {
-    fontFamily: fonts.headingBold,
-    fontSize: 28,
-    color: colors.deepOcean,
+  titleSpacing: {
     marginBottom: spacing.xs,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontFamily: fonts.body,
-    fontSize: 15,
-    color: colors.textSecondary,
-    lineHeight: 22,
-    textAlign: 'center',
-    maxWidth: 280,
   },
   formCard: {
     backgroundColor: colors.bgCard,
@@ -402,11 +419,11 @@ const s = StyleSheet.create({
     gap: spacing.sm,
   },
   label: {
+    // Sentence-case Inter semibold — sin uppercase/tracking (estética utility
+    // tech, fuera). El copy i18n ya viene en sentence-case.
     fontFamily: fonts.bodySemiBold,
-    fontSize: 13,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 14,
+    color: colors.textMain,
   },
   input: {
     backgroundColor: colors.bgMain,
@@ -510,34 +527,43 @@ const s = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
   },
-  durationChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.bgMain,
-  },
-  durationChipActive: {
-    backgroundColor: colors.sunsetOrange,
-  },
-  durationText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  durationTextActive: {
-    color: '#FFFFFF',
-  },
-  createBtn: {
-    flexDirection: 'row',
+  // Pill token del wizard (`DurationStep`), light-surfaced para el formulario.
+  dayPill: {
+    minWidth: 52,
+    height: 48,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 18,
-    borderRadius: borderRadius.lg,
+    flexDirection: 'row',
+    backgroundColor: colors.bgMain,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
   },
-  createBtnText: {
+  dayPillActive: {
+    backgroundColor: colors.sunsetOrange,
+    borderColor: colors.sunsetOrange,
+  },
+  dayPillText: {
     fontFamily: fonts.bodySemiBold,
-    fontSize: 17,
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  dayPillTextActive: {
     color: '#FFFFFF',
+  },
+  dayPillLocked: {
+    minWidth: 150,
+    backgroundColor: colors.sunsetOrangeLight,
+    borderColor: 'rgba(249, 115, 22, 0.3)',
+  },
+  dayPillLockedText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.sunsetOrange,
+  },
+  lockIcon: {
+    marginRight: 6,
   },
 });

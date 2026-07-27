@@ -13,3 +13,6 @@ export type { StepSubtitleProps } from './StepSubtitle';
 
 export { ProgressDots } from './ProgressDots';
 export type { ProgressDotsProps } from './ProgressDots';
+
+export { PrimaryButton } from './PrimaryButton';
+export type { PrimaryButtonProps } from './PrimaryButton';

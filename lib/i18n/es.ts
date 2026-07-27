@@ -13,6 +13,7 @@ export default {
     stopCount_one: '{{count}} parada',
     stopCount_other: '{{count}} paradas',
     back: 'Atrás',
+    close: 'Cerrar',
   },
   tabs: {
     home: 'Inicio',

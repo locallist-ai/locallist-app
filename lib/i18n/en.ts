@@ -13,6 +13,7 @@ export default {
     stopCount_one: '{{count}} stop',
     stopCount_other: '{{count}} stops',
     back: 'Back',
+    close: 'Close',
   },
   tabs: {
     home: 'Home',
