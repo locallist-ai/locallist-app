@@ -146,7 +146,8 @@
           "locationAlwaysPermission": false
         }
       ],
-      "./plugins/withCertPinning"
+      "./plugins/withCertPinning",
+      "./plugins/withoutPushEntitlement"
     ],
     "extra": {
       "eas": {
