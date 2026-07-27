@@ -39,7 +39,6 @@ const baseAuth = {
   isAdmin: false,
   logout: jest.fn(),
   refreshUser: jest.fn(),
-  setTierOverride: jest.fn(),
 };
 
 beforeEach(() => {

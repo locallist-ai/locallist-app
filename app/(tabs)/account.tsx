@@ -16,7 +16,7 @@ import { LanguagePickerModal } from '../../components/account/LanguagePickerModa
 
 export default function AccountScreen() {
   const { t, i18n } = useTranslation();
-  const { user, isAuthenticated, isPro, isAdmin, logout, setTierOverride } = useAuth();
+  const { user, isAuthenticated, isPro, isAdmin, logout } = useAuth();
   const [langPickerVisible, setLangPickerVisible] = useState(false);
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
@@ -71,14 +71,7 @@ export default function AccountScreen() {
         />
 
         {/* Dev Tools — solo en development + @locallist.ai admins */}
-        {__DEV__ && isAdmin && (
-          <DevToolsSection
-            isPro={isPro}
-            realTier={user?.tier ?? 'free'}
-            onToggleTier={() => setTierOverride(isPro ? 'free' : 'pro')}
-            onResetTier={() => setTierOverride(null)}
-          />
-        )}
+        {__DEV__ && isAdmin && <DevToolsSection />}
 
         {/* Footer */}
         <Text style={s.version}>LocalList v1.0.0</Text>

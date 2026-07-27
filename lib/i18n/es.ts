@@ -211,6 +211,16 @@ export default {
     shareLocalList: 'Compartir LocalList',
     shareMessage: "Descubre LocalList - Tu curador de viajes con IA. Deja de buscar. Empieza a viajar.\nhttps://locallist.ai",
   },
+  devTools: {
+    header: 'Dev Tools',
+    switchToPlus: 'Cambiar a Plus',
+    switchToFree: 'Cambiar a Free',
+    badgePlus: 'PLUS',
+    badgeFree: 'FREE',
+    resetQuota: 'Resetear cuota de planes',
+    disabledTitle: 'No disponible',
+    disabledBody: 'El cambio de tier de desarrollo no está habilitado en este entorno.',
+  },
   follow: {
     loading: 'Iniciando Follow Mode...',
     loadError: 'No se pudo cargar el plan',
