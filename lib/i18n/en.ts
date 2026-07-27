@@ -530,6 +530,10 @@ export default {
     previewGenericSubtitle: 'Curated stops, timed and ordered for you.',
     previewGenericHint: 'Built the moment you start.',
     createPlan: 'Create my plan',
+    // Save-this-plan hook (registration gate for the showcase preview)
+    savePlan: 'Save this plan',
+    saveNotNow: 'Not now',
+    savePlanSignupPrompt: 'Sign up to save your plan and favorites',
   },
   // Shared "request your city" inline input (onboarding + home city picker).
   cityRequest: {
