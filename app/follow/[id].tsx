@@ -21,6 +21,7 @@ import { useAuth } from '../../lib/auth';
 import { useGateHandler } from '../../lib/useGateHandler';
 import { PlanMap } from '../../components/map/PlanMap';
 import { FollowDaySheet } from '../../components/follow/FollowDaySheet';
+import { OfflineBanner } from '../../components/follow/OfflineBanner';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { ProgressDots } from '../../components/ui/design-system';
 import { clearResume, getResume, setResume } from '../../lib/follow/resume-store';
@@ -31,6 +32,7 @@ import {
   type QueuedMutation,
 } from '../../lib/follow/mutation-queue';
 import { prefetchDayPhotos } from '../../lib/follow/photo-prefetch';
+import { useConnectivity } from '../../lib/connectivity/use-connectivity';
 import type { PlanStop, PlanDetailResponse, RouteSegment } from '../../lib/types';
 import type { MapStop } from '../../components/map/PlanMap';
 
@@ -64,6 +66,16 @@ export default function FollowModeScreen() {
   const { isAuthenticated } = useAuth();
   const { presentGate } = useGateHandler();
   const insets = useSafeAreaInsets();
+
+  // Conectividad en tiempo real. Al RECONECTAR (offline -> online) drena la cola
+  // de mutaciones durable de #108 (mejor UX que esperar al próximo montaje): un
+  // `/complete` encolado sin red sale en cuanto vuelve la conexión. `flushQueue`
+  // es idempotente y reentrante-seguro, así que si ya está vacía es no-op.
+  const { isOffline } = useConnectivity({
+    onReconnect: () => {
+      void flushQueue(sendCompleteMutation);
+    },
+  });
 
   const [session, setSession] = useState<FollowSession | null>(null);
   const [allStops, setAllStops] = useState<(PlanStop & { id?: string })[]>([]);
@@ -345,6 +357,8 @@ export default function FollowModeScreen() {
             <Text style={s.cachedBadgeText}>{t('follow.offlineCached')}</Text>
           </View>
         )}
+
+        <OfflineBanner isOffline={isOffline} />
       </BlurView>
 
       <View style={s.dayListWrap} pointerEvents="box-none">

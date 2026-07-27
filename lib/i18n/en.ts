@@ -214,6 +214,7 @@ export default {
     loading: 'Starting Follow Mode...',
     loadError: 'Failed to load plan',
     offlineCached: 'Offline copy',
+    offlineLive: 'No connection, using saved data',
     offlineDownloading: 'Saving map for offline',
     offlinePercent: '{{percentage}}%',
     offlineReady: 'Map saved for offline',

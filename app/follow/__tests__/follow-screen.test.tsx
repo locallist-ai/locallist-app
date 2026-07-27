@@ -83,6 +83,9 @@ jest.mock('../../../lib/follow/mutation-queue', () => ({
   flushQueue: jest.fn(() => Promise.resolve()),
 }));
 jest.mock('../../../lib/follow/photo-prefetch', () => ({ prefetchDayPhotos: jest.fn() }));
+jest.mock('../../../lib/connectivity/use-connectivity', () => ({
+  useConnectivity: () => ({ isOffline: false }),
+}));
 
 const mockApi = api as jest.Mock;
 const mockGetResume = getResume as jest.Mock;
