@@ -23,7 +23,6 @@ import { PlanMap } from '../../components/map/PlanMap';
 import { FollowDaySheet } from '../../components/follow/FollowDaySheet';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { ProgressDots } from '../../components/ui/design-system';
-import { useOfflineTiles } from '../../components/map/useOfflineTiles';
 import { clearResume, getResume, setResume } from '../../lib/follow/resume-store';
 import type { PlanStop, PlanDetailResponse, RouteSegment } from '../../lib/types';
 import type { MapStop } from '../../components/map/PlanMap';
@@ -80,12 +79,6 @@ export default function FollowModeScreen() {
         .filter((s): s is MapStop => s !== null),
     [allStops, currentDay],
   );
-
-  const offlineTileStops = useMemo(
-    () => mapStops.map((s) => ({ latitude: s.latitude, longitude: s.longitude })),
-    [mapStops],
-  );
-  useOfflineTiles(offlineTileStops);
 
   // Persiste el stop actual en SecureStore para reanudar tras cerrar la app.
   useEffect(() => {
