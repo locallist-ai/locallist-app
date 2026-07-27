@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Pressable, Text, type ViewStyle } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  Pressable,
+  Text,
+  ActivityIndicator,
+  type ViewStyle,
+} from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import MapLibreGL, { type MapViewRef, type CameraRef } from '@maplibre/maplibre-react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,6 +29,8 @@ import {
   type MapPoint,
 } from '../../lib/map/camera';
 import { useFollowLocation } from './useFollowLocation';
+import { useOfflinePack } from './useOfflinePack';
+import { mapAttribution, mapStyleURL, OSM_COPYRIGHT_URL } from '../../lib/map/tiles';
 
 export interface MapStop {
   id: string;
@@ -57,6 +66,12 @@ interface PlanMapProps {
    * `false` (p. ej. el mapa de detalle de un sitio no lo usa).
    */
   followMode?: boolean;
+  /**
+   * Id del plan en curso. Solo se usa en `followMode` con la infra de tiles
+   * habilitada (`EXPO_PUBLIC_TILES_URL`): dispara la descarga del pack offline
+   * del plan. Ausente ⇒ sin offline (el mapa sigue online).
+   */
+  planId?: string;
 }
 
 const PIN_COLOR = '#3b82f6'; // electric-blue
@@ -72,6 +87,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
   activeDayNumber,
   interactive = true,
   followMode = false,
+  planId,
 }) => {
   const { t } = useTranslation();
   const mapRef = useRef<MapViewRef>(null);
@@ -80,6 +96,9 @@ export const PlanMap: React.FC<PlanMapProps> = ({
 
   const { status: locationStatus, coordinate: userCoordinate } = useFollowLocation(followMode);
   const [cameraMode, setCameraMode] = useState<CameraMode>('stop');
+
+  // Descarga del pack offline del plan (solo en follow con infra de tiles).
+  const offline = useOfflinePack(planId, stops, followMode);
 
   const showUserDot = followMode && locationStatus === 'granted' && userCoordinate !== null;
 
@@ -158,7 +177,7 @@ export const PlanMap: React.FC<PlanMapProps> = ({
       <MapLibreGL.MapView
         ref={mapRef}
         style={styles.map}
-        mapStyle="https://tiles.openfreemap.org/styles/liberty"
+        mapStyle={mapStyleURL()}
         pitchEnabled={false}
         rotateEnabled={false}
         scrollEnabled={interactive}
@@ -257,14 +276,50 @@ export const PlanMap: React.FC<PlanMapProps> = ({
         </Pressable>
       )}
 
+      {/* Indicador del pack offline: solo en follow y solo cuando hay algo que
+          mostrar (descargando / listo / error). En `idle` (sin infra o degradado
+          a online) no se pinta nada. */}
+      {followMode && offline.status !== 'idle' && (
+        <View style={styles.offlinePill} pointerEvents="box-none">
+          {offline.status === 'downloading' && (
+            <>
+              <ActivityIndicator size="small" color={colors.deepOcean} />
+              <Text style={styles.offlineText}>
+                {t('follow.offlineDownloading')} {t('follow.offlinePercent', { percentage: offline.percentage })}
+              </Text>
+            </>
+          )}
+          {offline.status === 'ready' && (
+            <>
+              <MaterialCommunityIcons name="cloud-check-outline" size={16} color={colors.deepOcean} />
+              <Text style={styles.offlineText}>{t('follow.offlineReady')}</Text>
+            </>
+          )}
+          {offline.status === 'error' && (
+            <Pressable
+              onPress={offline.retry}
+              style={styles.offlineRetry}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('a11y.retryOfflineMap')}
+            >
+              <MaterialCommunityIcons name="cloud-alert" size={16} color={colors.sunsetOrange} />
+              <Text style={styles.offlineText}>
+                {t('follow.offlineError')} · {t('follow.offlineRetry')}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
       <Pressable
-        onPress={() => WebBrowser.openBrowserAsync('https://www.openstreetmap.org/copyright')}
+        onPress={() => WebBrowser.openBrowserAsync(OSM_COPYRIGHT_URL)}
         style={styles.attribution}
         hitSlop={6}
         accessibilityRole="link"
         accessibilityLabel={t('a11y.openStreetMapCopyright')}
       >
-        <Text style={styles.attributionText}>© OpenStreetMap</Text>
+        <Text style={styles.attributionText}>{mapAttribution()}</Text>
       </Pressable>
     </View>
   );
@@ -330,6 +385,34 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 5,
+  },
+  offlinePill: {
+    position: 'absolute',
+    bottom: 26,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '70%',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  offlineRetry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  offlineText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '500',
   },
   attribution: {
     position: 'absolute',

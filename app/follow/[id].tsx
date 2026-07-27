@@ -295,6 +295,7 @@ export default function FollowModeScreen() {
         routeSegments={routeSegments}
         activeDayNumber={currentDay}
         followMode
+        planId={id}
       />
 
       <BlurView
