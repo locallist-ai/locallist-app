@@ -11,6 +11,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { formatPriceLabel } from '../../lib/helpers/price';
+import { formatTime12h } from '../../lib/helpers/time';
 import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import type { PlanStop } from '../../lib/types';
 
@@ -80,7 +81,7 @@ export const StopCard: React.FC<StopCardProps> = ({ stop }) => {
                   <MaterialCommunityIcons name={timeIcon} size={12} color={colors.sunsetOrange} />
                 </View>
                 {stop.suggestedArrival && (
-                  <Text style={styles.timePillText}>{stop.suggestedArrival}</Text>
+                  <Text style={styles.timePillText}>{formatTime12h(stop.suggestedArrival)}</Text>
                 )}
               </View>
             )}

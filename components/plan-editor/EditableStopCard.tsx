@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { colors, fonts, spacing, borderRadius } from '../../lib/theme';
 import { PhotoAttribution } from '../ui/PhotoAttribution';
 import { resolvePhotoUrl, isPhotoDisplayable } from '../../lib/helpers/photo-url';
+import { formatTime12h } from '../../lib/helpers/time';
 import type { PlanStop } from '../../lib/types';
 
 type Category = 'Food' | 'Outdoors' | 'Coffee' | 'Nightlife' | 'Culture' | 'Wellness';
@@ -89,7 +90,7 @@ export function EditableStopCard({ stop, onMovePress, onReplacePress, drag, isAc
             {stop.suggestedArrival && (
               <View style={s.durationChip}>
                 <Ionicons name="time-outline" size={11} color={colors.textSecondary} />
-                <Text style={s.durationText}>{t('stop.arrival', { time: stop.suggestedArrival })}</Text>
+                <Text style={s.durationText}>{t('stop.arrival', { time: formatTime12h(stop.suggestedArrival) })}</Text>
               </View>
             )}
             {stop.suggestedDurationMin != null && (

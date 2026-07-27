@@ -35,6 +35,7 @@ import { prefetchDayPhotos } from '../../lib/follow/photo-prefetch';
 import { useConnectivity } from '../../lib/connectivity/use-connectivity';
 import type { PlanStop, PlanDetailResponse, RouteSegment } from '../../lib/types';
 import type { MapStop } from '../../components/map/PlanMap';
+import { buildDayMapStops, mapStopFromPlanStop } from '../../lib/map/day-map-stops';
 
 type FollowSession = { id: string; planId: string; status: string };
 
@@ -44,20 +45,6 @@ type FollowSession = { id: string; planId: string; status: string };
 const sendCompleteMutation = async (mutation: QueuedMutation): Promise<number> => {
   const res = await api(`/follow/${mutation.sessionId}/complete`, { method: 'PATCH' });
   return res.status;
-};
-
-const mapToMapStop = (planStop: PlanStop): MapStop | null => {
-  const lat = planStop.place?.latitude;
-  const lng = planStop.place?.longitude;
-  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return {
-    id: planStop.placeId,
-    name: planStop.place?.name ?? 'Unknown',
-    latitude: lat,
-    longitude: lng,
-    category: planStop.place?.category,
-    orderIndex: planStop.orderIndex,
-  };
 };
 
 export default function FollowModeScreen() {
@@ -100,12 +87,11 @@ export default function FollowModeScreen() {
     return idx >= 0 ? idx : 0;
   }, [dayStops, currentStopRef]);
 
+  // Pines del día con su NÚMERO 1-based tomado de la posición en el día
+  // COMPLETO (antes de descartar stops sin coords), para casar con el "N / M"
+  // del sheet aunque un stop intermedio no tenga lat/lng.
   const mapStops = useMemo<MapStop[]>(
-    () =>
-      allStops
-        .filter((s) => s.dayNumber === currentDay)
-        .map(mapToMapStop)
-        .filter((s): s is MapStop => s !== null),
+    () => buildDayMapStops(allStops.filter((s) => s.dayNumber === currentDay)),
     [allStops, currentDay],
   );
 
@@ -113,7 +99,7 @@ export default function FollowModeScreen() {
   // pack debe cubrir el plan entero, no el día visible (si no, días 2..N sin
   // tiles). Solo alimenta el cálculo de bounds del pack, no el render.
   const packMapStops = useMemo<MapStop[]>(
-    () => allStops.map(mapToMapStop).filter((s): s is MapStop => s !== null),
+    () => allStops.map(mapStopFromPlanStop).filter((s): s is MapStop => s !== null),
     [allStops],
   );
 
@@ -298,11 +284,11 @@ export default function FollowModeScreen() {
     }
   };
 
-  const activeMapPinIndex = Math.max(
-    0,
-    mapStops.findIndex(
-      (st) => allStops[currentIndex] && st.id === allStops[currentIndex].placeId,
-    ),
+  // Índice del pin activo dentro de `mapStops`. Si el stop actual no tiene
+  // coords (no está en `mapStops`), findIndex devuelve -1 y NO se destaca ningún
+  // pin: destacar el "1" (max(0,-1)) marcaría un stop que no es el actual.
+  const activeMapPinIndex = mapStops.findIndex(
+    (st) => allStops[currentIndex] && st.id === allStops[currentIndex].placeId,
   );
 
   return (

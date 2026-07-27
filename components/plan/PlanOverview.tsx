@@ -20,6 +20,7 @@ import { TIME_BLOCK_ICON, DEFAULT_STOP_ICON } from '../../lib/timeBlocks';
 import { DaySection } from '../plan-editor/DaySection';
 import { usePlanEditorContext } from './PlanEditorContext';
 import { usePlanEditorModals } from './PlanEditorModals';
+import { formatTime12h } from '../../lib/helpers/time';
 import type { Plan, PlanStop } from '../../lib/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -362,7 +363,7 @@ export const PlanOverview: React.FC<PlanOverviewProps> = React.memo(({
           {dayDateLabel}
           {stopsForCurrentDay.map((s, idx) => {
             const rowIcon = s.timeBlock ? TIME_BLOCK_ICON[s.timeBlock] ?? DEFAULT_STOP_ICON : DEFAULT_STOP_ICON;
-            const arrival = s.suggestedArrival ? ` · ${s.suggestedArrival}` : '';
+            const arrival = s.suggestedArrival ? ` · ${formatTime12h(s.suggestedArrival)}` : '';
             return (
               <View key={`${s.placeId}-${idx}`} style={styles.summaryRow}>
                 <View style={styles.summaryRowBubble}>
