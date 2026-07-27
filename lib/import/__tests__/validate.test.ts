@@ -2,6 +2,7 @@ import {
   validatePickedVideo,
   resolveUploadMime,
   MAX_BYTES,
+  MAX_IMAGE_BYTES,
   MAX_DURATION_MS,
 } from '../validate';
 import type { PickedVideo } from '../native-picker';
@@ -9,9 +10,19 @@ import type { PickedVideo } from '../native-picker';
 const base: PickedVideo = {
   uri: 'file:///video.mp4',
   fileName: 'video.mp4',
+  kind: 'video',
   fileSize: 10 * 1024 * 1024,
   mimeType: 'video/mp4',
   durationMs: 30_000,
+};
+
+const imageBase: PickedVideo = {
+  uri: 'file:///photo.jpg',
+  fileName: 'photo.jpg',
+  kind: 'image',
+  fileSize: 5 * 1024 * 1024,
+  mimeType: 'image/jpeg',
+  durationMs: null,
 };
 
 describe('validatePickedVideo', () => {
@@ -48,6 +59,46 @@ describe('validatePickedVideo', () => {
       validatePickedVideo({ ...base, fileSize: MAX_BYTES + 1, fileName: 'clip.txt', mimeType: 'text/plain' }),
     ).toBe('too_large');
   });
+
+  // ── Imagen: sin duración, cap 25 MB, formatos de imagen ──
+
+  it('acepta un jpeg válido SIN comprobar duración (aunque venga con una absurda)', () => {
+    // durationMs enorme: para imagen debe IGNORARSE, no disparar too_long.
+    expect(
+      validatePickedVideo({ ...imageBase, durationMs: MAX_DURATION_MS + 1 }),
+    ).toBeNull();
+  });
+
+  it('rechaza imagen > 25 MB (cap de imagen, no el de vídeo)', () => {
+    expect(validatePickedVideo({ ...imageBase, fileSize: MAX_IMAGE_BYTES + 1 })).toBe('too_large');
+  });
+
+  it('una imagen de 30 MB (válida como vídeo) se rechaza por el cap de imagen', () => {
+    // 30 MB < 150 MB (vídeo) pero > 25 MB (imagen): el kind decide.
+    expect(validatePickedVideo({ ...imageBase, fileSize: 30 * 1024 * 1024 })).toBe('too_large');
+  });
+
+  it('acepta png/webp/heic válidos', () => {
+    expect(validatePickedVideo({ ...imageBase, fileName: 'a.png', mimeType: 'image/png' })).toBeNull();
+    expect(validatePickedVideo({ ...imageBase, fileName: 'a.webp', mimeType: 'image/webp' })).toBeNull();
+    expect(validatePickedVideo({ ...imageBase, fileName: 'a.heic', mimeType: 'image/heic' })).toBeNull();
+  });
+
+  it('acepta imagen por extensión cuando el mime falta (heic sin mime)', () => {
+    expect(validatePickedVideo({ ...imageBase, fileName: 'a.heic', mimeType: null })).toBeNull();
+  });
+
+  it('rechaza un formato de imagen no soportado (gif)', () => {
+    expect(
+      validatePickedVideo({ ...imageBase, fileName: 'a.gif', mimeType: 'image/gif' }),
+    ).toBe('unsupported_format');
+  });
+
+  it('un mime de vídeo NO cuela como imagen (kind manda)', () => {
+    expect(
+      validatePickedVideo({ ...imageBase, fileName: 'clip.mp4', mimeType: 'video/mp4' }),
+    ).toBe('unsupported_format');
+  });
 });
 
 describe('resolveUploadMime', () => {
@@ -61,5 +112,17 @@ describe('resolveUploadMime', () => {
 
   it('cae a video/mp4 cuando no hay pistas', () => {
     expect(resolveUploadMime({ ...base, mimeType: null, fileName: 'noext' })).toBe('video/mp4');
+  });
+
+  it('usa el mime de imagen cuando es válido (png)', () => {
+    expect(resolveUploadMime({ ...imageBase, mimeType: 'image/png', fileName: 'a.png' })).toBe('image/png');
+  });
+
+  it('deriva el mime de la extensión de imagen heic → image/heic', () => {
+    expect(resolveUploadMime({ ...imageBase, mimeType: null, fileName: 'a.heic' })).toBe('image/heic');
+  });
+
+  it('cae a image/jpeg cuando es imagen sin pistas', () => {
+    expect(resolveUploadMime({ ...imageBase, mimeType: null, fileName: 'noext' })).toBe('image/jpeg');
   });
 });

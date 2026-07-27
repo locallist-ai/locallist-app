@@ -60,9 +60,22 @@ const validAsset = {
   asset: {
     uri: 'file:///v.mp4',
     fileName: 'v.mp4',
+    kind: 'video' as const,
     fileSize: 20 * 1024 * 1024,
     mimeType: 'video/mp4',
     durationMs: 60_000,
+  },
+};
+
+const validImageAsset = {
+  status: 'picked' as const,
+  asset: {
+    uri: 'file:///photo.jpg',
+    fileName: 'photo.jpg',
+    kind: 'image' as const,
+    fileSize: 3 * 1024 * 1024,
+    mimeType: 'image/jpeg',
+    durationMs: null,
   },
 };
 
@@ -190,6 +203,7 @@ describe('import-video — resultados y creación', () => {
       candidates: 2,
       matched: 1,
       platform: 'self',
+      mediaKind: 'video',
     });
   });
 
@@ -301,6 +315,16 @@ describe('import-video — errores de subida', () => {
     await waitFor(() => expect(screen.getByText('import.errorUnavailable')).toBeTruthy());
     expect(screen.getByTestId('import-retry')).toBeTruthy();
   });
+
+  // A file declared as a photo but read as a video by the File API (e.g. an iOS
+  // Live Photo) is a TERMINAL error: retrying the SAME file fails identically, so
+  // the copy must be the actionable dedicated one, NOT the generic "try again".
+  it('(f) 400 import_media_type_mismatch → copy dedicada accionable, NO la genérica', async () => {
+    await uploadFails(400, 'import_media_type_mismatch');
+    await waitFor(() => expect(screen.getByText('import.errorMediaMismatch')).toBeTruthy());
+    // Non-vacuity guard: sin el `case`, cae al default y pintaría errorGeneric.
+    expect(screen.queryByText('import.errorGeneric')).toBeNull();
+  });
 });
 
 describe('import-video — atribución de plataforma', () => {
@@ -319,7 +343,29 @@ describe('import-video — atribución de plataforma', () => {
     const call = mockImportVideo.mock.calls[0][0];
     expect(call.platform).toBe('self');
     expect(call.creatorHandle).toBeUndefined();
-    expect(mockTrack).toHaveBeenCalledWith({ event: 'import_video_started', platform: 'self' });
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'import_video_started', platform: 'self', mediaKind: 'video' });
+  });
+
+  it('(image) elegir una IMAGEN → sube con mime image/jpeg + analytics mediaKind=image', async () => {
+    mockPickVideo.mockResolvedValue(validImageAsset);
+    mockImportVideo.mockResolvedValue(okUpload);
+    render(<ImportVideoScreen />);
+
+    fireEvent.press(screen.getByTestId('import-choose'));
+
+    await waitFor(() => expect(mockImportVideo).toHaveBeenCalled());
+    const call = mockImportVideo.mock.calls[0][0];
+    // El mime de imagen viaja en el multipart igual que el de vídeo.
+    expect(call.mimeType).toBe('image/jpeg');
+    expect(call.fileName).toBe('photo.jpg');
+    expect(mockTrack).toHaveBeenCalledWith({ event: 'import_video_started', platform: 'self', mediaKind: 'image' });
+    expect(mockTrack).toHaveBeenCalledWith({
+      event: 'import_video_uploaded',
+      candidates: 2,
+      matched: 1,
+      platform: 'self',
+      mediaKind: 'image',
+    });
   });
 
   it('(b) elegir TikTok → disclaimer + campo handle visibles, sube con platform=tiktok&creatorHandle', async () => {
@@ -352,7 +398,7 @@ describe('import-video — atribución de plataforma', () => {
     fireEvent.press(screen.getByTestId('import-choose'));
 
     await waitFor(() =>
-      expect(mockTrack).toHaveBeenCalledWith({ event: 'import_video_started', platform: 'tiktok' }),
+      expect(mockTrack).toHaveBeenCalledWith({ event: 'import_video_started', platform: 'tiktok', mediaKind: 'video' }),
     );
     await waitFor(() =>
       expect(mockTrack).toHaveBeenCalledWith({
@@ -360,6 +406,7 @@ describe('import-video — atribución de plataforma', () => {
         candidates: 2,
         matched: 1,
         platform: 'tiktok',
+        mediaKind: 'video',
       }),
     );
     // No tracked event should carry the handle.

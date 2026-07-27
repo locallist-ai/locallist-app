@@ -456,27 +456,27 @@ export default {
   },
   // Import a plan from your own travel video (F2 T5). v1 = own content only.
   import: {
-    title: 'Import from a video',
-    intro: 'Pick one of your own travel videos and we will pull out the places and match them to LocalList, ready to follow.',
-    chooseVideo: 'Choose a video',
-    chooseVideoHint: 'MP4, MOV or WebM. Up to 150 MB and 10 minutes.',
-    // Attribution: where the (self-uploaded) video came from.
-    platformLabel: 'Where is this video from?',
+    title: 'Import from a video or photo',
+    intro: 'Pick one of your own travel videos or a screenshot and we will pull out the places and match them to LocalList, ready to follow.',
+    chooseVideo: 'Choose a video or photo',
+    chooseVideoHint: 'Video (MP4, MOV, WebM) up to 150 MB and 10 min, or photo (JPG, PNG, WebP, HEIC) up to 25 MB.',
+    // Attribution: where the (self-uploaded) video or photo came from.
+    platformLabel: 'Where is this from?',
     platformSelf: 'My video',
     platformTiktok: 'TikTok',
     platformInstagram: 'Instagram',
     platformOther: 'Other',
     // Shown only for third-party clips — prominent legal notice + optional credit.
     disclaimer:
-      'Testing feature. Only upload videos you have the rights to. Importing third-party content may breach TikTok or Instagram terms and App Store rules.',
-    creatorHandleLabel: 'Whose video is this? (optional)',
+      'Testing feature. Only upload videos or photos you have the rights to. Importing third-party content may breach TikTok or Instagram terms and App Store rules.',
+    creatorHandleLabel: 'Whose is this? (optional)',
     creatorHandlePlaceholder: '@creator',
     // Native module missing (dev client predates the rebuild).
     updateNeededTitle: 'Update needed',
     updateNeededBody: 'Importing from a video needs a newer version of the app. Please update to use it.',
     // Photo-library permission denied.
     permissionDeniedTitle: 'Photo access needed',
-    permissionDeniedBody: 'Allow photo library access in Settings to pick a video.',
+    permissionDeniedBody: 'Allow photo library access in Settings to pick a video or photo.',
     // Upload / analysis progress.
     uploading: 'Uploading your video',
     uploadingPercent: 'Uploading {{percent}}%',
@@ -498,9 +498,9 @@ export default {
     selectAtLeastOne: 'Select at least one place to continue.',
     noCity: 'We could not tell which city this video is about. Try another video.',
     // Errors (mapped from the backend error codes).
-    errorTooLarge: 'That video is too large. Videos must be under 150 MB.',
+    errorTooLarge: 'That file is too large. Try a smaller video (under 150 MB) or photo (under 25 MB).',
     errorTooLong: 'That video is too long. Videos must be 10 minutes or less.',
-    errorUnsupported: 'That format is not supported. Use an MP4, MOV or WebM video.',
+    errorUnsupported: 'That format is not supported. Use an MP4, MOV or WebM video, or a JPG, PNG, WebP or HEIC photo.',
     errorNoPlaces: 'We could not find any places in that video. Try another one.',
     errorMissingFile: 'Something went wrong reading that video. Please try again.',
     errorInvalidRequest: 'Something went wrong with that request. Please try again.',
@@ -510,6 +510,7 @@ export default {
     thirdPartyDisabled: 'This feature is not available yet.',
     errorInvalidPlaces: 'Something went wrong with the selected places. Please try again.',
     errorTooManyPlaces: 'That is too many places for one plan. Remove a few and try again.',
+    errorMediaMismatch: 'That looks like a video, not a photo. Use the video option or pick a still image.',
     errorGeneric: 'Something went wrong. Please try again.',
     retry: 'Try again',
     startOver: 'Pick another video',
