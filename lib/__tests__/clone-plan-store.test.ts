@@ -130,7 +130,7 @@ describe('usePendingCloneLanding (the app-shell navigation, sole production payo
 
     renderHook(() => usePendingCloneLanding());
 
-    expect(mockPush).toHaveBeenCalledWith('/plan/plan-1');
+    expect(mockPush).toHaveBeenCalledWith('/plan/plan-1?source=shared');
     // Consumed: it does not re-navigate.
     expect(consumePendingCloneLanding()).toBeNull();
   });
@@ -142,7 +142,7 @@ describe('usePendingCloneLanding (the app-shell navigation, sole production payo
 
     act(() => setPendingCloneLanding('plan-2'));
 
-    expect(mockPush).toHaveBeenCalledWith('/plan/plan-2');
+    expect(mockPush).toHaveBeenCalledWith('/plan/plan-2?source=shared');
   });
 
   it('unsubscribes on unmount (no navigation after the shell is gone)', () => {

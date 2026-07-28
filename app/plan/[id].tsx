@@ -250,7 +250,9 @@ export default function PlanDetailScreen() {
     }
 
     if (isNew && result.planId) {
-      router.replace(`/plan/${result.planId}`);
+      // A generated-then-saved plan is unambiguously a wizard plan — carry the
+      // source so its `plan_viewed` reports `wizard`, not `unknown`.
+      router.replace(`/plan/${result.planId}?source=wizard`);
       return;
     }
 

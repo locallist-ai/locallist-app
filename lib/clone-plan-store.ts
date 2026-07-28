@@ -93,7 +93,8 @@ export function usePendingCloneLanding(): void {
   useEffect(() => {
     const landIfPending = () => {
       const id = consumePendingCloneLanding();
-      if (id) router.push(`/plan/${id}`);
+      // Cloned from a shared showcase plan → attribute its `plan_viewed` as `shared`.
+      if (id) router.push(`/plan/${id}?source=shared`);
     };
     landIfPending();
     return subscribeCloneLanding(landIfPending);

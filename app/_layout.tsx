@@ -2,9 +2,9 @@ import '../lib/i18n';
 import i18n from '../lib/i18n';
 import { initSentry, Sentry } from '../lib/sentry';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Animated as RNAnimated, Platform, TouchableOpacity, AppState } from 'react-native';
+import { View, Text, StyleSheet, Animated as RNAnimated, Platform, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Stack, usePathname } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -19,8 +19,7 @@ import { logger } from '../lib/logger';
 import { useOnboarding } from '../lib/onboarding-store';
 import { resolveEntryState, isGuestSession } from '../lib/entry-state';
 import { track } from '../lib/analytics';
-import { getDaysSinceInstall } from '../lib/analytics/app-open';
-import { normalizeScreen } from '../lib/analytics/screen-name';
+import { useAppOpenTracking, useScreenTracking } from '../lib/analytics/use-app-lifecycle';
 import { usePendingCloneLanding } from '../lib/clone-plan-store';
 import OnboardingScreen from './onboarding';
 
@@ -117,47 +116,6 @@ const splashStyles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 });
-
-// ─── App-open + navigation analytics ─────────────────────
-
-/**
- * `app_opened` on cold start AND on every return to foreground (AppState →
- * 'active'). `days_since_install` comes from the persisted first-open timestamp
- * (see lib/analytics/app-open) — 0 on the very first open.
- */
-function useAppOpenTracking() {
-  const appState = useRef(AppState.currentState);
-  useEffect(() => {
-    const fire = () => {
-      void getDaysSinceInstall().then((days) =>
-        track({ event: 'app_opened', days_since_install: days }),
-      );
-    };
-    fire(); // cold start
-    const sub = AppState.addEventListener('change', (next) => {
-      const prev = appState.current;
-      appState.current = next;
-      if (next === 'active' && prev.match(/inactive|background/)) fire();
-    });
-    return () => sub.remove();
-  }, []);
-}
-
-/**
- * `screen_view` on every Expo Router route change, with dynamic segments
- * normalized to a low-cardinality pattern (`/plan/[id]`). Consecutive duplicates
- * are deduped.
- */
-function useScreenTracking() {
-  const pathname = usePathname();
-  const lastScreen = useRef<string | null>(null);
-  useEffect(() => {
-    const screen = normalizeScreen(pathname);
-    if (screen === lastScreen.current) return;
-    lastScreen.current = screen;
-    track({ event: 'screen_view', screen });
-  }, [pathname]);
-}
 
 // ─── Root Layout ─────────────────────────────────────────
 // Flow: Splash → Login (if not authenticated) → App
