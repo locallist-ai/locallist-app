@@ -25,6 +25,7 @@ import { ShareButton, shouldShowShareButton } from '../../components/plan/ShareB
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { usePlanEditor } from '../../lib/plan/use-plan-editor';
 import { track } from '../../lib/analytics';
+import { derivePlanViewSource } from '../../lib/analytics/plan-view-source';
 import type { Plan, PlanStop, PlanDetailResponse } from '../../lib/types';
 import type { DayGroup } from '../../lib/plan/use-plan-editor';
 import type { PhotoMosaicItem } from '../../components/ui/PhotoMosaic';
@@ -59,12 +60,13 @@ function groupStopsByDay(stops: PlanStop[], durationDays: number) {
 
 export default function PlanDetailScreen() {
   const { t } = useTranslation();
-  const { id, planName, planCity, planDays, planStartDate } = useLocalSearchParams<{
+  const { id, planName, planCity, planDays, planStartDate, source } = useLocalSearchParams<{
     id: string;
     planName?: string;
     planCity?: string;
     planDays?: string;
     planStartDate?: string;
+    source?: string;
   }>();
   const { isAuthenticated, user } = useAuth();
   const { startDate: tripStartDate } = useTripContext();
@@ -127,11 +129,14 @@ export default function PlanDetailScreen() {
     if (isNew && editorPlan) setLoading(false);
   }, [isNew, editorPlan]);
 
+  // Plan detail viewed. `new` is a creation surface (unpersisted draft), not a
+  // view, so it's skipped; everything else fires with a low-cardinality source
+  // (no id/PII) derived from the route params.
   useEffect(() => {
-    if (id && id !== 'new' && id !== 'preview') {
-      track({ event: 'plan_viewed', planId: id });
+    if (id && id !== 'new') {
+      track({ event: 'plan_viewed', source: derivePlanViewSource({ id, source }) });
     }
-  }, [id]);
+  }, [id, source]);
 
   // Fetch plan data (preview store or API).
   useEffect(() => {
@@ -245,7 +250,9 @@ export default function PlanDetailScreen() {
     }
 
     if (isNew && result.planId) {
-      router.replace(`/plan/${result.planId}`);
+      // A generated-then-saved plan is unambiguously a wizard plan — carry the
+      // source so its `plan_viewed` reports `wizard`, not `unknown`.
+      router.replace(`/plan/${result.planId}?source=wizard`);
       return;
     }
 

@@ -24,6 +24,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { logger } from './logger';
 import { getCachedStorefront, type OfferingsError } from './purchases';
 import type { MediaKind } from './import/native-picker';
+import type { PlanViewSource } from './analytics/plan-view-source';
 
 const POSTHOG_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '';
 const POSTHOG_HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://eu.i.posthog.com';
@@ -164,6 +165,13 @@ export type FavoriteSource = 'place_detail' | 'card' | 'list';
 export type ImportPlatform = 'self' | 'tiktok' | 'instagram' | 'other';
 
 export type AppEvent =
+  // App lifecycle / navigation (retención + mapa de uso, sin PII)
+  // Cold start Y cada vuelta a foreground (AppState → 'active'). `days_since_install`
+  // = días enteros desde la primera apertura persistida (0 la primera vez).
+  | { event: 'app_opened'; days_since_install: number }
+  // Cambio de ruta de Expo Router. `screen` = patrón low-cardinality con los
+  // segmentos dinámicos normalizados (`/plan/[id]`), nunca el id literal.
+  | { event: 'screen_view'; screen: string }
   // Auth
   | { event: 'sign_up'; provider: 'apple' | 'google' | 'email' }
   | { event: 'sign_in'; provider: 'apple' | 'google' | 'email' }
@@ -189,7 +197,9 @@ export type AppEvent =
   // already-authenticated user saved directly. No ids/PII.
   | { event: 'onboarding_plan_saved'; viaSignup: boolean }
   // Content
-  | { event: 'plan_viewed'; planId: string; source?: 'feed' | 'builder' | 'deep_link' }
+  // Plan detail opened. SIN id/PII: solo `source` (procedencia low-cardinality,
+  // ver lib/analytics/plan-view-source). Indeterminable → 'unknown'.
+  | { event: 'plan_viewed'; source: PlanViewSource }
   | { event: 'place_viewed'; placeId: string; planId?: string }
   // Plan sharing (Social S1). SIN PII/ids: solo el flag del evento (abrir el share
   // sheet nativo / revocar el enlace) para el funnel de sharing.
@@ -197,6 +207,14 @@ export type AppEvent =
   | { event: 'plan_share_revoked' }
   // Builder
   | { event: 'wizard_started'; city?: string }
+  // Cada paso del wizard al hacerse visible (mount + cada cambio de step);
+  // `step` = índice numérico del useWizard (1=duración..4=budget). Denominador
+  // del funnel del wizard.
+  | { event: 'wizard_step_viewed'; step: number }
+  // El usuario abandona el wizard (unmount / navegación fuera) SIN generar un
+  // plan. Nunca en el camino de éxito (un generate exitoso lo suprime). `step` =
+  // último paso visible al salir.
+  | { event: 'wizard_abandoned'; step: number }
   | { event: 'wizard_completed'; planId: string; city: string; days: number }
   // Follow Mode
   | { event: 'follow_started'; planId: string }

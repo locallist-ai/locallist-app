@@ -19,6 +19,7 @@ import { logger } from '../lib/logger';
 import { useOnboarding } from '../lib/onboarding-store';
 import { resolveEntryState, isGuestSession } from '../lib/entry-state';
 import { track } from '../lib/analytics';
+import { useAppOpenTracking, useScreenTracking } from '../lib/analytics/use-app-lifecycle';
 import { usePendingCloneLanding } from '../lib/clone-plan-store';
 import OnboardingScreen from './onboarding';
 
@@ -121,6 +122,8 @@ const splashStyles = StyleSheet.create({
 
 function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
+  useAppOpenTracking();
+  useScreenTracking();
 
   const [fontsLoaded] = useFonts({
     Inter: require('../assets/fonts/Inter-Regular.ttf'),

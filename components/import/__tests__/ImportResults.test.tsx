@@ -91,5 +91,5 @@ it('crear → createImportPlan con ids + días elegidos y navega al plan', async
       platform: 'self',
     }),
   );
-  await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/plan/plan-123'));
+  await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/plan/plan-123?source=import'));
 });

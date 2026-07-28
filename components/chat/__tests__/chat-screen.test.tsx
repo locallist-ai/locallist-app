@@ -283,7 +283,7 @@ describe('chat — guard de doble-tap en el CTA de generación', () => {
     });
     // Un solo plan generado → una sola navegación
     expect(router.push).toHaveBeenCalledTimes(1);
-    expect(router.push).toHaveBeenCalledWith('/plan/p1');
+    expect(router.push).toHaveBeenCalledWith('/plan/p1?source=chat');
     expect(chatGenerate).toHaveBeenCalledTimes(1);
   });
 });

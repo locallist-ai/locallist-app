@@ -7,6 +7,7 @@ import { track } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
 import { setPreviewPlan } from '../../lib/plan/plan-store';
 import { hapticImpact, tierFromBudgetAmount, maxDaysForTier, BUDGET_AMOUNT_PRESETS } from './constants';
+import { useWizardFunnel } from './useWizardFunnel';
 import { getOnboardingPrefsSync } from '../../lib/onboarding-store';
 import { useTripContext, setStartDate as persistStartDate } from '../../lib/trip-context-store';
 import { useAuth } from '../../lib/auth';
@@ -144,6 +145,10 @@ export const useWizard = (): UseWizardResult => {
   const [city, setCity] = useState<string | null>(tripCity);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Funnel: `wizard_step_viewed` on each step + `wizard_abandoned` on unmount
+  // unless a generate succeeded (markGenerated suppresses it).
+  const { markGenerated } = useWizardFunnel(step);
 
   // Interests step state — multi-select + sub-categorías por interest.
   // Se pre-rellena con los intereses heredados del onboarding (si hay ≥1); el
@@ -380,6 +385,8 @@ export const useWizard = (): UseWizardResult => {
       logger.debug('[builder/chat] RESPONSE status', res.status);
       if (res.data) {
         logger.debug('[builder/chat] RESPONSE body', res.data);
+        // Suppress the abandon-on-unmount: this flow reached a generated plan.
+        markGenerated();
         track({ event: 'wizard_completed', planId: res.data.plan.id, city: res.data.plan.city, days: res.data.plan.durationDays });
         setPreviewPlan(res.data);
         // A free plan may have its duration clamped to the cap — surface a soft
@@ -413,7 +420,7 @@ export const useWizard = (): UseWizardResult => {
       pendingRef.current = false;
       setLoading(false);
     }
-  }, [loading, selections, city, tripStartDate, interests, subcategoryPicks, budgetAmount, companySubs, t, isPro, presentGate, presentClamped, refreshAiPlansQuota]);
+  }, [loading, selections, city, tripStartDate, interests, subcategoryPicks, budgetAmount, companySubs, t, isPro, presentGate, presentClamped, refreshAiPlansQuota, markGenerated]);
 
   // Mantener el ref siempre apuntando al último handleGenerate. advanceToNext
   // lo invoca cuando el usuario completa el último step de prefs y necesitamos
