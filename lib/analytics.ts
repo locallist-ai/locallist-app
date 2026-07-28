@@ -216,9 +216,9 @@ export type AppEvent =
   // último paso visible al salir.
   | { event: 'wizard_abandoned'; step: number }
   | { event: 'wizard_completed'; planId: string; city: string; days: number }
-  // Follow Mode
-  | { event: 'follow_started'; planId: string }
-  | { event: 'follow_completed'; planId: string; stopsCompleted: number }
+  // Follow Mode — `follow_started` / `follow_completed` son SERVER-owned (el
+  // backend los emite con el mismo distinct_id y flipa PlanMetrics.WasFollowed);
+  // NO se emiten app-side para evitar el doble-conteo de la misma persona.
   // Chat builder
   | { event: 'chat_started'; sessionId: string | null }
   | { event: 'chat_turn'; sessionId: string; turnCount: number; slotsFilled: number; totalSlots: number }
