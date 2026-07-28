@@ -19,6 +19,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { NetInfoState } from '@react-native-community/netinfo';
+import { logger } from '../logger';
 import { getNetInfoModule } from './netinfo-module';
 
 type ConnectivitySnapshot = Pick<NetInfoState, 'isConnected' | 'isInternetReachable'>;
@@ -53,17 +54,37 @@ export function useConnectivity(options?: UseConnectivityOptions): { isOffline: 
     const netInfo = getNetInfoModule();
     if (!netInfo) return; // sin módulo nativo: online permanente, nada que suscribir.
 
-    const unsubscribe = netInfo.addEventListener((state) => {
-      const offline = computeIsOffline(state);
-      if (wasOfflineRef.current && !offline) {
-        onReconnectRef.current?.();
-      }
-      wasOfflineRef.current = offline;
-      setIsOffline(offline);
-    });
+    // `addEventListener` puede LANZAR aunque el módulo JS resuelva: en un binario
+    // pre-rebuild el módulo nativo `RNCNetInfo` es null y esta versión de netinfo
+    // no falla en el `require` sino AQUÍ, al suscribirse. Bajo new arch tampoco
+    // hay un probe sync fiable (`NativeModules.RNCNetInfo` no aplica a TurboModules),
+    // así que contenemos el crash en el punto de uso: si lanza, nos quedamos online
+    // permanente (nada suscrito), jamás propagamos el error a Follow Mode.
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = netInfo.addEventListener((state) => {
+        const offline = computeIsOffline(state);
+        if (wasOfflineRef.current && !offline) {
+          onReconnectRef.current?.();
+        }
+        wasOfflineRef.current = offline;
+        setIsOffline(offline);
+      });
+    } catch (err) {
+      logger.warn(
+        'connectivity: NetInfo.addEventListener threw (native module unavailable?), assuming online',
+        err,
+      );
+      return; // sin suscripción: online permanente, no bloqueante.
+    }
 
     return () => {
-      unsubscribe();
+      // El teardown tampoco puede lanzar (módulo nativo roto/ausente).
+      try {
+        unsubscribe?.();
+      } catch (err) {
+        logger.warn('connectivity: NetInfo unsubscribe threw, ignoring', err);
+      }
     };
   }, []);
 

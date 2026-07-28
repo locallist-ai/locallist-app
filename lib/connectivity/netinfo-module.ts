@@ -26,7 +26,18 @@ export function getNetInfoModule(): NetInfoModule | null {
       } & NetInfoModule;
       // El paquete expone la API tanto en `default` (import por defecto) como en
       // el propio namespace del CJS; toma el que exista.
-      cached = (mod.default ?? mod) as NetInfoModule;
+      const resolved = (mod.default ?? mod) as NetInfoModule;
+      // Probe SYNC barato y fiable bajo new arch: comprobar la FORMA JS del módulo
+      // (que `addEventListener` sea una función), NO `NativeModules.RNCNetInfo`
+      // (los TurboModules no viven en ese registro, daría un falso negativo). Ojo:
+      // esto NO detecta el módulo nativo null de un binario pre-rebuild — ahí la
+      // función existe pero LANZA al invocarse; ese caso lo contiene el try/catch
+      // del punto de uso en `use-connectivity.ts`. Aquí solo descartamos un módulo
+      // JS malformado o ausente antes de considerarlo disponible.
+      if (!resolved || typeof resolved.addEventListener !== 'function') {
+        throw new Error('netinfo module resolved without a usable addEventListener');
+      }
+      cached = resolved;
     } catch (err) {
       logger.warn(
         'connectivity: @react-native-community/netinfo native module unavailable (binary predates rebuild?), assuming online',
