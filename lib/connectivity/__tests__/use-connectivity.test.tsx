@@ -132,4 +132,48 @@ describe('useConnectivity', () => {
     expect(mod.__addEventListener).not.toHaveBeenCalled();
     expect(onReconnect).not.toHaveBeenCalled();
   });
+
+  // Regresión del crash que bloqueaba las pruebas de Pablo: en un binario
+  // pre-rebuild el módulo JS resuelve (getNetInfoModule NO devuelve null) pero
+  // `addEventListener` LANZA al invocarse porque el módulo nativo `RNCNetInfo`
+  // es null. El hook debe CONTENER ese throw: quedarse online, sin propagar.
+  it('addEventListener que LANZA (módulo nativo null) no crashea: online permanente', () => {
+    const brokenNetInfo = {
+      addEventListener: jest.fn(() => {
+        throw new Error("Cannot read property 'addEventListener' of null (RNCNetInfo)");
+      }),
+    };
+    mod.getNetInfoModule.mockReturnValueOnce(brokenNetInfo);
+    const onReconnect = jest.fn();
+
+    let result: { current: { isOffline: boolean } } | undefined;
+    let unmount: (() => void) | undefined;
+    expect(() => {
+      const hook = renderHook(() => useConnectivity({ onReconnect }));
+      result = hook.result;
+      unmount = hook.unmount;
+    }).not.toThrow();
+
+    expect(result?.current.isOffline).toBe(false); // el crash que veía Pablo, ahora contenido.
+    expect(brokenNetInfo.addEventListener).toHaveBeenCalledTimes(1);
+    expect(onReconnect).not.toHaveBeenCalled();
+
+    // El teardown tampoco puede lanzar aunque no haya suscripción viva.
+    expect(() => unmount?.()).not.toThrow();
+  });
+
+  it('unsubscribe que LANZA en el teardown no propaga en unmount', () => {
+    const throwingUnsubscribe = jest.fn(() => {
+      throw new Error('unsubscribe against null native module');
+    });
+    const flakyNetInfo = {
+      addEventListener: jest.fn(() => throwingUnsubscribe),
+    };
+    mod.getNetInfoModule.mockReturnValueOnce(flakyNetInfo);
+
+    const { unmount } = renderHook(() => useConnectivity());
+    expect(flakyNetInfo.addEventListener).toHaveBeenCalledTimes(1);
+    expect(() => unmount()).not.toThrow();
+    expect(throwingUnsubscribe).toHaveBeenCalledTimes(1);
+  });
 });
