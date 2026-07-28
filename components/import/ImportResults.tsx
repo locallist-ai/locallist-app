@@ -116,7 +116,7 @@ export const ImportResults: React.FC<ImportResultsProps> = ({
 
     if (res.data) {
       track({ event: 'import_plan_created', places: placeIds.length });
-      router.replace(`/plan/${res.data.id}`);
+      router.replace(`/plan/${res.data.id}?source=import`);
       return;
     }
 

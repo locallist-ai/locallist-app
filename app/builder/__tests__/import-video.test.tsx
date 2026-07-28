@@ -227,7 +227,7 @@ describe('import-video — resultados y creación', () => {
         platform: 'self',
       }),
     );
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/plan/plan-123'));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/plan/plan-123?source=import'));
     expect(mockTrack).toHaveBeenCalledWith({ event: 'import_plan_created', places: 1 });
   });
 

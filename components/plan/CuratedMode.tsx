@@ -107,7 +107,7 @@ export function CuratedMode({ insets, plans, error, refreshing, onRefresh, onBac
           }
           renderItem={({ item, index }) => (
             <Animated.View entering={FadeInDown.delay(index * 80)}>
-              <TouchableOpacity style={s.card} activeOpacity={0.7} onPress={() => router.push(`/plan/${item.id}`)}>
+              <TouchableOpacity style={s.card} activeOpacity={0.7} onPress={() => router.push(`/plan/${item.id}?source=curated`)}>
                 <PhotoHero
                   localImage={PLAN_COVERS[item.name]}
                   imageUrl={item.image ?? undefined}

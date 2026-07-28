@@ -172,7 +172,7 @@ export default function PlansScreen() {
   // Row handlers for "my plans" (depend on selectionMode → live in orchestrator).
   const handleRowPress = (id: string) => {
     if (selectionMode) toggleSelected(id);
-    else router.push(`/plan/${id}`);
+    else router.push(`/plan/${id}?source=mine`);
   };
   const handleRowLongPress = (id: string) => {
     if (!selectionMode) enterSelection(id);

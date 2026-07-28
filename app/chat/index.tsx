@@ -370,7 +370,7 @@ export default function ChatScreen() {
         setPendingPlanId(plan.id);
         setSaveSheetVisible(true);
       } else {
-        router.push(`/plan/${plan.id}`);
+        router.push(`/plan/${plan.id}?source=chat`);
       }
     } finally {
       pendingRef.current = false;
@@ -422,12 +422,12 @@ export default function ChatScreen() {
       dietaryRestrictions: fields.dietary,
     });
     setSaveSheetVisible(false);
-    if (pendingPlanId) router.push(`/plan/${pendingPlanId}`);
+    if (pendingPlanId) router.push(`/plan/${pendingPlanId}?source=chat`);
   };
 
   const handleProfileSkip = () => {
     setSaveSheetVisible(false);
-    if (pendingPlanId) router.push(`/plan/${pendingPlanId}`);
+    if (pendingPlanId) router.push(`/plan/${pendingPlanId}?source=chat`);
   };
 
   return (
